@@ -1,0 +1,970 @@
+// ============================================================================
+// DzERP — Schéma de fondation (Phase 2)
+//
+// Conventions:
+//  - IDs: UUID v4 générés côté client (@default(uuid())).
+//  - Audit: chaque entité métier porte createdAt/updatedAt (+ createdById /
+//    updatedById / deletedById stockés comme identifiants simples avec index).
+//    Les modèles d'infrastructure (Session, AuditLog, ...) utilisent de vraies
+//    relations pour l'acteur.
+//  - Suppression logique: champ deletedAt (nullable). Voir l'extension client
+//    softDelete dans src/lib/db/soft-delete.ts.
+//  - Les énumérations partagées sont centralisées ci-dessous.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Énumérations partagées
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum DocumentStatus {
+  DRAFT
+  PENDING
+  VALIDATED
+  REJECTED
+  CANCELLED
+  ARCHIVED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  EXPORT
+  IMPORT
+  UPLOAD
+  LOGIN
+  LOGOUT
+  ASSIGN
+  REVOKE
+  SETTING_CHANGE
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  EXPORT
+  IMPORT
+  STATUS_CHANGE
+  SETTING_CHANGE
+  PERMISSION_CHANGE
+  SYSTEM
+}
+
+enum FileKind {
+  ATTACHMENT
+  AVATAR
+  DOCUMENT
+  EXPORT
+  IMPORT
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  SECRET
+}
+
+enum BranchType {
+  HEADQUARTER
+  DIRECTION
+  AGENCY
+}
+
+// ---------------------------------------------------------------------------
+// Multi-établissement
+// ---------------------------------------------------------------------------
+
+model Branch {
+  id         String     @id @default(uuid())
+  code       String     @unique
+  name       String
+  nameAr     String?
+  type       BranchType @default(DIRECTION)
+  city       String?
+  address    String?
+  phone      String?
+  email      String?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  createdById String?
+  updatedById String?
+
+  users User[]
+
+  quotations       Quotation[]
+  salesOrders      SalesOrder[]
+  deliveryNotes    DeliveryNote[]
+  invoices         Invoice[]
+  creditNotes      CreditNote[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
+  goodsReceipts    GoodsReceipt[]
+  supplierInvoices SupplierInvoice[]
+
+  @@index([type])
+  @@index([city])
+}
+
+// ---------------------------------------------------------------------------
+// RBAC — Utilisateurs, Rôles, Permissions
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  email        String?    @unique
+  passwordHash String
+  fullName     String?
+  title        String?
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  createdById  String?
+  updatedById  String?
+
+  roles     UserRole[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+  activity  ActivityEvent[]
+  files     FileAsset[]
+  settings  Setting[]
+
+  issuedQuotations       Quotation[]
+  issuedSalesOrders      SalesOrder[]
+  issuedDeliveryNotes    DeliveryNote[]
+  issuedInvoices         Invoice[]
+  issuedCreditNotes      CreditNote[]
+  issuedPurchaseRequests PurchaseRequest[]
+  issuedPurchaseOrders   PurchaseOrder[]
+  issuedGoodsReceipts    GoodsReceipt[]
+  issuedSupplierInvoices SupplierInvoice[]
+
+  @@index([branchId])
+  @@index([status])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  nameAr      String?
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@index([isSystem])
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  module      String
+  name        String
+  nameAr      String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([module])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+// ---------------------------------------------------------------------------
+// Sessions (cookie signé + révocabilité)
+// ---------------------------------------------------------------------------
+
+model Session {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Paramètres / configuration (architecture "Settings")
+// ---------------------------------------------------------------------------
+
+model Setting {
+  id          String      @id @default(uuid())
+  key         String      @unique
+  value       String
+  type        SettingType @default(STRING)
+  description String?
+  isPublic    Boolean     @default(false)
+  updatedById String?
+  updatedBy   User?       @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([isPublic])
+}
+
+// ---------------------------------------------------------------------------
+// Journal d'audit (traçabilité)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  action    AuditAction
+  entity    String
+  entityId  String?
+  actorId   String?
+  actor     User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  ip        String?
+  userAgent String?
+  changes   Json?
+  createdAt DateTime    @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Fil d'activité (timeline)
+// ---------------------------------------------------------------------------
+
+model ActivityEvent {
+  id        String       @id @default(uuid())
+  type      ActivityType
+  actorId   String?
+  actor     User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entity    String
+  entityId  String?
+  title     String
+  titleAr   String?
+  meta      Json?
+  createdAt DateTime     @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Fichiers (abstraction upload)
+// ---------------------------------------------------------------------------
+
+model FileAsset {
+  id           String   @id @default(uuid())
+  originalName String
+  storageKey   String   @unique
+  mimeType     String
+  size         Int
+  kind         FileKind @default(ATTACHMENT)
+  entity       String
+  entityId     String?
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdById])
+  @@index([kind])
+}
+
+// ---------------------------------------------------------------------------
+// Numérotation de documents (devis, commandes, factures...)
+// ---------------------------------------------------------------------------
+
+model Counter {
+  id        String @id @default(uuid())
+  key       String @unique
+  prefix    String @default("")
+  nextValue BigInt @default(1)
+  padLength Int    @default(4)
+  step      Int    @default(1)
+}
+
+// ---------------------------------------------------------------------------
+// Entités métier de base (étendues en Phase 3)
+// ---------------------------------------------------------------------------
+
+model Client {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  nameAr     String?
+  sector     String?
+  email      String?
+  phone      String?
+  taxId      String? // NIF
+  address    String?
+  balance    Decimal  @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt  DateTime?
+  deletedById String?
+
+  quotations        Quotation[]
+  salesOrders       SalesOrder[]
+  deliveryNotes     DeliveryNote[]
+  invoices          Invoice[]
+  creditNotes       CreditNote[]
+  purchaseRequests  PurchaseRequest[]
+  purchaseOrders    PurchaseOrder[]
+  goodsReceipts     GoodsReceipt[]
+  supplierInvoices  SupplierInvoice[]
+
+  @@index([name])
+  @@index([sector])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([createdById])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sku         String   @unique
+  name        String
+  nameAr      String?
+  unit        String?
+  category    String?
+  price       Decimal  @default(0)
+  stock       Int      @default(0)
+  stockMin    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  deletedById String?
+
+  quotationLines       QuotationLine[]
+  salesOrderLines      SalesOrderLine[]
+  deliveryNoteLines    DeliveryNoteLine[]
+  invoiceLines         InvoiceLine[]
+  creditNoteLines      CreditNoteLine[]
+  purchaseRequestLines PurchaseRequestLine[]
+  purchaseOrderLines   PurchaseOrderLine[]
+  goodsReceiptLines    GoodsReceiptLine[]
+  supplierInvoiceLines SupplierInvoiceLine[]
+
+  @@index([name])
+  @@index([category])
+  @@index([deletedAt])
+  @@index([createdById])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Documents métier (Ventes / Achats)
+//
+// Conception :
+//  - Relations réelles vers les modèles de fondation (Client, Branch, User,
+//    Product) via des champs de rétro-référence ajoutés ci-dessus.
+//  - `createdById`/`updatedById` restent des identifiants simples (convention).
+//  - Chaque document possède ses lignes (produit, quantité, prix, remise, TVA).
+//  - Les modules (devis, commandes, factures...) consommeront ces modèles et
+//    la numérotation via `src/features/documents/series.ts`.
+// ---------------------------------------------------------------------------
+
+enum DocType {
+  QUOTATION
+  SALES_ORDER
+  DELIVERY_NOTE
+  INVOICE
+  CREDIT_NOTE
+  PURCHASE_REQUEST
+  PURCHASE_ORDER
+  GOODS_RECEIPT
+  SUPPLIER_INVOICE
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+// ---------------------------------------------------------------------------
+// Numérotation documentaire (séries réutilisables par module)
+// ---------------------------------------------------------------------------
+
+model DocumentSeries {
+  id         String   @id @default(uuid())
+  key        String   @unique // identifiant stable ex. "QUOTATION"
+  docType    DocType  @unique // une série active par type de document
+  label      String
+  labelAr    String?
+  prefix     String   @default("")
+  separator  String   @default("-")
+  suffix     String   @default("")
+  withYear   Boolean  @default(true)
+  year       Int? // exercice courant ; null = année en cours
+  nextValue  BigInt   @default(1)
+  padLength  Int      @default(4)
+  step       Int      @default(1)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  updatedById String?
+}
+
+// ---------------------------------------------------------------------------
+// Ventes
+// ---------------------------------------------------------------------------
+
+model Quotation {
+  id         String         @id @default(uuid())
+  number     String         @unique
+  status     DocumentStatus @default(DRAFT)
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId   String
+  branch     Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  issuedById String?
+  issuedBy   User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt   DateTime       @default(now())
+  validUntil DateTime?
+  currency   String         @default("DZD")
+  notes      String?
+  totalHt    Decimal        @default(0)
+  totalTva   Decimal        @default(0)
+  totalTtc   Decimal        @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  createdById String?
+  updatedById String?
+
+  lines      QuotationLine[]
+  salesOrders SalesOrder[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model QuotationLine {
+  id          String  @id @default(uuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber  Int     @default(1)
+  label       String
+  unit        String?
+  quantity    Decimal @default(1)
+  unitPrice   Decimal @default(0)
+  discountPct Decimal @default(0)
+  taxPct      Decimal @default(0)
+  amountHt    Decimal @default(0)
+  amountTva   Decimal @default(0)
+  amountTtc   Decimal @default(0)
+
+  @@index([quotationId])
+  @@index([productId])
+}
+
+model SalesOrder {
+  id           String         @id @default(uuid())
+  number       String         @unique
+  status       DocumentStatus @default(DRAFT)
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId     String
+  branch       Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  quotationId  String?
+  quotation    Quotation?     @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+  issuedById   String?
+  issuedBy     User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt     DateTime       @default(now())
+  deliveryDate DateTime?
+  currency     String         @default("DZD")
+  notes        String?
+  totalHt      Decimal        @default(0)
+  totalTva     Decimal        @default(0)
+  totalTtc     Decimal        @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdById  String?
+  updatedById  String?
+
+  lines        SalesOrderLine[]
+  deliveryNotes DeliveryNote[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([quotationId])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model SalesOrderLine {
+  id           String  @id @default(uuid())
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber   Int     @default(1)
+  label        String
+  unit         String?
+  quantity     Decimal @default(1)
+  unitPrice    Decimal @default(0)
+  discountPct  Decimal @default(0)
+  taxPct       Decimal @default(0)
+  amountHt     Decimal @default(0)
+  amountTva    Decimal @default(0)
+  amountTtc    Decimal @default(0)
+
+  @@index([salesOrderId])
+  @@index([productId])
+}
+
+model DeliveryNote {
+  id           String         @id @default(uuid())
+  number       String         @unique
+  status       DocumentStatus @default(DRAFT)
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId     String
+  branch       Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  salesOrderId String?
+  salesOrder   SalesOrder?    @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  issuedById   String?
+  issuedBy     User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt     DateTime       @default(now())
+  shippedAt    DateTime?
+  currency     String         @default("DZD")
+  notes        String?
+  totalHt      Decimal        @default(0)
+  totalTva     Decimal        @default(0)
+  totalTtc     Decimal        @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdById  String?
+  updatedById  String?
+
+  lines        DeliveryNoteLine[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([salesOrderId])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model DeliveryNoteLine {
+  id            String  @id @default(uuid())
+  deliveryNoteId String
+  deliveryNote  DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber    Int     @default(1)
+  label         String
+  unit          String?
+  quantity      Decimal @default(1)
+  unitPrice     Decimal @default(0)
+  discountPct   Decimal @default(0)
+  taxPct        Decimal @default(0)
+  amountHt      Decimal @default(0)
+  amountTva     Decimal @default(0)
+  amountTtc     Decimal @default(0)
+
+  @@index([deliveryNoteId])
+  @@index([productId])
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  number        String        @unique
+  status        DocumentStatus @default(DRAFT)
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId      String
+  branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  issuedById    String?
+  issuedBy      User?         @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt      DateTime      @default(now())
+  dueDate       DateTime?
+  currency      String        @default("DZD")
+  notes         String?
+  totalHt       Decimal       @default(0)
+  totalTva      Decimal       @default(0)
+  totalTtc      Decimal       @default(0)
+  paidAmount    Decimal       @default(0)
+  paymentStatus PaymentStatus @default(UNPAID)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  createdById   String?
+  updatedById   String?
+
+  lines        InvoiceLine[]
+  creditNotes  CreditNote[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([dueDate])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model InvoiceLine {
+  id        String  @id @default(uuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber Int    @default(1)
+  label     String
+  unit      String?
+  quantity  Decimal @default(1)
+  unitPrice Decimal @default(0)
+  discountPct Decimal @default(0)
+  taxPct    Decimal @default(0)
+  amountHt  Decimal @default(0)
+  amountTva Decimal @default(0)
+  amountTtc Decimal @default(0)
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+model CreditNote {
+  id          String        @id @default(uuid())
+  number      String        @unique
+  status      DocumentStatus @default(DRAFT)
+  clientId    String
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId    String
+  branch      Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  invoiceId   String?
+  invoice     Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  issuedById  String?
+  issuedBy    User?         @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt    DateTime      @default(now())
+  reason      String?
+  currency    String        @default("DZD")
+  notes       String?
+  totalHt     Decimal       @default(0)
+  totalTva    Decimal       @default(0)
+  totalTtc    Decimal       @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  createdById String?
+  updatedById String?
+
+  lines      CreditNoteLine[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([invoiceId])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model CreditNoteLine {
+  id           String  @id @default(uuid())
+  creditNoteId String
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber   Int     @default(1)
+  label        String
+  unit         String?
+  quantity     Decimal @default(1)
+  unitPrice    Decimal @default(0)
+  discountPct  Decimal @default(0)
+  taxPct       Decimal @default(0)
+  amountHt     Decimal @default(0)
+  amountTva    Decimal @default(0)
+  amountTtc    Decimal @default(0)
+
+  @@index([creditNoteId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Achats
+// ---------------------------------------------------------------------------
+
+model PurchaseRequest {
+  id          String         @id @default(uuid())
+  number      String         @unique
+  status      DocumentStatus @default(DRAFT)
+  clientId    String // tiers : fournisseur (modèle Fournisseur à venir)
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId    String
+  branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  issuedById  String?
+  issuedBy    User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt    DateTime       @default(now())
+  neededAt    DateTime?
+  priority    String? // LOW | MEDIUM | HIGH
+  currency    String         @default("DZD")
+  notes       String?
+  totalHt     Decimal        @default(0)
+  totalTva    Decimal        @default(0)
+  totalTtc    Decimal        @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdById String?
+  updatedById String?
+
+  lines       PurchaseRequestLine[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model PurchaseRequestLine {
+  id               String  @id @default(uuid())
+  purchaseRequestId String
+  purchaseRequest  PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber       Int     @default(1)
+  label            String
+  unit             String?
+  quantity         Decimal @default(1)
+  unitPrice        Decimal @default(0)
+  discountPct      Decimal @default(0)
+  taxPct           Decimal @default(0)
+  amountHt         Decimal @default(0)
+  amountTva        Decimal @default(0)
+  amountTtc        Decimal @default(0)
+
+  @@index([purchaseRequestId])
+  @@index([productId])
+}
+
+model PurchaseOrder {
+  id          String         @id @default(uuid())
+  number      String         @unique
+  status      DocumentStatus @default(DRAFT)
+  clientId    String // tiers : fournisseur
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId    String
+  branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  issuedById  String?
+  issuedBy    User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt    DateTime       @default(now())
+  deliveryDate DateTime?
+  currency    String         @default("DZD")
+  notes       String?
+  totalHt     Decimal        @default(0)
+  totalTva    Decimal        @default(0)
+  totalTtc    Decimal        @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdById String?
+  updatedById String?
+
+  lines        PurchaseOrderLine[]
+  goodsReceipts GoodsReceipt[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model PurchaseOrderLine {
+  id             String  @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber     Int     @default(1)
+  label          String
+  unit           String?
+  quantity       Decimal @default(1)
+  unitPrice      Decimal @default(0)
+  discountPct    Decimal @default(0)
+  taxPct         Decimal @default(0)
+  amountHt       Decimal @default(0)
+  amountTva      Decimal @default(0)
+  amountTtc      Decimal @default(0)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model GoodsReceipt {
+  id              String         @id @default(uuid())
+  number          String         @unique
+  status          DocumentStatus @default(DRAFT)
+  clientId        String // tiers : fournisseur
+  client          Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  issuedById      String?
+  issuedBy        User?          @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt        DateTime       @default(now())
+  receivedAt      DateTime?
+  currency        String         @default("DZD")
+  notes           String?
+  totalHt         Decimal        @default(0)
+  totalTva        Decimal        @default(0)
+  totalTtc        Decimal        @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdById     String?
+  updatedById     String?
+
+  lines           GoodsReceiptLine[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([purchaseOrderId])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model GoodsReceiptLine {
+  id             String  @id @default(uuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber     Int     @default(1)
+  label          String
+  unit           String?
+  quantity       Decimal @default(1)
+  unitPrice      Decimal @default(0)
+  discountPct    Decimal @default(0)
+  taxPct         Decimal @default(0)
+  amountHt       Decimal @default(0)
+  amountTva      Decimal @default(0)
+  amountTtc      Decimal @default(0)
+
+  @@index([goodsReceiptId])
+  @@index([productId])
+}
+
+model SupplierInvoice {
+  id            String        @id @default(uuid())
+  number        String        @unique
+  status        DocumentStatus @default(DRAFT)
+  clientId      String // tiers : fournisseur
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  branchId      String
+  branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  issuedById    String?
+  issuedBy      User?         @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt      DateTime      @default(now())
+  dueDate       DateTime?
+  currency      String        @default("DZD")
+  notes         String?
+  totalHt       Decimal       @default(0)
+  totalTva      Decimal       @default(0)
+  totalTtc      Decimal       @default(0)
+  paidAmount    Decimal       @default(0)
+  paymentStatus PaymentStatus @default(UNPAID)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  createdById   String?
+  updatedById   String?
+
+  lines         SupplierInvoiceLine[]
+
+  @@index([clientId])
+  @@index([branchId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([dueDate])
+  @@index([issuedAt])
+  @@index([createdById])
+}
+
+model SupplierInvoiceLine {
+  id               String  @id @default(uuid())
+  supplierInvoiceId String
+  supplierInvoice  SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber       Int     @default(1)
+  label            String
+  unit             String?
+  quantity         Decimal @default(1)
+  unitPrice        Decimal @default(0)
+  discountPct      Decimal @default(0)
+  taxPct           Decimal @default(0)
+  amountHt         Decimal @default(0)
+  amountTva        Decimal @default(0)
+  amountTtc        Decimal @default(0)
+
+  @@index([supplierInvoiceId])
+  @@index([productId])
+}
