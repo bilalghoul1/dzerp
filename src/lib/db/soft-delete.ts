@@ -4,7 +4,11 @@ import { Prisma } from "@/generated/prisma/client";
  * Modèles utilisant la suppression logique (soft delete).
  * Ajouter un modèle ici implique un champ `deletedAt DateTime?` dans le schéma.
  */
-export const SOFT_DELETABLE_MODELS = new Set<string>(["Client", "Product"]);
+export const SOFT_DELETABLE_MODELS = new Set<string>([
+  "Client",
+  "Product",
+  "Warehouse",
+]);
 
 type QueryArgs = Record<string, unknown>;
 

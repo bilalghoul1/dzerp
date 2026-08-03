@@ -204,40 +204,90 @@ export const PERMISSIONS = {
     name: "Créer une facture fournisseur",
     nameAr: "إنشاء فاتورة مورد",
   },
-  "stock.view": {
-    module: "stock",
-    name: "Consulter le stock",
-    nameAr: "عرض المخزون",
-  },
-  "stock.manage": {
-    module: "stock",
-    name: "Gérer le stock",
-    nameAr: "إدارة المخزون",
-  },
-  "stock.produit.view": {
+  "product.view": {
     module: "stock",
     name: "Consulter les produits",
     nameAr: "عرض المنتجات",
   },
-  "stock.produit.create": {
+  "product.create": {
     module: "stock",
     name: "Créer un produit",
     nameAr: "إنشاء منتج",
   },
-  "stock.entrepot.view": {
+  "product.update": {
+    module: "stock",
+    name: "Modifier un produit",
+    nameAr: "تعديل منتج",
+  },
+  "product.delete": {
+    module: "stock",
+    name: "Supprimer un produit",
+    nameAr: "حذف منتج",
+  },
+  "product.restore": {
+    module: "stock",
+    name: "Restaurer un produit",
+    nameAr: "استعادة منتج",
+  },
+  "product.import": {
+    module: "stock",
+    name: "Importer des produits",
+    nameAr: "استيراد المنتجات",
+  },
+  "product.export": {
+    module: "stock",
+    name: "Exporter les produits",
+    nameAr: "تصدير المنتجات",
+  },
+  "warehouse.view": {
     module: "stock",
     name: "Consulter les entrepôts",
     nameAr: "عرض المستودعات",
   },
-  "stock.entrepot.create": {
+  "warehouse.create": {
     module: "stock",
     name: "Créer un entrepôt",
     nameAr: "إنشاء مستودع",
   },
-  "stock.mouvement.create": {
+  "warehouse.update": {
+    module: "stock",
+    name: "Modifier un entrepôt",
+    nameAr: "تعديل مستودع",
+  },
+  "warehouse.delete": {
+    module: "stock",
+    name: "Supprimer un entrepôt",
+    nameAr: "حذف مستودع",
+  },
+  "warehouse.restore": {
+    module: "stock",
+    name: "Restaurer un entrepôt",
+    nameAr: "استعادة مستودع",
+  },
+  "inventory.view": {
+    module: "stock",
+    name: "Consulter les mouvements de stock",
+    nameAr: "عرض حركات المخزون",
+  },
+  "inventory.create": {
     module: "stock",
     name: "Créer un mouvement de stock",
     nameAr: "إنشاء حركة مخزون",
+  },
+  "inventory.adjust": {
+    module: "stock",
+    name: "Ajuster le stock",
+    nameAr: "تسوية المخزون",
+  },
+  "inventory.transfer": {
+    module: "stock",
+    name: "Transférer entre entrepôts",
+    nameAr: "تحويل بين المستودعات",
+  },
+  "inventory.export": {
+    module: "stock",
+    name: "Exporter les mouvements",
+    nameAr: "تصدير الحركات",
   },
   "production.view": {
     module: "production",

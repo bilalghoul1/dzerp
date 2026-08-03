@@ -58,8 +58,8 @@ const GROUPS: {
     items: [
       { key: "customer", href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
       { key: "supplier", href: "/crm/suppliers", icon: "handshake", permission: "crm.supplier.create" },
-      { key: "product", href: "/stock/produits/nouveau", icon: "inventory_2", permission: "stock.produit.create" },
-      { key: "warehouse", href: "/stock/entrepots/nouveau", icon: "warehouse", permission: "stock.entrepot.create" },
+      { key: "product", href: "/stock", icon: "inventory_2", permission: "product.create" },
+      { key: "warehouse", href: "/stock/entrepots", icon: "warehouse", permission: "warehouse.create" },
     ],
   },
   {

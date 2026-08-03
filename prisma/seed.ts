@@ -15,6 +15,9 @@ const prisma = new PrismaClient({
 async function main() {
   console.log("→ Nettoyage des données existantes…");
 
+  await prisma.roleAssignment.deleteMany();
+  await prisma.userCompany.deleteMany();
+  await prisma.company.deleteMany();
   await prisma.rolePermission.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.auditLog.deleteMany();
@@ -56,7 +59,18 @@ async function main() {
   await prisma.client.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.supplier.deleteMany();
+  await prisma.inventoryMovement.deleteMany();
+  await prisma.warehouseLocation.deleteMany();
+  await prisma.warehouse.deleteMany();
+  await prisma.productSupplier.deleteMany();
+  await prisma.productAttributeValue.deleteMany();
+  await prisma.productAttribute.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.productCategory.deleteMany();
+  await prisma.brand.deleteMany();
+  await prisma.manufacturer.deleteMany();
+  await prisma.unit.deleteMany();
+  await prisma.vatCategory.deleteMany();
   await prisma.branch.deleteMany();
 
   console.log("→ Succursales…");
@@ -75,6 +89,26 @@ async function main() {
     });
     branchRecords[branch.code] = record.id;
   }
+
+  console.log("→ Sociétés (Phase 5.3)…");
+  const mainCompany = await prisma.company.upsert({
+    where: { code: "MAIN" },
+    update: {
+      name: "DzERP Algérie",
+      nameAr: "دزيرب الجزائر",
+      currency: "DZD",
+      isDefault: true,
+      isActive: true,
+    },
+    create: {
+      code: "MAIN",
+      name: "DzERP Algérie",
+      nameAr: "دزيرب الجزائر",
+      currency: "DZD",
+      isDefault: true,
+      isActive: true,
+    },
+  });
 
   console.log("→ Permissions (catalogue)…");
   const permissionIds: Record<string, string> = {};
@@ -142,9 +176,9 @@ async function main() {
     "achats.besoin.view", "achats.besoin.create",
     "achats.reception.view", "achats.reception.create",
     "achats.facture.view", "achats.facture.create",
-    "stock.view", "stock.mouvement.create",
-    "stock.produit.view", "stock.produit.create",
-    "stock.entrepot.view", "stock.entrepot.create",
+    "product.view", "product.create", "product.update",
+    "warehouse.view", "warehouse.create", "warehouse.update",
+    "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
     "production.view",
     "compta.view",
     "rh.view",
@@ -164,7 +198,7 @@ async function main() {
     "ventes.livraison.view", "ventes.avoir.view",
     "achats.bon.view", "achats.besoin.view",
     "achats.reception.view", "achats.facture.view",
-    "stock.view", "stock.produit.view", "stock.entrepot.view",
+    "product.view", "warehouse.view", "inventory.view",
     "production.view", "compta.view", "rh.view", "rapports.view", "search.global",
   ];
   await prisma.rolePermission.createMany({
@@ -221,6 +255,30 @@ async function main() {
       where: { userId_roleId: { userId: record.id, roleId: role.id } },
       update: {},
       create: { userId: record.id, roleId: role.id },
+    });
+
+    // Phase 5.3 : adhésion société par défaut + attribution de rôle (RoleAssignment).
+    const membership = await prisma.userCompany.upsert({
+      where: { userId_companyId: { userId: record.id, companyId: mainCompany.id } },
+      update: { active: true, isDefault: true },
+      create: {
+        userId: record.id,
+        companyId: mainCompany.id,
+        active: true,
+        isDefault: true,
+      },
+    });
+    await prisma.roleAssignment.upsert({
+      where: {
+        userCompanyId_roleId: { userCompanyId: membership.id, roleId: role.id },
+      },
+      update: { active: true, assignedBy: record.id },
+      create: {
+        userCompanyId: membership.id,
+        roleId: role.id,
+        active: true,
+        assignedBy: record.id,
+      },
     });
   }
 
@@ -305,6 +363,9 @@ async function main() {
     { key: "SUPPLIER_INVOICE", docType: "SUPPLIER_INVOICE" as const, label: "Facture fournisseur", labelAr: "فاتورة مورد", prefix: "FF" },
     { key: "CUSTOMER", docType: "CUSTOMER" as const, label: "Client", labelAr: "عميل", prefix: "CUS", padLength: 6, withYear: false },
     { key: "SUPPLIER", docType: "SUPPLIER" as const, label: "Fournisseur", labelAr: "مورد", prefix: "SUP", padLength: 6, withYear: false },
+    { key: "PRODUCT", docType: "PRODUCT" as const, label: "Produit", labelAr: "منتج", prefix: "PRD", padLength: 6, withYear: false },
+    { key: "WAREHOUSE", docType: "WAREHOUSE" as const, label: "Entrepôt", labelAr: "مستودع", prefix: "WH", padLength: 6, withYear: false },
+    { key: "INVENTORY_MOVEMENT", docType: "INVENTORY_MOVEMENT" as const, label: "Mouvement de stock", labelAr: "حركة مخزون", prefix: "MOV", padLength: 6, withYear: false },
   ];
   for (const s of series) {
     await prisma.documentSeries.upsert({
@@ -553,22 +614,283 @@ async function main() {
     data: { nextValue: BigInt(4) },
   });
 
-  const products = [
-    { sku: "ART-0001", name: "Pompe industrielle 50kW", nameAr: "مضخة صناعية 50 كيلوواط", unit: "unité", category: "Équipement", price: 450000, stock: 12, stockMin: 5 },
-    { sku: "ART-0002", name: "Moteur électrique 50kW", nameAr: "محرك كهربائي 50 كيلوواط", unit: "unité", category: "Équipement", price: 780000, stock: 3, stockMin: 4 },
-    { sku: "ART-0003", name: "Tube acier DN100", nameAr: "أنبوب فولاذي DN100", unit: "m", category: "Pièces", price: 1200, stock: 2400, stockMin: 500 },
-    { sku: "ART-0004", name: "Groupe électrogène 100kVA", nameAr: "مولد كهربائي 100 كيلوفولت أمبير", unit: "unité", category: "Équipement", price: 3200000, stock: 2, stockMin: 1 },
-    { sku: "ART-0005", name: "Câble électrique 3x2.5mm²", nameAr: "كابل كهربائي 3×2.5", unit: "rouleau", category: "Électricité", price: 8500, stock: 180, stockMin: 50 },
+  console.log("→ Catalogue produits (Phase 4)…");
+
+  const units = [
+    { code: "U", name: "Unité", nameAr: "وحدة" },
+    { code: "M", name: "Mètre", nameAr: "متر" },
+    { code: "ROU", name: "Rouleau", nameAr: "لفة" },
   ];
+  const unitRecords: Record<string, string> = {};
+  for (const unit of units) {
+    const record = await prisma.unit.upsert({
+      where: { code: unit.code },
+      update: { name: unit.name, nameAr: unit.nameAr },
+      create: unit,
+    });
+    unitRecords[unit.code] = record.id;
+  }
+
+  const vatCategories = [
+    { code: "TVA_19", name: "TVA 19%", nameAr: "ت.ق.م 19٪", rate: 19, isDefault: true },
+    { code: "TVA_09", name: "TVA 9%", nameAr: "ت.ق.م 9٪", rate: 9 },
+    { code: "TVA_00", name: "Exonéré (0%)", nameAr: "معفى (0٪)", rate: 0 },
+  ];
+  const vatRecords: Record<string, string> = {};
+  for (const vat of vatCategories) {
+    const record = await prisma.vatCategory.upsert({
+      where: { code: vat.code },
+      update: { name: vat.name, nameAr: vat.nameAr, rate: vat.rate },
+      create: vat,
+    });
+    vatRecords[vat.code] = record.id;
+  }
+
+  const categories = [
+    { code: "EQUIP", name: "Équipement", nameAr: "معدات", parentCode: null },
+    { code: "POMPES", name: "Pompes", nameAr: "مضخات", parentCode: "EQUIP" },
+    { code: "MOTEURS", name: "Moteurs", nameAr: "محركات", parentCode: "EQUIP" },
+    { code: "GROUPE", name: "Groupe électrogène", nameAr: "مولدات", parentCode: "EQUIP" },
+    { code: "PIECES", name: "Pièces", nameAr: "قطع غيار", parentCode: null },
+    { code: "ELEC", name: "Électricité", nameAr: "كهرباء", parentCode: null },
+  ];
+  const categoryRecords: Record<string, string> = {};
+  for (const category of categories) {
+    const record = await prisma.productCategory.upsert({
+      where: { code: category.code },
+      update: { name: category.name, nameAr: category.nameAr },
+      create: {
+        code: category.code,
+        name: category.name,
+        nameAr: category.nameAr,
+      },
+    });
+    categoryRecords[category.code] = record.id;
+  }
+  for (const category of categories) {
+    if (category.parentCode) {
+      await prisma.productCategory.update({
+        where: { code: category.code },
+        data: { parentId: categoryRecords[category.parentCode] },
+      });
+    }
+  }
+
+  const brands = [
+    { code: "GRUNDFOS", name: "Grundfos", nameAr: "غروندفوس" },
+    { code: "SIEMENS", name: "Siemens", nameAr: "سيمنز" },
+    { code: "ABB", name: "ABB", nameAr: "إيه بي بي" },
+    { code: "CATERPILLAR", name: "Caterpillar", nameAr: "كاتربيلر" },
+  ];
+  const brandRecords: Record<string, string> = {};
+  for (const brand of brands) {
+    const record = await prisma.brand.upsert({
+      where: { code: brand.code },
+      update: { name: brand.name, nameAr: brand.nameAr },
+      create: brand,
+    });
+    brandRecords[brand.code] = record.id;
+  }
+
+  const manufacturers = [
+    { code: "SONELGAZ", name: "Sonelgaz Équipements", nameAr: "سونلغاز للتجهيزات" },
+    { code: "INOX", name: "Inox SA", nameAr: "إينوكس" },
+  ];
+  const manufacturerRecords: Record<string, string> = {};
+  for (const manufacturer of manufacturers) {
+    const record = await prisma.manufacturer.upsert({
+      where: { code: manufacturer.code },
+      update: { name: manufacturer.name, nameAr: manufacturer.nameAr },
+      create: manufacturer,
+    });
+    manufacturerRecords[manufacturer.code] = record.id;
+  }
+
+  const products = [
+    {
+      code: "PRD-000001",
+      sku: "ART-0001",
+      name: "Pompe industrielle 50kW",
+      nameAr: "مضخة صناعية 50 كيلوواط",
+      category: "POMPES",
+      brand: "GRUNDFOS",
+      manufacturer: "SONELGAZ",
+      unit: "U",
+      vat: "TVA_19",
+      costPrice: 350000,
+      sellingPrice: 450000,
+      stockMin: 5,
+    },
+    {
+      code: "PRD-000002",
+      sku: "ART-0002",
+      name: "Moteur électrique 50kW",
+      nameAr: "محرك كهربائي 50 كيلوواط",
+      category: "MOTEURS",
+      brand: "SIEMENS",
+      manufacturer: "SONELGAZ",
+      unit: "U",
+      vat: "TVA_19",
+      costPrice: 620000,
+      sellingPrice: 780000,
+      stockMin: 4,
+    },
+    {
+      code: "PRD-000003",
+      sku: "ART-0003",
+      name: "Tube acier DN100",
+      nameAr: "أنبوب فولاذي DN100",
+      category: "PIECES",
+      brand: null,
+      manufacturer: "INOX",
+      unit: "M",
+      vat: "TVA_09",
+      costPrice: 900,
+      sellingPrice: 1200,
+      stockMin: 500,
+    },
+    {
+      code: "PRD-000004",
+      sku: "ART-0004",
+      name: "Groupe électrogène 100kVA",
+      nameAr: "مولد كهربائي 100 كيلوفولت أمبير",
+      category: "GROUPE",
+      brand: "CATERPILLAR",
+      manufacturer: null,
+      unit: "U",
+      vat: "TVA_19",
+      costPrice: 2700000,
+      sellingPrice: 3200000,
+      stockMin: 1,
+    },
+    {
+      code: "PRD-000005",
+      sku: "ART-0005",
+      name: "Câble électrique 3x2.5mm²",
+      nameAr: "كابل كهربائي 3×2.5",
+      category: "ELEC",
+      brand: "ABB",
+      manufacturer: null,
+      unit: "ROU",
+      vat: "TVA_19",
+      costPrice: 6500,
+      sellingPrice: 8500,
+      stockMin: 50,
+    },
+  ];
+
+  const productRecords: Record<string, string> = {};
   for (const product of products) {
-    await prisma.product.upsert({
+    const record = await prisma.product.upsert({
       where: { sku: product.sku },
       update: {},
-      create: product,
+      create: {
+        code: product.code,
+        sku: product.sku,
+        name: product.name,
+        nameAr: product.nameAr,
+        categoryId: categoryRecords[product.category],
+        brandId: product.brand ? brandRecords[product.brand] : null,
+        manufacturerId: product.manufacturer
+          ? manufacturerRecords[product.manufacturer]
+          : null,
+        purchaseUnitId: unitRecords[product.unit],
+        salesUnitId: unitRecords[product.unit],
+        inventoryUnitId: unitRecords[product.unit],
+        vatCategoryId: vatRecords[product.vat],
+        costPrice: product.costPrice,
+        purchasePrice: product.costPrice,
+        sellingPrice: product.sellingPrice,
+        retailPrice: product.sellingPrice,
+        minimumQuantity: product.stockMin,
+        reorderPoint: product.stockMin,
+        trackInventory: true,
+        allowNegativeStock: false,
+        costingMethod: "AVERAGE",
+        minimumSellingPrice: product.costPrice,
+        isActive: true,
+      },
+    });
+    productRecords[product.sku] = record.id;
+  }
+
+  console.log("→ Entrepôts (Phase 4)…");
+  const warehouses = [
+    {
+      code: "WH-000001",
+      name: "Entrepôt Central - Alger",
+      nameAr: "المستودع المركزي - الجزائر",
+      branchCode: "HQ",
+      address: "Zone industrielle, Rouiba, Alger",
+    },
+    {
+      code: "WH-000002",
+      name: "Entrepôt Ouest - Oran",
+      nameAr: "مستودع الغرب - وهران",
+      branchCode: "OR",
+      address: "Zone industrielle, Es Sénia, Oran",
+    },
+  ];
+  const warehouseRecords: Record<string, string> = {};
+  for (const warehouse of warehouses) {
+    const record = await prisma.warehouse.upsert({
+      where: { code: warehouse.code },
+      update: {},
+      create: {
+        code: warehouse.code,
+        name: warehouse.name,
+        nameAr: warehouse.nameAr,
+        branchId: branchRecords[warehouse.branchCode],
+        address: warehouse.address,
+        isActive: true,
+      },
+    });
+    warehouseRecords[warehouse.code] = record.id;
+  }
+
+  console.log("→ Mouvements d'inventaire (Phase 4)…");
+  const openingBalances = [
+    { sku: "ART-0001", warehouseCode: "WH-000001", quantity: 12, unitCost: 350000 },
+    { sku: "ART-0002", warehouseCode: "WH-000001", quantity: 3, unitCost: 620000 },
+    { sku: "ART-0003", warehouseCode: "WH-000001", quantity: 1500, unitCost: 900 },
+    { sku: "ART-0003", warehouseCode: "WH-000002", quantity: 900, unitCost: 920 },
+    { sku: "ART-0004", warehouseCode: "WH-000001", quantity: 2, unitCost: 2700000 },
+    { sku: "ART-0005", warehouseCode: "WH-000001", quantity: 120, unitCost: 6500 },
+    { sku: "ART-0005", warehouseCode: "WH-000002", quantity: 60, unitCost: 6800 },
+  ];
+  for (const [index, balance] of openingBalances.entries()) {
+    const number = `MOV-${String(index + 1).padStart(6, "0")}`;
+    await prisma.inventoryMovement.create({
+      data: {
+        number,
+        type: "OPENING_BALANCE",
+        productId: productRecords[balance.sku],
+        warehouseId: warehouseRecords[balance.warehouseCode],
+        quantity: balance.quantity,
+        unitCost: balance.unitCost,
+        occurredAt: new Date(),
+      },
     });
   }
 
+  // Keep Phase 4 series counters past the seeded demo codes.
+  await prisma.documentSeries.updateMany({
+    where: { docType: "PRODUCT" },
+    data: { nextValue: BigInt(6) },
+  });
+  await prisma.documentSeries.updateMany({
+    where: { docType: "WAREHOUSE" },
+    data: { nextValue: BigInt(3) },
+  });
+  await prisma.documentSeries.updateMany({
+    where: { docType: "INVENTORY_MOVEMENT" },
+    data: { nextValue: BigInt(openingBalances.length + 1) },
+  });
+
   const counts = {
+    companies: await prisma.company.count(),
+    userCompanies: await prisma.userCompany.count(),
+    roleAssignments: await prisma.roleAssignment.count(),
     branches: await prisma.branch.count(),
     users: await prisma.user.count(),
     roles: await prisma.role.count(),
@@ -576,6 +898,13 @@ async function main() {
     customers: await prisma.customer.count(),
     suppliers: await prisma.supplier.count(),
     products: await prisma.product.count(),
+    productCategories: await prisma.productCategory.count(),
+    brands: await prisma.brand.count(),
+    manufacturers: await prisma.manufacturer.count(),
+    units: await prisma.unit.count(),
+    vatCategories: await prisma.vatCategory.count(),
+    warehouses: await prisma.warehouse.count(),
+    inventoryMovements: await prisma.inventoryMovement.count(),
     wilayas: await prisma.wilaya.count(),
     communes: await prisma.commune.count(),
     countries: await prisma.country.count(),

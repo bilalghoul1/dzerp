@@ -2,40 +2,27 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE, verifySessionCookie } from "@/features/auth/session";
+import { COMPANY_COOKIE } from "@/lib/constants";
 import {
-  ALL_PERMISSION_KEYS,
-  type PermissionKey,
-} from "@/features/auth/permissions";
+  listCompaniesForUser,
+  resolveMembership,
+  selectActiveCompanyId,
+} from "@/features/company/store";
+import type { PermissionKey } from "@/features/auth/permissions";
 
 import type { SessionContext, SessionUser } from "@/features/auth/types";
 
 export type { SessionContext, SessionUser };
 
-async function getUserPermissions(userId: string): Promise<PermissionKey[]> {
-  const userRoles = await prisma.userRole.findMany({
-    where: { userId },
-    select: {
-      role: {
-        select: {
-          permissions: {
-            select: { permission: { select: { key: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  const keys = new Set<PermissionKey>();
-  for (const ur of userRoles) {
-    for (const rp of ur.role.permissions) {
-      if ((ALL_PERMISSION_KEYS as readonly string[]).includes(rp.permission.key)) {
-        keys.add(rp.permission.key as PermissionKey);
-      }
-    }
-  }
-  return Array.from(keys);
-}
-
+/**
+ * Session authentifiée + permissions effectives dans la société active.
+ *
+ * Phase 5.3 : les permissions sont évaluées UNIQUEMENT via le contexte société
+ * (`RoleAssignment`), avec repli temporaire sur les rôles globaux (`UserRole`).
+ * `SessionContext.permissions` reflète donc l'autorisation société, pas les
+ * rôles globaux bruts. Aucune valeur de session/cookie n'est utilisée sans
+ * validation préalable.
+ */
 export async function getCurrentUser(): Promise<SessionContext | null> {
   const store = await cookies();
   const value = store.get(SESSION_COOKIE)?.value;
@@ -76,9 +63,21 @@ export async function getCurrentUser(): Promise<SessionContext | null> {
 
   if (!user || user.status !== "ACTIVE") return null;
 
-  const permissions = await getUserPermissions(user.id);
+  // Société active : cookie requête → session → société par défaut.
+  const companies = await listCompaniesForUser(user.id);
+  const activeCompanyId = selectActiveCompanyId(
+    companies,
+    store.get(COMPANY_COOKIE)?.value,
+    session.activeCompanyId,
+  );
+  const resolution = activeCompanyId
+    ? await resolveMembership(user.id, activeCompanyId)
+    : null;
 
-  return { user, permissions };
+  return {
+    user,
+    permissions: resolution?.permissions ?? [],
+  };
 }
 
 export async function requireUser(): Promise<SessionContext> {

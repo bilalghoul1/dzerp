@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/rbac";
 import { AppShell } from "@/components/shell/app-shell";
-import { prisma } from "@/lib/prisma";
-import { getCompanyProfile } from "@/features/settings/config";
-import { getActiveBranch } from "@/features/session/active-branch";
+import { resolveCompanyContext } from "@/features/company/resolver";
+import {
+  runWithCompanyContext,
+  runWithResolveCache,
+} from "@/features/company/context";
 
 export const dynamic = "force-dynamic";
 
@@ -15,25 +17,10 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const [company, branches, activeBranch] = await Promise.all([
-    getCompanyProfile(),
-    prisma.branch.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, code: true, name: true, nameAr: true },
-    }),
-    getActiveBranch(),
-  ]);
-
-  return (
-    <AppShell
-      user={session.user}
-      permissions={session.permissions}
-      companyName={company.name}
-      branches={branches}
-      activeBranch={activeBranch}
-    >
-      {children}
-    </AppShell>
-  );
+  return runWithResolveCache(async () => {
+    const context = await resolveCompanyContext(session);
+    return runWithCompanyContext(context, () => (
+      <AppShell context={context}>{children}</AppShell>
+    ));
+  });
 }

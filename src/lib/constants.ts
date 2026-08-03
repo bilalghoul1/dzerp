@@ -20,4 +20,5 @@ export const STORAGE_KEYS = {
 export const SESSION_COOKIE = "dzerp.session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12h
 
+export const COMPANY_COOKIE = "dzerp.company";
 export const BRANCH_COOKIE = "dzerp.branch";

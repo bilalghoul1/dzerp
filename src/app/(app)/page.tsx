@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { listActivity } from "@/features/activity/service";
 import { recentDocuments } from "@/features/search/server";
+import { getStockSummary } from "@/features/inventory/config";
 import {
   Card,
   CardContent,
@@ -50,7 +51,6 @@ export default async function DashboardPage() {
   const [
     clientCount,
     productCount,
-    stockAlertCount,
     branchCount,
     userCount,
     pendingQuotations,
@@ -60,12 +60,12 @@ export default async function DashboardPage() {
     topClients,
     upcomingPayments,
     topProductRows,
+    stockSummary,
     recentDocs,
     recentActivity,
   ] = await Promise.all([
     prisma.customer.count(),
     prisma.product.count(),
-    prisma.product.count({ where: { stock: { lte: 0 } } }),
     prisma.branch.count(),
     prisma.user.count({ where: { status: "ACTIVE" } }),
     prisma.quotation.count({ where: { status: "PENDING" } }),
@@ -97,15 +97,29 @@ export default async function DashboardPage() {
       orderBy: { _sum: { quantity: "desc" } },
       take: 5,
     }),
+    getStockSummary(),
     recentDocuments(6),
     listActivity(8),
   ]);
+
+  const [stockAlertProducts] = await Promise.all([
+    prisma.product.findMany({
+      where: { deletedAt: null, isActive: true },
+      select: { id: true, minimumQuantity: true },
+    }),
+  ]);
+  const stockByProduct = new Map(
+    stockSummary.map((s) => [s.productId, s.onHand]),
+  );
+  const stockAlertCount = stockAlertProducts.filter(
+    (p) => (stockByProduct.get(p.id) ?? 0) < Number(p.minimumQuantity),
+  ).length;
 
   const productIds = topProductRows.map((r) => r.productId).filter((id): id is string => !!id);
   const products = productIds.length
     ? await prisma.product.findMany({
         where: { id: { in: productIds } },
-        select: { id: true, name: true, nameAr: true, sku: true, unit: true },
+        select: { id: true, name: true, nameAr: true, sku: true },
       })
     : [];
   const productMap = new Map(products.map((p) => [p.id, p]));

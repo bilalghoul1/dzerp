@@ -66,9 +66,15 @@ export type SessionMeta = {
   userAgent?: string | null;
 };
 
+export type SessionContextOptions = {
+  activeCompanyId?: string | null;
+  activeBranchId?: string | null;
+};
+
 export async function createSession(
   userId: string,
   meta: SessionMeta = {},
+  contextOptions: SessionContextOptions = {},
 ): Promise<{ sessionId: string; cookieValue: string; expiresAt: Date }> {
   const token = randomBytes(24).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
@@ -79,6 +85,8 @@ export async function createSession(
       userId,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
+      activeCompanyId: contextOptions.activeCompanyId ?? null,
+      activeBranchId: contextOptions.activeBranchId ?? null,
       expiresAt,
     },
   });
@@ -123,6 +131,83 @@ export async function revokeSession(): Promise<void> {
 
 export function verifySessionCookie(value: string): SessionPayload | null {
   return verify(value);
+}
+
+export type SessionActiveContext = {
+  activeCompanyId: string | null;
+  activeBranchId: string | null;
+};
+
+/**
+ * Contexte société/succursale persisté sur la session courante (cookie).
+ * Les valeurs ne sont PAS fiables : le résolveur de contexte les valide.
+ */
+export async function getSessionActiveContext(): Promise<SessionActiveContext | null> {
+  const store = await cookies();
+  const value = store.get(SESSION_COOKIE)?.value;
+  if (!value) return null;
+
+  const payload = verify(value);
+  if (!payload) return null;
+
+  const session = await prisma.session.findUnique({
+    where: { id: payload.sid },
+    select: { id: true, activeCompanyId: true, activeBranchId: true },
+  });
+  if (!session) return null;
+
+  return {
+    activeCompanyId: session.activeCompanyId,
+    activeBranchId: session.activeBranchId,
+  };
+}
+
+/**
+ * Dernier contexte société/succursale d'un utilisateur (session précédente,
+ * non révoquée). Utilisé à la connexion pour restaurer le contexte précédent.
+ */
+export async function getLastSessionContext(
+  userId: string,
+): Promise<SessionActiveContext | null> {
+  const session = await prisma.session.findFirst({
+    where: { userId, revokedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { activeCompanyId: true, activeBranchId: true },
+  });
+  if (!session) return null;
+  return {
+    activeCompanyId: session.activeCompanyId,
+    activeBranchId: session.activeBranchId,
+  };
+}
+
+/** Met à jour le contexte société/succursale de la session courante. */
+export async function updateSessionContext(
+  input: SessionContextOptions,
+): Promise<boolean> {
+  const store = await cookies();
+  const value = store.get(SESSION_COOKIE)?.value;
+  if (!value) return false;
+
+  const payload = verify(value);
+  if (!payload) return false;
+
+  const data: {
+    activeCompanyId?: string | null;
+    activeBranchId?: string | null;
+  } = {};
+  if (input.activeCompanyId !== undefined) {
+    data.activeCompanyId = input.activeCompanyId;
+  }
+  if (input.activeBranchId !== undefined) {
+    data.activeBranchId = input.activeBranchId;
+  }
+
+  const updated = await prisma.session.updateMany({
+    where: { id: payload.sid, revokedAt: null },
+    data,
+  });
+  return updated.count === 1;
 }
 
 export { SESSION_COOKIE };

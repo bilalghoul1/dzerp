@@ -165,11 +165,16 @@ export async function globalSearch(
       }),
       prisma.product.findMany({
         where: {
-          OR: [{ name: containsQ }, { sku: containsQ }],
+          OR: [
+            { name: containsQ },
+            { sku: containsQ },
+            { code: containsQ },
+            { barcode: containsQ },
+          ],
         },
         take: limit,
         orderBy: { name: "asc" },
-        select: { id: true, name: true, nameAr: true, sku: true, category: true },
+        select: { id: true, name: true, nameAr: true, sku: true, code: true },
       }),
       prisma.user.findMany({
         where: {
@@ -214,8 +219,8 @@ export async function globalSearch(
       id: p.id,
       title: p.name,
       titleAr: p.nameAr,
-      subtitle: `Item · ${p.sku}${p.category ? ` · ${p.category}` : ""}`,
-      href: `/stock/${p.id}`,
+      subtitle: `Item · ${p.code}${p.sku && p.sku !== p.code ? ` · ${p.sku}` : ""}`,
+      href: `/stock`,
       icon: "inventory_2",
     })),
     ...users.map((u) => ({

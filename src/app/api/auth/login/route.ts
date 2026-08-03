@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import {
@@ -7,6 +8,8 @@ import {
 } from "@/features/auth/session";
 import { verifyPassword } from "@/features/auth/password";
 import { recordAudit } from "@/features/audit/service";
+import { resolveLoginContext } from "@/features/company/resolver";
+import { COMPANY_COOKIE, BRANCH_COOKIE } from "@/lib/constants";
 
 const loginSchema = z.object({
   username: z.string().trim().min(1, "Identifiant requis"),
@@ -54,7 +57,28 @@ export async function POST(request: Request): Promise<NextResponse> {
       userAgent: request.headers.get("user-agent"),
     };
 
-    await createSession(user.id, meta);
+    const loginContext = await resolveLoginContext(user.id);
+
+    await createSession(user.id, meta, {
+      activeCompanyId: loginContext.activeCompanyId,
+      activeBranchId: loginContext.activeBranchId,
+    });
+
+    const cookieStore = await cookies();
+    if (loginContext.activeCompanyId) {
+      cookieStore.set(COMPANY_COOKIE, loginContext.activeCompanyId, {
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      });
+    }
+    if (loginContext.activeBranchId) {
+      cookieStore.set(BRANCH_COOKIE, loginContext.activeBranchId, {
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      });
+    }
 
     await recordAudit({
       action: "LOGIN",

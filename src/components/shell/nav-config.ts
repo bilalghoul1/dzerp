@@ -13,7 +13,7 @@ export const mainNav: NavItem[] = [
   { labelKey: "nav.suppliers", href: "/crm/suppliers", icon: "handshake", permission: "crm.supplier.view" },
   { labelKey: "nav.ventes", href: "/ventes", icon: "payments", permission: "ventes.devis.view" },
   { labelKey: "nav.achats", href: "/achats", icon: "shopping_cart", permission: "achats.bon.view" },
-  { labelKey: "nav.stock", href: "/stock", icon: "inventory_2", permission: "stock.view" },
+  { labelKey: "nav.stock", href: "/stock", icon: "inventory_2", permission: "product.view" },
   { labelKey: "nav.production", href: "/production", icon: "factory", permission: "production.view" },
   { labelKey: "nav.comptabilite", href: "/comptabilite", icon: "account_balance", permission: "compta.view" },
   { labelKey: "nav.rh", href: "/rh", icon: "badge", permission: "rh.view" },

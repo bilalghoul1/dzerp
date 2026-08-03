@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "verify:phase53": "tsx scripts/verify-phase53.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
