@@ -56,16 +56,16 @@ export async function listCompaniesForUser(
 }
 
 /**
- * Succursales de la société active.
- * Phase 5.3 : `Branch` ne porte pas encore de `companyId` (migration 5.4) ;
- * on retourne donc toutes les succursales actives.
+ * Succursales de la société active. Le filtre `companyId` est explicite :
+ * la résolution du contexte s'exécute hors contexte ALS, ce scoping explicite
+ * permet à l'extension companyScope de laisser passer la requête.
  */
 export async function listBranchesForCompany(
   companyId: string,
 ): Promise<BranchRef[]> {
   return memo(`branches:${companyId}`, async () => {
     return prisma.branch.findMany({
-      where: { isActive: true },
+      where: { companyId, isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, code: true, name: true, nameAr: true },
     });

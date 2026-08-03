@@ -170,7 +170,9 @@ enum InventoryMovementType {
 
 model Branch {
   id          String     @id @default(uuid())
-  code        String     @unique
+  companyId   String
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String
   name        String
   nameAr      String?
   type        BranchType @default(DIRECTION)
@@ -181,7 +183,7 @@ model Branch {
   manager     String?
   country     String?
   wilaya      String?
-  commune     String?
+  commune      String?
   postalCode  String?
   rc          String?
   nif         String?
@@ -208,6 +210,7 @@ model Branch {
   sessions         Session[]
 
   @@index([type])
+  @@unique([companyId, code])
   @@index([city])
   @@index([wilaya])
 }
@@ -449,6 +452,30 @@ model Company {
   userCompanies UserCompany[]
   sessions      Session[]
 
+  branches           Branch[]
+  documentSeries     DocumentSeries[]
+  customers          Customer[]
+  suppliers          Supplier[]
+  products           Product[]
+  productCategories  ProductCategory[]
+  brands             Brand[]
+  manufacturers      Manufacturer[]
+  warehouses         Warehouse[]
+  inventoryMovements InventoryMovement[]
+  quotations         Quotation[]
+  salesOrders        SalesOrder[]
+  deliveryNotes      DeliveryNote[]
+  invoices           Invoice[]
+  creditNotes        CreditNote[]
+  purchaseRequests   PurchaseRequest[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+  supplierInvoices   SupplierInvoice[]
+  documentApprovals  DocumentApproval[]
+  fileAssets         FileAsset[]
+  auditLogs          AuditLog[]
+  activityEvents     ActivityEvent[]
+
   @@index([isActive])
   @@index([isDefault])
 }
@@ -550,6 +577,8 @@ model Setting {
 
 model AuditLog {
   id        String      @id @default(uuid())
+  companyId String?
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   action    AuditAction
   entity    String
   entityId  String?
@@ -560,6 +589,7 @@ model AuditLog {
   changes   Json?
   createdAt DateTime    @default(now())
 
+  @@index([companyId])
   @@index([entity, entityId])
   @@index([actorId])
   @@index([action])
@@ -572,6 +602,8 @@ model AuditLog {
 
 model ActivityEvent {
   id        String       @id @default(uuid())
+  companyId String?
+  company   Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   type      ActivityType
   actorId   String?
   actor     User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
@@ -582,6 +614,7 @@ model ActivityEvent {
   meta      Json?
   createdAt DateTime     @default(now())
 
+  @@index([companyId])
   @@index([entity, entityId])
   @@index([actorId])
   @@index([createdAt])
@@ -593,6 +626,8 @@ model ActivityEvent {
 
 model FileAsset {
   id           String   @id @default(uuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   originalName String
   storageKey   String   @unique
   mimeType     String
@@ -604,6 +639,7 @@ model FileAsset {
   createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
+  @@index([companyId])
   @@index([entity, entityId])
   @@index([createdById])
   @@index([kind])
@@ -692,7 +728,9 @@ model Client {
 
 model Customer {
   id             String     @id @default(uuid())
-  code           String     @unique
+  companyId      String
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code           String
   type           ClientType @default(COMPANY)
   name           String
   nameAr         String?
@@ -738,11 +776,14 @@ model Customer {
   @@index([createdAt])
   @@index([deletedAt])
   @@index([createdById])
+  @@unique([companyId, code])
 }
 
 model Supplier {
   id             String     @id @default(uuid())
-  code           String     @unique
+  companyId      String
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code           String
   type           ClientType @default(COMPANY)
   name           String
   nameAr         String?
@@ -790,13 +831,16 @@ model Supplier {
   @@index([createdAt])
   @@index([deletedAt])
   @@index([createdById])
+  @@unique([companyId, code])
 }
 
 model Product {
   id          String      @id @default(uuid())
-  code        String      @unique // numéro de référence produit (série PRODUCT)
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String // numéro de référence produit (série PRODUCT)
   type        ProductType @default(PRODUCT)
-  sku         String      @unique
+  sku         String
   name        String // nom français
   nameAr      String?
   description String?
@@ -905,6 +949,8 @@ model Product {
   @@index([parentId])
   @@index([deletedAt])
   @@index([createdById])
+  @@unique([companyId, code])
+  @@unique([companyId, sku])
 }
 
 // ---------------------------------------------------------------------------
@@ -913,7 +959,9 @@ model Product {
 
 model ProductCategory {
   id          String            @id @default(uuid())
-  code        String            @unique
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String
   name        String
   nameAr      String?
   parentId    String? // sous-catégorie
@@ -931,11 +979,14 @@ model ProductCategory {
 
   @@index([parentId])
   @@index([isActive])
+  @@unique([companyId, code])
 }
 
 model Brand {
   id          String   @id @default(uuid())
-  code        String   @unique
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String
   name        String
   nameAr      String?
   description String?
@@ -948,11 +999,14 @@ model Brand {
   products Product[]
 
   @@index([isActive])
+  @@unique([companyId, code])
 }
 
 model Manufacturer {
   id          String   @id @default(uuid())
-  code        String   @unique
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String
   name        String
   nameAr      String?
   country     String?
@@ -965,6 +1019,7 @@ model Manufacturer {
   products Product[]
 
   @@index([isActive])
+  @@unique([companyId, code])
 }
 
 model Unit {
@@ -1063,7 +1118,9 @@ model ProductSupplier {
 
 model Warehouse {
   id          String    @id @default(uuid())
-  code        String    @unique
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code        String
   name        String
   nameAr      String?
   description String?
@@ -1087,6 +1144,7 @@ model Warehouse {
   @@index([managerId])
   @@index([deletedAt])
   @@index([createdById])
+  @@unique([companyId, code])
 }
 
 // Préparation : zones / emplacements / rayonnages / bacs (arborescence).
@@ -1116,6 +1174,8 @@ model WarehouseLocation {
 
 model InventoryMovement {
   id               String                @id @default(uuid())
+  companyId        String
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   number           String                @unique // série INVENTORY_MOVEMENT (MOV-000001)
   type             InventoryMovementType
   productId        String
@@ -1135,6 +1195,7 @@ model InventoryMovement {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
+  @@unique([companyId, number])
   @@index([productId, warehouseId])
   @@index([productId])
   @@index([warehouseId])
@@ -1186,8 +1247,10 @@ enum PaymentStatus {
 
 model DocumentSeries {
   id          String   @id @default(uuid())
-  key         String   @unique // identifiant stable ex. "QUOTATION"
-  docType     DocType  @unique // une série active par type de document
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  key         String // identifiant stable ex. "QUOTATION"
+  docType     DocType // une série active par type de document
   label       String
   labelAr     String?
   prefix      String   @default("")
@@ -1202,6 +1265,9 @@ model DocumentSeries {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   updatedById String?
+
+  @@unique([companyId, key])
+  @@unique([companyId, docType])
 }
 
 // ---------------------------------------------------------------------------
@@ -1210,6 +1276,8 @@ model DocumentSeries {
 
 model DocumentApproval {
   id            String         @id @default(uuid())
+  companyId     String
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   docType       DocType
   docId         String         @unique // identifiant du document ciblé
   requestedById String?
@@ -1222,6 +1290,7 @@ model DocumentApproval {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  @@index([companyId])
   @@index([docType])
   @@index([status])
   @@index([approverId])
@@ -1233,7 +1302,9 @@ model DocumentApproval {
 
 model Quotation {
   id          String         @id @default(uuid())
-  number      String         @unique
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number      String
   status      DocumentStatus @default(DRAFT)
   clientId    String?
   client      Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1258,6 +1329,7 @@ model Quotation {
   lines       QuotationLine[]
   salesOrders SalesOrder[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([customerId])
   @@index([branchId])
@@ -1289,7 +1361,9 @@ model QuotationLine {
 
 model SalesOrder {
   id           String         @id @default(uuid())
-  number       String         @unique
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number       String
   status       DocumentStatus @default(DRAFT)
   clientId     String?
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1316,6 +1390,7 @@ model SalesOrder {
   lines         SalesOrderLine[]
   deliveryNotes DeliveryNote[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([customerId])
   @@index([branchId])
@@ -1348,7 +1423,9 @@ model SalesOrderLine {
 
 model DeliveryNote {
   id           String         @id @default(uuid())
-  number       String         @unique
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number       String
   status       DocumentStatus @default(DRAFT)
   clientId     String?
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1374,6 +1451,7 @@ model DeliveryNote {
 
   lines DeliveryNoteLine[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([customerId])
   @@index([branchId])
@@ -1406,7 +1484,9 @@ model DeliveryNoteLine {
 
 model Invoice {
   id            String         @id @default(uuid())
-  number        String         @unique
+  companyId     String
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number        String
   status        DocumentStatus @default(DRAFT)
   clientId      String?
   client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1433,6 +1513,7 @@ model Invoice {
   lines       InvoiceLine[]
   creditNotes CreditNote[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([customerId])
   @@index([branchId])
@@ -1466,7 +1547,9 @@ model InvoiceLine {
 
 model CreditNote {
   id          String         @id @default(uuid())
-  number      String         @unique
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number      String
   status      DocumentStatus @default(DRAFT)
   clientId    String?
   client      Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1492,6 +1575,7 @@ model CreditNote {
 
   lines CreditNoteLine[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([customerId])
   @@index([branchId])
@@ -1528,7 +1612,9 @@ model CreditNoteLine {
 
 model PurchaseRequest {
   id          String         @id @default(uuid())
-  number      String         @unique
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number      String
   status      DocumentStatus @default(DRAFT)
   clientId    String? // legacy shared-party reference (nullable); see supplierId
   client      Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1553,6 +1639,7 @@ model PurchaseRequest {
 
   lines PurchaseRequestLine[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([supplierId])
   @@index([branchId])
@@ -1584,7 +1671,9 @@ model PurchaseRequestLine {
 
 model PurchaseOrder {
   id           String         @id @default(uuid())
-  number       String         @unique
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number       String
   status       DocumentStatus @default(DRAFT)
   clientId     String? // legacy shared-party reference (nullable); see supplierId
   client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1609,6 +1698,7 @@ model PurchaseOrder {
   lines         PurchaseOrderLine[]
   goodsReceipts GoodsReceipt[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([supplierId])
   @@index([branchId])
@@ -1640,7 +1730,9 @@ model PurchaseOrderLine {
 
 model GoodsReceipt {
   id              String         @id @default(uuid())
-  number          String         @unique
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number          String
   status          DocumentStatus @default(DRAFT)
   clientId        String? // legacy shared-party reference (nullable); see supplierId
   client          Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1666,6 +1758,7 @@ model GoodsReceipt {
 
   lines GoodsReceiptLine[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([supplierId])
   @@index([branchId])
@@ -1698,7 +1791,9 @@ model GoodsReceiptLine {
 
 model SupplierInvoice {
   id            String         @id @default(uuid())
-  number        String         @unique
+  companyId     String
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number        String
   status        DocumentStatus @default(DRAFT)
   clientId      String? // legacy shared-party reference (nullable); see supplierId
   client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -1724,6 +1819,7 @@ model SupplierInvoice {
 
   lines SupplierInvoiceLine[]
 
+  @@unique([companyId, number])
   @@index([clientId])
   @@index([supplierId])
   @@index([branchId])

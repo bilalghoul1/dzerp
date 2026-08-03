@@ -17,7 +17,6 @@ async function main() {
 
   await prisma.roleAssignment.deleteMany();
   await prisma.userCompany.deleteMany();
-  await prisma.company.deleteMany();
   await prisma.rolePermission.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.auditLog.deleteMany();
@@ -72,25 +71,9 @@ async function main() {
   await prisma.unit.deleteMany();
   await prisma.vatCategory.deleteMany();
   await prisma.branch.deleteMany();
+  await prisma.company.deleteMany();
 
-  console.log("→ Succursales…");
-  const branches = [
-    { code: "HQ", name: "Siège Social - Alger", nameAr: "المقر الرئيسي - الجزائر العاصمة", type: "HEADQUARTER" as const, city: "Alger", phone: "+213 21 00 00 00", email: "contact@dzerp.dz" },
-    { code: "OR", name: "Direction Ouest - Oran", nameAr: "المديرية الغربية - وهران", type: "DIRECTION" as const, city: "Oran", phone: "+213 41 00 00 00", email: "oran@dzerp.dz" },
-    { code: "CE", name: "Direction Est - Constantine", nameAr: "المديرية الشرقية - قسنطينة", type: "DIRECTION" as const, city: "Constantine", phone: "+213 31 00 00 00", email: "constantine@dzerp.dz" },
-    { code: "SU", name: "Direction Sud - Ouargla", nameAr: "المديرية الجنوبية - ورقلة", type: "DIRECTION" as const, city: "Ouargla", phone: "+213 29 00 00 00", email: "ouargla@dzerp.dz" },
-  ];
-  const branchRecords: Record<string, string> = {};
-  for (const branch of branches) {
-    const record = await prisma.branch.upsert({
-      where: { code: branch.code },
-      update: branch,
-      create: branch,
-    });
-    branchRecords[branch.code] = record.id;
-  }
-
-  console.log("→ Sociétés (Phase 5.3)…");
+  console.log("→ Société par défaut (Phase 5.3)…");
   const mainCompany = await prisma.company.upsert({
     where: { code: "MAIN" },
     update: {
@@ -109,6 +92,30 @@ async function main() {
       isActive: true,
     },
   });
+
+  console.log("→ Succursales…");
+  const branches = [
+    { code: "HQ", name: "Siège Social - Alger", nameAr: "المقر الرئيسي - الجزائر العاصمة", type: "HEADQUARTER" as const, city: "Alger", phone: "+213 21 00 00 00", email: "contact@dzerp.dz" },
+    { code: "OR", name: "Direction Ouest - Oran", nameAr: "المديرية الغربية - وهران", type: "DIRECTION" as const, city: "Oran", phone: "+213 41 00 00 00", email: "oran@dzerp.dz" },
+    { code: "CE", name: "Direction Est - Constantine", nameAr: "المديرية الشرقية - قسنطينة", type: "DIRECTION" as const, city: "Constantine", phone: "+213 31 00 00 00", email: "constantine@dzerp.dz" },
+    { code: "SU", name: "Direction Sud - Ouargla", nameAr: "المديرية الجنوبية - ورقلة", type: "DIRECTION" as const, city: "Ouargla", phone: "+213 29 00 00 00", email: "ouargla@dzerp.dz" },
+  ];
+  const branchRecords: Record<string, string> = {};
+  for (const branch of branches) {
+    const record = await prisma.branch.upsert({
+      where: { companyId_code: { companyId: mainCompany.id, code: branch.code } },
+      update: {
+        name: branch.name,
+        nameAr: branch.nameAr,
+        type: branch.type,
+        city: branch.city,
+        phone: branch.phone,
+        email: branch.email,
+      },
+      create: { ...branch, companyId: mainCompany.id },
+    });
+    branchRecords[branch.code] = record.id;
+  }
 
   console.log("→ Permissions (catalogue)…");
   const permissionIds: Record<string, string> = {};
@@ -369,9 +376,9 @@ async function main() {
   ];
   for (const s of series) {
     await prisma.documentSeries.upsert({
-      where: { key: s.key },
+      where: { companyId_key: { companyId: mainCompany.id, key: s.key } },
       update: {},
-      create: s,
+      create: { ...s, companyId: mainCompany.id },
     });
   }
 
@@ -585,9 +592,9 @@ async function main() {
   ];
   for (const customer of customers) {
     await prisma.customer.upsert({
-      where: { code: customer.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: customer.code } },
       update: {},
-      create: customer,
+      create: { ...customer, companyId: mainCompany.id },
     });
   }
 
@@ -598,19 +605,19 @@ async function main() {
   ];
   for (const supplier of suppliers) {
     await prisma.supplier.upsert({
-      where: { code: supplier.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: supplier.code } },
       update: {},
-      create: supplier,
+      create: { ...supplier, companyId: mainCompany.id },
     });
   }
 
   // Keep partner series counters past the seeded demo codes.
   await prisma.documentSeries.updateMany({
-    where: { docType: "CUSTOMER" },
+    where: { companyId: mainCompany.id, docType: "CUSTOMER" },
     data: { nextValue: BigInt(6) },
   });
   await prisma.documentSeries.updateMany({
-    where: { docType: "SUPPLIER" },
+    where: { companyId: mainCompany.id, docType: "SUPPLIER" },
     data: { nextValue: BigInt(4) },
   });
 
@@ -657,12 +664,13 @@ async function main() {
   const categoryRecords: Record<string, string> = {};
   for (const category of categories) {
     const record = await prisma.productCategory.upsert({
-      where: { code: category.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: category.code } },
       update: { name: category.name, nameAr: category.nameAr },
       create: {
         code: category.code,
         name: category.name,
         nameAr: category.nameAr,
+        companyId: mainCompany.id,
       },
     });
     categoryRecords[category.code] = record.id;
@@ -670,7 +678,7 @@ async function main() {
   for (const category of categories) {
     if (category.parentCode) {
       await prisma.productCategory.update({
-        where: { code: category.code },
+        where: { companyId_code: { companyId: mainCompany.id, code: category.code } },
         data: { parentId: categoryRecords[category.parentCode] },
       });
     }
@@ -685,9 +693,9 @@ async function main() {
   const brandRecords: Record<string, string> = {};
   for (const brand of brands) {
     const record = await prisma.brand.upsert({
-      where: { code: brand.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: brand.code } },
       update: { name: brand.name, nameAr: brand.nameAr },
-      create: brand,
+      create: { ...brand, companyId: mainCompany.id },
     });
     brandRecords[brand.code] = record.id;
   }
@@ -699,9 +707,9 @@ async function main() {
   const manufacturerRecords: Record<string, string> = {};
   for (const manufacturer of manufacturers) {
     const record = await prisma.manufacturer.upsert({
-      where: { code: manufacturer.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: manufacturer.code } },
       update: { name: manufacturer.name, nameAr: manufacturer.nameAr },
-      create: manufacturer,
+      create: { ...manufacturer, companyId: mainCompany.id },
     });
     manufacturerRecords[manufacturer.code] = record.id;
   }
@@ -782,11 +790,12 @@ async function main() {
   const productRecords: Record<string, string> = {};
   for (const product of products) {
     const record = await prisma.product.upsert({
-      where: { sku: product.sku },
+      where: { companyId_sku: { companyId: mainCompany.id, sku: product.sku } },
       update: {},
       create: {
         code: product.code,
         sku: product.sku,
+        companyId: mainCompany.id,
         name: product.name,
         nameAr: product.nameAr,
         categoryId: categoryRecords[product.category],
@@ -834,12 +843,13 @@ async function main() {
   const warehouseRecords: Record<string, string> = {};
   for (const warehouse of warehouses) {
     const record = await prisma.warehouse.upsert({
-      where: { code: warehouse.code },
+      where: { companyId_code: { companyId: mainCompany.id, code: warehouse.code } },
       update: {},
       create: {
         code: warehouse.code,
         name: warehouse.name,
         nameAr: warehouse.nameAr,
+        companyId: mainCompany.id,
         branchId: branchRecords[warehouse.branchCode],
         address: warehouse.address,
         isActive: true,
@@ -864,6 +874,7 @@ async function main() {
       data: {
         number,
         type: "OPENING_BALANCE",
+        companyId: mainCompany.id,
         productId: productRecords[balance.sku],
         warehouseId: warehouseRecords[balance.warehouseCode],
         quantity: balance.quantity,
@@ -875,15 +886,15 @@ async function main() {
 
   // Keep Phase 4 series counters past the seeded demo codes.
   await prisma.documentSeries.updateMany({
-    where: { docType: "PRODUCT" },
+    where: { companyId: mainCompany.id, docType: "PRODUCT" },
     data: { nextValue: BigInt(6) },
   });
   await prisma.documentSeries.updateMany({
-    where: { docType: "WAREHOUSE" },
+    where: { companyId: mainCompany.id, docType: "WAREHOUSE" },
     data: { nextValue: BigInt(3) },
   });
   await prisma.documentSeries.updateMany({
-    where: { docType: "INVENTORY_MOVEMENT" },
+    where: { companyId: mainCompany.id, docType: "INVENTORY_MOVEMENT" },
     data: { nextValue: BigInt(openingBalances.length + 1) },
   });
 

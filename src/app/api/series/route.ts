@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { apiGuard } from "@/features/auth/api-guard";
+import { apiGuardWithContext, runScoped } from "@/features/company/api";
 import {
   formatSeriesNumber,
   listDocumentSeries,
@@ -23,69 +23,73 @@ const updateSchema = z.object({
 });
 
 export async function GET(): Promise<NextResponse> {
-  const guard = await apiGuard("parametres.view");
+  const guard = await apiGuardWithContext("parametres.view");
   if (guard.response) return guard.response;
 
-  try {
-    const series = await listDocumentSeries();
-    const withPreview = series.map((s) => ({
-      ...s,
-      next: formatSeriesNumber(s, s.nextValue),
-    }));
-    return okResponse(withPreview);
-  } catch (error) {
-    console.error("series GET error:", error);
-    return NextResponse.json(
-      { error: { message: "Erreur interne.", code: "INTERNAL_ERROR" } },
-      { status: 500 },
-    );
-  }
+  return runScoped(guard.context, async () => {
+    try {
+      const series = await listDocumentSeries();
+      const withPreview = series.map((s) => ({
+        ...s,
+        next: formatSeriesNumber(s, s.nextValue),
+      }));
+      return okResponse(withPreview);
+    } catch (error) {
+      console.error("series GET error:", error);
+      return NextResponse.json(
+        { error: { message: "Erreur interne.", code: "INTERNAL_ERROR" } },
+        { status: 500 },
+      );
+    }
+  });
 }
 
 export async function PATCH(request: Request): Promise<NextResponse> {
-  const guard = await apiGuard("parametres.manage");
+  const guard = await apiGuardWithContext("parametres.manage");
   if (guard.response) return guard.response;
 
-  try {
-    const body = await request.json().catch(() => ({}));
-    const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) {
+  return runScoped(guard.context, async () => {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const parsed = updateSchema.safeParse(body);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: { message: "Requête invalide.", code: "INVALID_BODY", details: parsed.error.flatten() } },
+          { status: 400 },
+        );
+      }
+
+      const { id, ...data } = parsed.data;
+      const existing = await prisma.documentSeries.findUnique({ where: { id } });
+      if (!existing) {
+        return NextResponse.json(
+          { error: { message: "Série introuvable.", code: "NOT_FOUND" } },
+          { status: 404 },
+        );
+      }
+
+      const nextValue =
+        data.nextValue !== undefined ? BigInt(data.nextValue) : undefined;
+
+      const series = await prisma.documentSeries.update({
+        where: { id },
+        data: { ...data, ...(nextValue !== undefined ? { nextValue } : {}) },
+      });
+
+      await recordAudit({
+        action: "UPDATE",
+        entity: "DocumentSeries",
+        entityId: series.id,
+        actorId: guard.session.user.id,
+      });
+
+      return okResponse(series);
+    } catch (error) {
+      console.error("series PATCH error:", error);
       return NextResponse.json(
-        { error: { message: "Requête invalide.", code: "INVALID_BODY", details: parsed.error.flatten() } },
-        { status: 400 },
+        { error: { message: "Erreur interne.", code: "INTERNAL_ERROR" } },
+        { status: 500 },
       );
     }
-
-    const { id, ...data } = parsed.data;
-    const existing = await prisma.documentSeries.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json(
-        { error: { message: "Série introuvable.", code: "NOT_FOUND" } },
-        { status: 404 },
-      );
-    }
-
-    const nextValue =
-      data.nextValue !== undefined ? BigInt(data.nextValue) : undefined;
-
-    const series = await prisma.documentSeries.update({
-      where: { id },
-      data: { ...data, ...(nextValue !== undefined ? { nextValue } : {}) },
-    });
-
-    await recordAudit({
-      action: "UPDATE",
-      entity: "DocumentSeries",
-      entityId: series.id,
-      actorId: guard.session.user.id,
-    });
-
-    return okResponse(series);
-  } catch (error) {
-    console.error("series PATCH error:", error);
-    return NextResponse.json(
-      { error: { message: "Erreur interne.", code: "INTERNAL_ERROR" } },
-      { status: 500 },
-    );
-  }
+  });
 }

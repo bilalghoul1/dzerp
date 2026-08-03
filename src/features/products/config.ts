@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
@@ -348,6 +349,7 @@ export async function createProduct(
   const row = await prisma.product.create({
     data: {
       ...buildCreateData(input, code, createdById),
+      companyId: requireCompanyContext().company.id,
       attributeValues: input.attributes?.length
         ? {
             create: input.attributes.map((a) => ({

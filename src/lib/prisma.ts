@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { companyScopeExtension } from "@/lib/db/company-scope";
 import {
   softDeleteExtension,
   setSoftDeleteDelegate,
@@ -17,7 +18,9 @@ function resolveConnectionUrl(): string {
 const adapter = new PrismaPg({ connectionString: resolveConnectionUrl() });
 
 const baseClient = new PrismaClient({ adapter });
-const extendedClient = baseClient.$extends(softDeleteExtension);
+const extendedClient = baseClient
+  .$extends(companyScopeExtension)
+  .$extends(softDeleteExtension);
 
 type PrismaClientExtended = typeof extendedClient;
 

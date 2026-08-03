@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 import {
   businessPartnerCreateSchema,
@@ -47,6 +48,7 @@ export async function createCustomer(
       type: input.type ?? "COMPANY",
       creditLimit: input.creditLimit ?? 0,
       code,
+      companyId: requireCompanyContext().company.id,
       createdById,
     },
   });

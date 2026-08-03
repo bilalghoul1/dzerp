@@ -44,6 +44,57 @@ export function getCompanyContext(): CompanyContext | null {
   return storage.getStore()?.context ?? null;
 }
 
+/**
+ * Contexte société requis : échoue si la requête s'exécute hors contexte.
+ * Utilisé par les services métier qui renseignent `companyId` explicitement
+ * (le scoping d'écriture de l'extension le renseigne aussi à l'exécution).
+ */
+type FallbackResolver = () => Promise<CompanyContext | null>;
+
+let fallbackResolver: FallbackResolver | null = null;
+
+/**
+ * Enregistre le résolveur de contexte de secours. Nécessaire car les rendus
+ * asynchrones des pages RSC s'exécutent hors du contexte ALS du layout : les
+ * requêtes Prisma scoped n'y trouvent aucun contexte ALS. Le résolveur doit
+ * être mémorisé par requête (`React.cache`, layout racine) pour éviter une
+ * résolution par requête Prisma.
+ */
+export function setFallbackContextResolver(
+  resolver: FallbackResolver | null,
+): void {
+  fallbackResolver = resolver;
+}
+
+/**
+ * Contexte société pour une opération Prisma : contexte ALS s'il existe,
+ * sinon résolution de secours (par requête). Retourne `null` si l'utilisateur
+ * n'est pas authentifié ou si aucun contexte n'est résolvable. Toute erreur de
+ * résolution est traitée comme absence de contexte (fail-closed en aval).
+ */
+export async function getOrResolveCompanyContext(): Promise<CompanyContext | null> {
+  const existing = getCompanyContext();
+  if (existing) return existing;
+  if (!fallbackResolver) return null;
+  try {
+    return await fallbackResolver();
+  } catch {
+    return null;
+  }
+}
+
+/** Contexte société requis : échoue si la requête s'exécute hors contexte. */
+export function requireCompanyContext(): CompanyContext {
+  const context = getCompanyContext();
+  if (!context) {
+    throw new Error(
+      "companyScope: opération métier sans contexte société " +
+        "(runWithCompanyContext / apiGuardWithContext requis).",
+    );
+  }
+  return context;
+}
+
 /** True si la fonction courante s'exécute dans un contexte "unscoped" (administration globale). */
 export function isUnscopedContext(): boolean {
   return storage.getStore()?.unscoped ?? false;

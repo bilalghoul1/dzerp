@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 
 const optionalText = (max: number) =>
@@ -117,6 +118,7 @@ export async function createWarehouse(
       address: input.address ?? null,
       managerId: input.managerId ?? null,
       isActive: input.isActive ?? true,
+      companyId: requireCompanyContext().company.id,
       createdById,
     },
     include: WAREHOUSE_INCLUDE,

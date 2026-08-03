@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 import { ApiError } from "@/lib/http";
 import type {
@@ -359,6 +360,7 @@ export async function createInventoryMovement(
       occurredAt: input.occurredAt ?? new Date(),
       referenceNumber: input.referenceNumber ?? null,
       notes: input.notes ?? null,
+      companyId: requireCompanyContext().company.id,
       createdById,
     },
     include: MOVEMENT_INCLUDE,
@@ -407,6 +409,7 @@ export async function createTransfer(
   const inNumber = (await nextDocumentNumber("INVENTORY_MOVEMENT")).number;
 
   const movements = await prisma.$transaction(async (tx) => {
+    const companyId = requireCompanyContext().company.id;
     const out = await tx.inventoryMovement.create({
       data: {
         number: outNumber,
@@ -417,6 +420,7 @@ export async function createTransfer(
         occurredAt,
         referenceNumber,
         notes,
+        companyId,
         createdById,
       },
     });
@@ -430,6 +434,7 @@ export async function createTransfer(
         occurredAt,
         referenceNumber,
         notes,
+        companyId,
         createdById,
       },
     });
