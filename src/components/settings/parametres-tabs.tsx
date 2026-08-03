@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 type ParametresTab = {
   href: string;
-  labelKey: "parametres.company" | "parametres.branches" | "parametres.taxes" | "parametres.currencies" | "parametres.units" | "parametres.numbering" | "parametres.preferences";
+  labelKey: "parametres.company" | "parametres.branches" | "parametres.taxes" | "parametres.currencies" | "parametres.units" | "parametres.numbering" | "parametres.preferences" | "parametres.referentiels";
   match: string[];
 };
 
@@ -19,6 +19,7 @@ const TABS: ParametresTab[] = [
   { href: "/parametres/units", labelKey: "parametres.units", match: ["/parametres/units"] },
   { href: "/parametres/numbering", labelKey: "parametres.numbering", match: ["/parametres/numbering"] },
   { href: "/parametres/preferences", labelKey: "parametres.preferences", match: ["/parametres/preferences"] },
+  { href: "/parametres/referentiels", labelKey: "parametres.referentiels", match: ["/parametres/referentiels"] },
 ];
 
 export function ParametresTabs() {

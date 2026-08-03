@@ -9,7 +9,8 @@ export type NavItem = {
 
 export const mainNav: NavItem[] = [
   { labelKey: "nav.dashboard", href: "/", icon: "dashboard", permission: "dashboard.view" },
-  { labelKey: "nav.crm", href: "/crm", icon: "group", permission: "crm.client.view" },
+  { labelKey: "nav.customers", href: "/crm/customers", icon: "group", permission: "crm.customer.view" },
+  { labelKey: "nav.suppliers", href: "/crm/suppliers", icon: "handshake", permission: "crm.supplier.view" },
   { labelKey: "nav.ventes", href: "/ventes", icon: "payments", permission: "ventes.devis.view" },
   { labelKey: "nav.achats", href: "/achats", icon: "shopping_cart", permission: "achats.bon.view" },
   { labelKey: "nav.stock", href: "/stock", icon: "inventory_2", permission: "stock.view" },

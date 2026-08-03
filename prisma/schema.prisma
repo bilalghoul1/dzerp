@@ -92,6 +92,29 @@ enum BranchType {
   AGENCY
 }
 
+enum ClientType {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum PartyKind {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum PrintFormat {
+  A4
+  A5
+  THERMAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ---------------------------------------------------------------------------
 // Multi-établissement
 // ---------------------------------------------------------------------------
@@ -106,6 +129,15 @@ model Branch {
   address    String?
   phone      String?
   email      String?
+  manager    String?
+  country    String?
+  wilaya     String?
+  commune    String?
+  postalCode String?
+  rc         String?
+  nif        String?
+  nis        String?
+  ai         String?
   isActive   Boolean    @default(true)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -126,6 +158,106 @@ model Branch {
 
   @@index([type])
   @@index([city])
+  @@index([wilaya])
+}
+
+// ---------------------------------------------------------------------------
+// Référentiels (fondation algérienne)
+// ---------------------------------------------------------------------------
+
+model Country {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String?
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([isActive])
+}
+
+model LegalForm {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([isActive])
+}
+
+model BusinessSector {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([isActive])
+}
+
+model PaymentMethod {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String?
+  days      Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([isActive])
+}
+
+model Wilaya {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  communes Commune[]
+
+  @@index([isActive])
+}
+
+model Commune {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  wilayaCode String
+  wilaya    Wilaya   @relation(fields: [wilayaCode], references: [code], onDelete: Cascade)
+  name      String
+  nameAr    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([wilayaCode])
+  @@index([isActive])
+}
+
+model Bank {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  nameAr    String?
+  swift     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([isActive])
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +286,8 @@ model User {
   activity  ActivityEvent[]
   files     FileAsset[]
   settings  Setting[]
+  requestedApprovals DocumentApproval[] @relation("DocumentApprovalRequestedBy")
+  decidedApprovals   DocumentApproval[] @relation("DocumentApprovalApprover")
 
   issuedQuotations       Quotation[]
   issuedSalesOrders      SalesOrder[]
@@ -346,13 +480,35 @@ model Counter {
 model Client {
   id         String   @id @default(uuid())
   code       String   @unique
+  kind       PartyKind @default(CUSTOMER) // tiers : client, fournisseur ou les deux
+  type       ClientType @default(COMPANY) // entreprise ou particulier
   name       String
   nameAr     String?
+  // Particuliers
+  firstName  String?
+  lastName   String?
+  // Entreprises
+  legalName      String?
+  commercialName String?
+  legalForm      String?
+  activity       String?
   sector     String?
   email      String?
   phone      String?
+  // Données légales algériennes (optionnelles)
   taxId      String? // NIF
+  rc         String?
+  nis        String?
+  ai         String?
+  vatNumber  String?
   address    String?
+  wilaya     String?
+  commune    String?
+  postalCode String?
+  // Conditions commerciales
+  paymentTerms String?
+  creditLimit  Decimal  @default(0)
+  notes      String?
   balance    Decimal  @default(0)
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -373,6 +529,111 @@ model Client {
   supplierInvoices  SupplierInvoice[]
 
   @@index([name])
+  @@index([kind])
+  @@index([type])
+  @@index([sector])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([createdById])
+}
+
+// ---------------------------------------------------------------------------
+// Business partners (independent modules)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id            String     @id @default(uuid())
+  code          String     @unique
+  type          ClientType @default(COMPANY)
+  name          String
+  nameAr        String?
+  firstName     String?
+  lastName      String?
+  legalName     String?
+  commercialName String?
+  legalForm     String?
+  activity      String?
+  sector        String?
+  email         String?
+  phone         String?
+  taxId         String?
+  rc            String?
+  nis           String?
+  ai            String?
+  vatNumber     String?
+  address       String?
+  wilaya        String?
+  commune       String?
+  postalCode    String?
+  paymentTerms  String?
+  creditLimit   Decimal    @default(0)
+  notes         String?
+  balance       Decimal    @default(0)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  createdById   String?
+  updatedById   String?
+  deletedAt     DateTime?
+  deletedById   String?
+
+  quotations   Quotation[]
+  salesOrders  SalesOrder[]
+  deliveryNotes DeliveryNote[]
+  invoices     Invoice[]
+  creditNotes  CreditNote[]
+
+  @@index([name])
+  @@index([type])
+  @@index([sector])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([createdById])
+}
+
+model Supplier {
+  id            String     @id @default(uuid())
+  code          String     @unique
+  type          ClientType @default(COMPANY)
+  name          String
+  nameAr        String?
+  firstName     String?
+  lastName      String?
+  legalName     String?
+  commercialName String?
+  legalForm     String?
+  activity      String?
+  sector        String?
+  email         String?
+  phone         String?
+  taxId         String?
+  rc            String?
+  nis           String?
+  ai            String?
+  vatNumber     String?
+  address       String?
+  wilaya        String?
+  commune       String?
+  postalCode    String?
+  paymentTerms  String?
+  creditLimit   Decimal    @default(0)
+  notes         String?
+  balance       Decimal    @default(0)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  createdById   String?
+  updatedById   String?
+  deletedAt     DateTime?
+  deletedById   String?
+
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
+  goodsReceipts    GoodsReceipt[]
+  supplierInvoices SupplierInvoice[]
+
+  @@index([name])
+  @@index([type])
   @@index([sector])
   @@index([createdAt])
   @@index([deletedAt])
@@ -435,6 +696,8 @@ enum DocType {
   PURCHASE_ORDER
   GOODS_RECEIPT
   SUPPLIER_INVOICE
+  CUSTOMER
+  SUPPLIER
 }
 
 enum PaymentStatus {
@@ -469,6 +732,29 @@ model DocumentSeries {
 }
 
 // ---------------------------------------------------------------------------
+// Approbation de documents (workflow réutilisable)
+// ---------------------------------------------------------------------------
+
+model DocumentApproval {
+  id             String         @id @default(uuid())
+  docType        DocType
+  docId          String         @unique // identifiant du document ciblé
+  requestedById  String?
+  requestedBy    User?          @relation("DocumentApprovalRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  approverId     String?
+  approver       User?          @relation("DocumentApprovalApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  status         ApprovalStatus @default(PENDING)
+  comment        String?
+  decidedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([docType])
+  @@index([status])
+  @@index([approverId])
+}
+
+// ---------------------------------------------------------------------------
 // Ventes
 // ---------------------------------------------------------------------------
 
@@ -476,8 +762,10 @@ model Quotation {
   id         String         @id @default(uuid())
   number     String         @unique
   status     DocumentStatus @default(DRAFT)
-  clientId   String
-  client     Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId   String?
+  client     Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  customerId String
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branchId   String
   branch     Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issuedById String?
@@ -498,6 +786,7 @@ model Quotation {
   salesOrders SalesOrder[]
 
   @@index([clientId])
+  @@index([customerId])
   @@index([branchId])
   @@index([status])
   @@index([issuedAt])
@@ -529,8 +818,10 @@ model SalesOrder {
   id           String         @id @default(uuid())
   number       String         @unique
   status       DocumentStatus @default(DRAFT)
-  clientId     String
-  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId     String?
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branchId     String
   branch       Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   quotationId  String?
@@ -553,6 +844,7 @@ model SalesOrder {
   deliveryNotes DeliveryNote[]
 
   @@index([clientId])
+  @@index([customerId])
   @@index([branchId])
   @@index([status])
   @@index([quotationId])
@@ -585,8 +877,10 @@ model DeliveryNote {
   id           String         @id @default(uuid())
   number       String         @unique
   status       DocumentStatus @default(DRAFT)
-  clientId     String
-  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId     String?
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branchId     String
   branch       Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   salesOrderId String?
@@ -608,6 +902,7 @@ model DeliveryNote {
   lines        DeliveryNoteLine[]
 
   @@index([clientId])
+  @@index([customerId])
   @@index([branchId])
   @@index([status])
   @@index([salesOrderId])
@@ -640,8 +935,10 @@ model Invoice {
   id            String        @id @default(uuid())
   number        String        @unique
   status        DocumentStatus @default(DRAFT)
-  clientId      String
-  client        Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId      String?
+  client        Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branchId      String
   branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issuedById    String?
@@ -664,6 +961,7 @@ model Invoice {
   creditNotes  CreditNote[]
 
   @@index([clientId])
+  @@index([customerId])
   @@index([branchId])
   @@index([status])
   @@index([paymentStatus])
@@ -697,8 +995,10 @@ model CreditNote {
   id          String        @id @default(uuid())
   number      String        @unique
   status      DocumentStatus @default(DRAFT)
-  clientId    String
-  client      Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId    String?
+  client      Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branchId    String
   branch      Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
   invoiceId   String?
@@ -720,6 +1020,7 @@ model CreditNote {
   lines      CreditNoteLine[]
 
   @@index([clientId])
+  @@index([customerId])
   @@index([branchId])
   @@index([status])
   @@index([invoiceId])
@@ -756,8 +1057,10 @@ model PurchaseRequest {
   id          String         @id @default(uuid())
   number      String         @unique
   status      DocumentStatus @default(DRAFT)
-  clientId    String // tiers : fournisseur (modèle Fournisseur à venir)
-  client      Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId    String? // legacy shared-party reference (nullable); see supplierId
+  client      Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  supplierId  String
+  supplier    Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   branchId    String
   branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issuedById  String?
@@ -778,6 +1081,7 @@ model PurchaseRequest {
   lines       PurchaseRequestLine[]
 
   @@index([clientId])
+  @@index([supplierId])
   @@index([branchId])
   @@index([status])
   @@index([issuedAt])
@@ -809,8 +1113,10 @@ model PurchaseOrder {
   id          String         @id @default(uuid())
   number      String         @unique
   status      DocumentStatus @default(DRAFT)
-  clientId    String // tiers : fournisseur
-  client      Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId    String? // legacy shared-party reference (nullable); see supplierId
+  client      Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  supplierId  String
+  supplier    Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   branchId    String
   branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issuedById  String?
@@ -831,6 +1137,7 @@ model PurchaseOrder {
   goodsReceipts GoodsReceipt[]
 
   @@index([clientId])
+  @@index([supplierId])
   @@index([branchId])
   @@index([status])
   @@index([issuedAt])
@@ -862,8 +1169,10 @@ model GoodsReceipt {
   id              String         @id @default(uuid())
   number          String         @unique
   status          DocumentStatus @default(DRAFT)
-  clientId        String // tiers : fournisseur
-  client          Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId        String? // legacy shared-party reference (nullable); see supplierId
+  client          Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  supplierId      String
+  supplier        Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   branchId        String
   branch          Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   purchaseOrderId String?
@@ -885,6 +1194,7 @@ model GoodsReceipt {
   lines           GoodsReceiptLine[]
 
   @@index([clientId])
+  @@index([supplierId])
   @@index([branchId])
   @@index([status])
   @@index([purchaseOrderId])
@@ -917,8 +1227,10 @@ model SupplierInvoice {
   id            String        @id @default(uuid())
   number        String        @unique
   status        DocumentStatus @default(DRAFT)
-  clientId      String // tiers : fournisseur
-  client        Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId      String? // legacy shared-party reference (nullable); see supplierId
+  client        Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  supplierId    String
+  supplier      Supplier      @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   branchId      String
   branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issuedById    String?
@@ -940,6 +1252,7 @@ model SupplierInvoice {
   lines         SupplierInvoiceLine[]
 
   @@index([clientId])
+  @@index([supplierId])
   @@index([branchId])
   @@index([status])
   @@index([paymentStatus])

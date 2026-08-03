@@ -49,29 +49,88 @@ export const DEFAULT_UNITS: UnitItem[] = [
 ];
 
 export type CompanyProfile = {
+  // Général
   name: string;
+  legalName: string;
+  legalForm: string;
+  activity: string;
+  secondaryActivity: string;
+  establishedAt: string;
+  // Légal
   taxId: string;
+  rc: string;
+  nis: string;
+  ai: string;
+  vatNumber: string;
+  // Adresse
+  country: string;
+  wilaya: string;
+  commune: string;
+  postalCode: string;
   address: string;
+  // Contacts
   phone: string;
+  mobile: string;
   email: string;
+  website: string;
+  // Banque
+  bank: string;
+  bankAgency: string;
+  bankAccount: string;
+  rib: string;
+  iban: string;
+  swift: string;
+  // Identité visuelle
+  logoKey: string;
+  stampKey: string;
+  signatureKey: string;
+  // Technique
   currency: string;
   fiscalYear: number;
   locale: string;
   theme: string;
   notificationsEmail: boolean;
+  printFormat: string;
+  qrEnabled: boolean;
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   name: "DzERP Algérie",
+  legalName: "",
+  legalForm: "",
+  activity: "",
+  secondaryActivity: "",
+  establishedAt: "",
   taxId: "",
+  rc: "",
+  nis: "",
+  ai: "",
+  vatNumber: "",
+  country: "DZ",
+  wilaya: "",
+  commune: "",
+  postalCode: "",
   address: "",
   phone: "",
+  mobile: "",
   email: "",
+  website: "",
+  bank: "",
+  bankAgency: "",
+  bankAccount: "",
+  rib: "",
+  iban: "",
+  swift: "",
+  logoKey: "",
+  stampKey: "",
+  signatureKey: "",
   currency: "DZD",
   fiscalYear: new Date().getFullYear(),
   locale: "fr",
   theme: "light",
   notificationsEmail: true,
+  printFormat: "A4",
+  qrEnabled: false,
 };
 
 function asString(value: SettingValue | undefined, fallback: string): string {
@@ -91,44 +150,92 @@ function asArray<T>(value: SettingValue | undefined, fallback: T[]): T[] {
 }
 
 export async function getCompanyProfile(): Promise<CompanyProfile> {
-  const [
-    name,
-    taxId,
-    address,
-    phone,
-    email,
-    currency,
-    fiscalYear,
-    locale,
-    theme,
-    notificationsEmail,
-  ] = await Promise.all([
-    getSetting("company.name"),
-    getSetting("company.taxId"),
-    getSetting("company.address"),
-    getSetting("company.phone"),
-    getSetting("company.email"),
-    getSetting("company.currency"),
-    getSetting("fiscal.year"),
-    getSetting("locale.default"),
-    getSetting("theme.default"),
-    getSetting("notifications.email"),
-  ]);
+  const keys = [
+    "company.name",
+    "company.legalName",
+    "company.legalForm",
+    "company.activity",
+    "company.secondaryActivity",
+    "company.establishedAt",
+    "company.taxId",
+    "company.rc",
+    "company.nis",
+    "company.ai",
+    "company.vatNumber",
+    "company.country",
+    "company.wilaya",
+    "company.commune",
+    "company.postalCode",
+    "company.address",
+    "company.phone",
+    "company.mobile",
+    "company.email",
+    "company.website",
+    "company.bank",
+    "company.bankAgency",
+    "company.bankAccount",
+    "company.rib",
+    "company.iban",
+    "company.swift",
+    "company.logoKey",
+    "company.stampKey",
+    "company.signatureKey",
+    "company.currency",
+    "fiscal.year",
+    "locale.default",
+    "theme.default",
+    "notifications.email",
+    "print.defaultFormat",
+    "documents.qr.enabled",
+  ] as const;
+
+  const values = await Promise.all(
+    keys.map((key) => getSetting(key)),
+  );
+
+  const pick = (index: number, fallback: string) =>
+    asString(values[index], fallback);
 
   return {
-    name: asString(name, DEFAULT_COMPANY_PROFILE.name),
-    taxId: asString(taxId, DEFAULT_COMPANY_PROFILE.taxId),
-    address: asString(address, DEFAULT_COMPANY_PROFILE.address),
-    phone: asString(phone, DEFAULT_COMPANY_PROFILE.phone),
-    email: asString(email, DEFAULT_COMPANY_PROFILE.email),
-    currency: asString(currency, DEFAULT_COMPANY_PROFILE.currency),
-    fiscalYear: asNumber(fiscalYear, DEFAULT_COMPANY_PROFILE.fiscalYear),
-    locale: asString(locale, DEFAULT_COMPANY_PROFILE.locale),
-    theme: asString(theme, DEFAULT_COMPANY_PROFILE.theme),
+    name: pick(0, DEFAULT_COMPANY_PROFILE.name),
+    legalName: pick(1, DEFAULT_COMPANY_PROFILE.legalName),
+    legalForm: pick(2, DEFAULT_COMPANY_PROFILE.legalForm),
+    activity: pick(3, DEFAULT_COMPANY_PROFILE.activity),
+    secondaryActivity: pick(4, DEFAULT_COMPANY_PROFILE.secondaryActivity),
+    establishedAt: pick(5, DEFAULT_COMPANY_PROFILE.establishedAt),
+    taxId: pick(6, DEFAULT_COMPANY_PROFILE.taxId),
+    rc: pick(7, DEFAULT_COMPANY_PROFILE.rc),
+    nis: pick(8, DEFAULT_COMPANY_PROFILE.nis),
+    ai: pick(9, DEFAULT_COMPANY_PROFILE.ai),
+    vatNumber: pick(10, DEFAULT_COMPANY_PROFILE.vatNumber),
+    country: pick(11, DEFAULT_COMPANY_PROFILE.country),
+    wilaya: pick(12, DEFAULT_COMPANY_PROFILE.wilaya),
+    commune: pick(13, DEFAULT_COMPANY_PROFILE.commune),
+    postalCode: pick(14, DEFAULT_COMPANY_PROFILE.postalCode),
+    address: pick(15, DEFAULT_COMPANY_PROFILE.address),
+    phone: pick(16, DEFAULT_COMPANY_PROFILE.phone),
+    mobile: pick(17, DEFAULT_COMPANY_PROFILE.mobile),
+    email: pick(18, DEFAULT_COMPANY_PROFILE.email),
+    website: pick(19, DEFAULT_COMPANY_PROFILE.website),
+    bank: pick(20, DEFAULT_COMPANY_PROFILE.bank),
+    bankAgency: pick(21, DEFAULT_COMPANY_PROFILE.bankAgency),
+    bankAccount: pick(22, DEFAULT_COMPANY_PROFILE.bankAccount),
+    rib: pick(23, DEFAULT_COMPANY_PROFILE.rib),
+    iban: pick(24, DEFAULT_COMPANY_PROFILE.iban),
+    swift: pick(25, DEFAULT_COMPANY_PROFILE.swift),
+    logoKey: pick(26, DEFAULT_COMPANY_PROFILE.logoKey),
+    stampKey: pick(27, DEFAULT_COMPANY_PROFILE.stampKey),
+    signatureKey: pick(28, DEFAULT_COMPANY_PROFILE.signatureKey),
+    currency: pick(29, DEFAULT_COMPANY_PROFILE.currency),
+    fiscalYear: asNumber(values[30], DEFAULT_COMPANY_PROFILE.fiscalYear),
+    locale: pick(31, DEFAULT_COMPANY_PROFILE.locale),
+    theme: pick(32, DEFAULT_COMPANY_PROFILE.theme),
     notificationsEmail: asBoolean(
-      notificationsEmail,
+      values[33],
       DEFAULT_COMPANY_PROFILE.notificationsEmail,
     ),
+    printFormat: pick(34, DEFAULT_COMPANY_PROFILE.printFormat),
+    qrEnabled: asBoolean(values[35], DEFAULT_COMPANY_PROFILE.qrEnabled),
   };
 }
 
@@ -138,15 +245,41 @@ export async function updateCompanyProfile(
 ): Promise<void> {
   const updates: { key: string; value: SettingValue; type?: "STRING" | "NUMBER" | "BOOLEAN" }[] = [
     { key: "company.name", value: input.name ?? "", type: "STRING" },
+    { key: "company.legalName", value: input.legalName ?? "", type: "STRING" },
+    { key: "company.legalForm", value: input.legalForm ?? "", type: "STRING" },
+    { key: "company.activity", value: input.activity ?? "", type: "STRING" },
+    { key: "company.secondaryActivity", value: input.secondaryActivity ?? "", type: "STRING" },
+    { key: "company.establishedAt", value: input.establishedAt ?? "", type: "STRING" },
     { key: "company.taxId", value: input.taxId ?? "", type: "STRING" },
+    { key: "company.rc", value: input.rc ?? "", type: "STRING" },
+    { key: "company.nis", value: input.nis ?? "", type: "STRING" },
+    { key: "company.ai", value: input.ai ?? "", type: "STRING" },
+    { key: "company.vatNumber", value: input.vatNumber ?? "", type: "STRING" },
+    { key: "company.country", value: input.country ?? "DZ", type: "STRING" },
+    { key: "company.wilaya", value: input.wilaya ?? "", type: "STRING" },
+    { key: "company.commune", value: input.commune ?? "", type: "STRING" },
+    { key: "company.postalCode", value: input.postalCode ?? "", type: "STRING" },
     { key: "company.address", value: input.address ?? "", type: "STRING" },
     { key: "company.phone", value: input.phone ?? "", type: "STRING" },
+    { key: "company.mobile", value: input.mobile ?? "", type: "STRING" },
     { key: "company.email", value: input.email ?? "", type: "STRING" },
+    { key: "company.website", value: input.website ?? "", type: "STRING" },
+    { key: "company.bank", value: input.bank ?? "", type: "STRING" },
+    { key: "company.bankAgency", value: input.bankAgency ?? "", type: "STRING" },
+    { key: "company.bankAccount", value: input.bankAccount ?? "", type: "STRING" },
+    { key: "company.rib", value: input.rib ?? "", type: "STRING" },
+    { key: "company.iban", value: input.iban ?? "", type: "STRING" },
+    { key: "company.swift", value: input.swift ?? "", type: "STRING" },
+    { key: "company.logoKey", value: input.logoKey ?? "", type: "STRING" },
+    { key: "company.stampKey", value: input.stampKey ?? "", type: "STRING" },
+    { key: "company.signatureKey", value: input.signatureKey ?? "", type: "STRING" },
     { key: "company.currency", value: input.currency ?? "DZD", type: "STRING" },
     { key: "fiscal.year", value: input.fiscalYear ?? new Date().getFullYear(), type: "NUMBER" },
     { key: "locale.default", value: input.locale ?? "fr", type: "STRING" },
     { key: "theme.default", value: input.theme ?? "light", type: "STRING" },
     { key: "notifications.email", value: input.notificationsEmail ?? true, type: "BOOLEAN" },
+    { key: "print.defaultFormat", value: input.printFormat ?? "A4", type: "STRING" },
+    { key: "documents.qr.enabled", value: input.qrEnabled ?? false, type: "BOOLEAN" },
   ];
 
   await Promise.all(

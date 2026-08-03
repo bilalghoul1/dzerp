@@ -63,7 +63,7 @@ export default async function DashboardPage() {
     recentDocs,
     recentActivity,
   ] = await Promise.all([
-    prisma.client.count(),
+    prisma.customer.count(),
     prisma.product.count(),
     prisma.product.count({ where: { stock: { lte: 0 } } }),
     prisma.branch.count(),
@@ -74,7 +74,7 @@ export default async function DashboardPage() {
     prisma.invoice.count({
       where: { paymentStatus: { in: ["UNPAID", "PARTIAL"] } },
     }),
-    prisma.client.findMany({
+    prisma.customer.findMany({
       orderBy: { balance: "desc" },
       take: 5,
       select: { id: true, code: true, name: true, nameAr: true, sector: true, balance: true },
@@ -88,7 +88,7 @@ export default async function DashboardPage() {
         number: true,
         totalTtc: true,
         dueDate: true,
-        client: { select: { name: true } },
+        customer: { select: { name: true } },
       },
     }),
     prisma.invoiceLine.groupBy({
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{invoice.number}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {invoice.client?.name ?? "—"} ·{" "}
+                        {invoice.customer?.name ?? "—"} ·{" "}
                         {invoice.dueDate ? formatDate(invoice.dueDate) : "—"}
                       </p>
                     </div>

@@ -66,7 +66,7 @@ export async function nextDocumentNumber(
     });
 
     if (!series) {
-      throw new Error(`Aucune série active pour le type "${docType}".`);
+      throw new Error(`No active series for doc type "${docType}".`);
     }
 
     const nextValue = series.nextValue;
@@ -84,7 +84,7 @@ export async function nextDocumentNumber(
     }
   }
 
-  throw new Error(`Numérotation saturée pour le type "${docType}".`);
+  throw new Error(`Numbering saturated for doc type "${docType}".`);
 }
 
 /** Liste des séries, utilisée par la configuration de la numérotation. */

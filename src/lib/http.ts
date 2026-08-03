@@ -31,7 +31,7 @@ export function errorResponse(error: unknown): NextResponse {
   }
 
   const message =
-    error instanceof Error ? error.message : "Erreur interne inattendue.";
+    error instanceof Error ? error.message : "Unexpected internal error.";
 
   return NextResponse.json(
     { error: { message, code: "INTERNAL_ERROR" } },

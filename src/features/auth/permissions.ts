@@ -9,35 +9,75 @@ export const PERMISSIONS = {
     name: "Voir le tableau de bord",
     nameAr: "عرض لوحة القيادة",
   },
-  "crm.client.view": {
+  "crm.customer.view": {
     module: "crm",
     name: "Consulter les clients",
     nameAr: "عرض العملاء",
   },
-  "crm.client.create": {
+  "crm.customer.create": {
     module: "crm",
     name: "Créer un client",
     nameAr: "إنشاء عميل",
   },
-  "crm.client.update": {
+  "crm.customer.update": {
     module: "crm",
     name: "Modifier un client",
     nameAr: "تعديل عميل",
   },
-  "crm.fournisseur.view": {
+  "crm.customer.delete": {
+    module: "crm",
+    name: "Supprimer un client",
+    nameAr: "حذف عميل",
+  },
+  "crm.customer.restore": {
+    module: "crm",
+    name: "Restaurer un client",
+    nameAr: "استعادة عميل",
+  },
+  "crm.customer.import": {
+    module: "crm",
+    name: "Importer des clients",
+    nameAr: "استيراد العملاء",
+  },
+  "crm.customer.export": {
+    module: "crm",
+    name: "Exporter les clients",
+    nameAr: "تصدير العملاء",
+  },
+  "crm.supplier.view": {
     module: "crm",
     name: "Consulter les fournisseurs",
     nameAr: "عرض الموردين",
   },
-  "crm.fournisseur.create": {
+  "crm.supplier.create": {
     module: "crm",
     name: "Créer un fournisseur",
     nameAr: "إنشاء مورد",
   },
-  "crm.client.delete": {
+  "crm.supplier.update": {
     module: "crm",
-    name: "Supprimer un client",
-    nameAr: "حذف عميل",
+    name: "Modifier un fournisseur",
+    nameAr: "تعديل مورد",
+  },
+  "crm.supplier.delete": {
+    module: "crm",
+    name: "Supprimer un fournisseur",
+    nameAr: "حذف مورد",
+  },
+  "crm.supplier.restore": {
+    module: "crm",
+    name: "Restaurer un fournisseur",
+    nameAr: "استعادة مورد",
+  },
+  "crm.supplier.import": {
+    module: "crm",
+    name: "Importer des fournisseurs",
+    nameAr: "استيراد الموردين",
+  },
+  "crm.supplier.export": {
+    module: "crm",
+    name: "Exporter les fournisseurs",
+    nameAr: "تصدير الموردين",
   },
   "ventes.devis.view": {
     module: "ventes",

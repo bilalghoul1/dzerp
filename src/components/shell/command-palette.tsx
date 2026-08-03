@@ -24,7 +24,7 @@ type SearchHit = {
 
 const QUICK_ACTIONS: SearchHit[] = [
   { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/devis/nouveau", icon: "note_add" },
-  { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/nouveau", icon: "person_add" },
+  { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add" },
   { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/achats/bons/nouveau", icon: "add_shopping_cart" },
 ];
 
@@ -71,6 +71,8 @@ export function CommandPalette({
         switch (type) {
           case "client":
             return t("search.clients");
+          case "supplier":
+            return t("search.suppliers");
           case "product":
             return t("search.products");
           case "user":

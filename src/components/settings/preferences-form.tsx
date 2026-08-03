@@ -54,6 +54,8 @@ export function PreferencesForm({
               value: values.notificationsEmail,
               type: "BOOLEAN",
             },
+            { key: "print.defaultFormat", value: values.printFormat, type: "STRING" },
+            { key: "documents.qr.enabled", value: values.qrEnabled, type: "BOOLEAN" },
           ],
         }),
       });
@@ -127,6 +129,41 @@ export function PreferencesForm({
             onChange={(e) =>
               update({ fiscalYear: Number(e.target.value) || 0 })
             }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="pref-print-format">
+            {t("parametres.prefPrintFormat")}
+          </Label>
+          <Select
+            value={values.printFormat}
+            onValueChange={(v) => update({ printFormat: v })}
+          >
+            <SelectTrigger id="pref-print-format" className="w-full sm:max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="A4">{t("parametres.printFormat_A4")}</SelectItem>
+              <SelectItem value="A5">{t("parametres.printFormat_A5")}</SelectItem>
+              <SelectItem value="THERMAL">
+                {t("parametres.printFormat_THERMAL")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="pref-qr" className="leading-snug">
+              {t("parametres.prefQr")}
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              {t("parametres.prefQrDescription")}
+            </p>
+          </div>
+          <Switch
+            id="pref-qr"
+            checked={values.qrEnabled}
+            onCheckedChange={(v) => update({ qrEnabled: v })}
           />
         </div>
         <div className="flex items-center justify-between gap-4 rounded-lg border p-4">

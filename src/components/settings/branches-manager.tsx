@@ -48,6 +48,15 @@ type BranchRow = {
   address: string | null;
   phone: string | null;
   email: string | null;
+  manager: string | null;
+  country: string | null;
+  wilaya: string | null;
+  commune: string | null;
+  postalCode: string | null;
+  rc: string | null;
+  nif: string | null;
+  nis: string | null;
+  ai: string | null;
   isActive: boolean;
 };
 
@@ -60,6 +69,15 @@ type BranchInput = {
   address: string;
   phone: string;
   email: string;
+  manager: string;
+  country: string;
+  wilaya: string;
+  commune: string;
+  postalCode: string;
+  rc: string;
+  nif: string;
+  nis: string;
+  ai: string;
 };
 
 const EMPTY_FORM: BranchInput = {
@@ -71,6 +89,15 @@ const EMPTY_FORM: BranchInput = {
   address: "",
   phone: "",
   email: "",
+  manager: "",
+  country: "",
+  wilaya: "",
+  commune: "",
+  postalCode: "",
+  rc: "",
+  nif: "",
+  nis: "",
+  ai: "",
 };
 
 export function BranchesManager({
@@ -104,6 +131,15 @@ export function BranchesManager({
       address: branch.address ?? "",
       phone: branch.phone ?? "",
       email: branch.email ?? "",
+      manager: branch.manager ?? "",
+      country: branch.country ?? "",
+      wilaya: branch.wilaya ?? "",
+      commune: branch.commune ?? "",
+      postalCode: branch.postalCode ?? "",
+      rc: branch.rc ?? "",
+      nif: branch.nif ?? "",
+      nis: branch.nis ?? "",
+      ai: branch.ai ?? "",
     });
     setDialogOpen(true);
   };
@@ -355,6 +391,85 @@ export function BranchesManager({
                 value={form.email}
                 onChange={(e) => setField("email", e.target.value)}
               />
+            </div>
+            <div className="sm:col-span-2">
+              <h4 className="mb-2 text-sm font-medium">
+                {t("parametres.branchLegal")}
+              </h4>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="branch-manager">{t("parametres.manager")}</Label>
+                  <Input
+                    id="branch-manager"
+                    value={form.manager}
+                    onChange={(e) => setField("manager", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-country">{t("parametres.country")}</Label>
+                  <Input
+                    id="branch-country"
+                    value={form.country}
+                    onChange={(e) => setField("country", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-wilaya">{t("parametres.wilaya")}</Label>
+                  <Input
+                    id="branch-wilaya"
+                    value={form.wilaya}
+                    onChange={(e) => setField("wilaya", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-commune">{t("parametres.commune")}</Label>
+                  <Input
+                    id="branch-commune"
+                    value={form.commune}
+                    onChange={(e) => setField("commune", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-postal">{t("parametres.postalCode")}</Label>
+                  <Input
+                    id="branch-postal"
+                    value={form.postalCode}
+                    onChange={(e) => setField("postalCode", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-rc">{t("parametres.rc")}</Label>
+                  <Input
+                    id="branch-rc"
+                    value={form.rc}
+                    onChange={(e) => setField("rc", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-nif">{t("parametres.nif")}</Label>
+                  <Input
+                    id="branch-nif"
+                    value={form.nif}
+                    onChange={(e) => setField("nif", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-nis">{t("parametres.nis")}</Label>
+                  <Input
+                    id="branch-nis"
+                    value={form.nis}
+                    onChange={(e) => setField("nis", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-ai">{t("parametres.ai")}</Label>
+                  <Input
+                    id="branch-ai"
+                    value={form.ai}
+                    onChange={(e) => setField("ai", e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
