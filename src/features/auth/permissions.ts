@@ -344,6 +344,36 @@ export const PERMISSIONS = {
     name: "Consulter le journal d'audit",
     nameAr: "عرض سجل التدقيق",
   },
+  "admin.company.view": {
+    module: "admin",
+    name: "Consulter les sociétés",
+    nameAr: "عرض الشركات",
+  },
+  "admin.company.create": {
+    module: "admin",
+    name: "Créer une société",
+    nameAr: "إنشاء شركة",
+  },
+  "admin.company.update": {
+    module: "admin",
+    name: "Modifier une société",
+    nameAr: "تعديل شركة",
+  },
+  "admin.company.archive": {
+    module: "admin",
+    name: "Archiver / changer le statut d'une société",
+    nameAr: "أرشفة / تغيير حالة شركة",
+  },
+  "admin.company.delete": {
+    module: "admin",
+    name: "Supprimer une société (suppression logique)",
+    nameAr: "حذف شركة (حذف منطقي)",
+  },
+  "admin.company.membership.manage": {
+    module: "admin",
+    name: "Gérer les affectations utilisateurs aux sociétés",
+    nameAr: "إدارة تعيين المستخدمين للشركات",
+  },
   "rapports.view": {
     module: "rapports",
     name: "Consulter les rapports",
@@ -358,6 +388,41 @@ export const PERMISSIONS = {
     module: "files",
     name: "Envoyer des fichiers",
     nameAr: "رفع الملفات",
+  },
+  "documents.read": {
+    module: "documents",
+    name: "Consulter les documents commerciaux",
+    nameAr: "عرض الوثائق التجارية",
+  },
+  "documents.create": {
+    module: "documents",
+    name: "Créer un document commercial",
+    nameAr: "إنشاء وثيقة تجارية",
+  },
+  "documents.update": {
+    module: "documents",
+    name: "Modifier un document commercial",
+    nameAr: "تعديل وثيقة تجارية",
+  },
+  "documents.delete": {
+    module: "documents",
+    name: "Supprimer un document commercial",
+    nameAr: "حذف وثيقة تجارية",
+  },
+  "documents.approve": {
+    module: "documents",
+    name: "Approuver un document commercial",
+    nameAr: "الموافقة على وثيقة تجارية",
+  },
+  "documents.convert": {
+    module: "documents",
+    name: "Convertir un document commercial",
+    nameAr: "تحويل وثيقة تجارية",
+  },
+  "documents.print": {
+    module: "documents",
+    name: "Imprimer un document commercial",
+    nameAr: "طباعة وثيقة تجارية",
   },
 } as const;
 

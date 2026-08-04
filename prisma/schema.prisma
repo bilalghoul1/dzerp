@@ -31,13 +31,42 @@ enum UserStatus {
   SUSPENDED
 }
 
+/// Statut du cycle de vie d'une société (Phase 5.5).
+/// ARCHIVED rend la société en lecture seule (toute écriture est refusée).
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
 enum DocumentStatus {
   DRAFT
-  PENDING
-  VALIDATED
+  PENDING            // legacy — prefer PENDING_APPROVAL
+  PENDING_APPROVAL
+  VALIDATED          // legacy — prefer APPROVED
+  APPROVED
   REJECTED
+  CONFIRMED
+  PARTIALLY_PROCESSED
+  PROCESSED
   CANCELLED
-  ARCHIVED
+  ARCHIVED           // legacy — prefer CLOSED
+  CLOSED
+}
+
+enum DocumentLineKind {
+  PRODUCT
+  SERVICE
+  COMMENT
+  SECTION
+}
+
+enum DocumentRelationType {
+  CONVERSION
+  REFERENCE
+  CREDIT
+  AMENDMENT
 }
 
 enum AuditAction {
@@ -197,6 +226,9 @@ model Branch {
 
   users User[]
 
+  defaultBranchFor Company?         @relation("CompanyDefaultBranch")
+  userCompanies    UserCompany[]    @relation("UserCompanyDefaultBranch")
+
   quotations       Quotation[]
   salesOrders      SalesOrder[]
   deliveryNotes    DeliveryNote[]
@@ -336,6 +368,7 @@ model User {
 
   roles              UserRole[]
   userCompanies      UserCompany[]
+  companyDrafts      CompanyDraft[]
   sessions           Session[]
   auditLogs          AuditLog[]
   activity           ActivityEvent[]
@@ -352,9 +385,10 @@ model User {
   issuedPurchaseRequests PurchaseRequest[]
   issuedPurchaseOrders   PurchaseOrder[]
   issuedGoodsReceipts    GoodsReceipt[]
-  issuedSupplierInvoices SupplierInvoice[]
+   issuedSupplierInvoices SupplierInvoice[]
+   createdDocumentRelations DocumentRelation[]
 
-  managedWarehouses Warehouse[]
+   managedWarehouses Warehouse[]
 
   @@index([branchId])
   @@index([status])
@@ -449,6 +483,40 @@ model Company {
   createdById String?
   updatedById String?
 
+  // Phase 5.5 : gestion des sociétés (module d'administration)
+  commercialName   String?
+  type             String? // ex. "Holding", "Filiale", "Société de services"
+  capital          Decimal?
+  establishedAt    DateTime?
+  expiryDate       DateTime?
+  secondaryActivity String?
+  mobile           String?
+  bank             String?
+  bankAgency       String?
+  bankAccount      String?
+  rib              String?
+  iban             String?
+  swift            String?
+  paymentTerms     String?
+  notes            String?
+  language         String        @default("fr")
+  logoKey          String?
+  stampKey         String?
+  signatureKey     String?
+  primaryColor     String?
+  secondaryColor   String?
+  invoiceFooter    String?
+  emailFooter      String?
+  printHeader      String?
+  printFormat      String        @default("A4")
+  printMargins     Json?
+  qrEnabled        Boolean       @default(false)
+  status           CompanyStatus @default(ACTIVE)
+  defaultBranchId  String?   @unique
+  defaultBranch    Branch?   @relation("CompanyDefaultBranch", fields: [defaultBranchId], references: [id], onDelete: SetNull)
+  deletedAt        DateTime?
+  deletedById      String?
+
   userCompanies UserCompany[]
   sessions      Session[]
 
@@ -471,13 +539,30 @@ model Company {
   purchaseOrders     PurchaseOrder[]
   goodsReceipts      GoodsReceipt[]
   supplierInvoices   SupplierInvoice[]
-  documentApprovals  DocumentApproval[]
-  fileAssets         FileAsset[]
+   documentApprovals  DocumentApproval[]
+   documentRelations  DocumentRelation[]
+   fileAssets         FileAsset[]
   auditLogs          AuditLog[]
   activityEvents     ActivityEvent[]
 
   @@index([isActive])
   @@index([isDefault])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+/// Brouillon de création de société (assistant 9 étapes, Phase 5.5).
+/// Un seul brouillon actif par utilisateur : sauvegarde partielle des étapes.
+model CompanyDraft {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  step      Int      @default(0)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 /// Adhésion d'un utilisateur à une société (Phase 5.3).
@@ -495,6 +580,10 @@ model UserCompany {
   joinedAt  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Phase 5.5 : succursale par défaut de l'utilisateur dans cette société.
+  defaultBranchId String?
+  defaultBranch   Branch? @relation("UserCompanyDefaultBranch", fields: [defaultBranchId], references: [id], onDelete: SetNull)
 
   roleAssignments RoleAssignment[]
 
@@ -1321,10 +1410,12 @@ model Quotation {
   totalHt     Decimal        @default(0)
   totalTva    Decimal        @default(0)
   totalTtc    Decimal        @default(0)
+  exchangeRate Decimal       @default(1)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   createdById String?
   updatedById String?
+  meta        Json?
 
   lines       QuotationLine[]
   salesOrders SalesOrder[]
@@ -1339,21 +1430,22 @@ model Quotation {
 }
 
 model QuotationLine {
-  id          String    @id @default(uuid())
+  id          String            @id @default(uuid())
   quotationId String
-  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotation   Quotation         @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   productId   String?
-  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  lineNumber  Int       @default(1)
-  label       String
-  unit        String?
-  quantity    Decimal   @default(1)
-  unitPrice   Decimal   @default(0)
-  discountPct Decimal   @default(0)
-  taxPct      Decimal   @default(0)
-  amountHt    Decimal   @default(0)
-  amountTva   Decimal   @default(0)
-  amountTtc   Decimal   @default(0)
+  product     Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber        Int             @default(1)
+  kind              DocumentLineKind @default(PRODUCT)
+  label             String
+  unit              String?
+  quantity          Decimal         @default(1)
+  unitPrice         Decimal         @default(0)
+  discountPct       Decimal         @default(0)
+  taxPct            Decimal         @default(0)
+  amountHt          Decimal         @default(0)
+  amountTva         Decimal         @default(0)
+  amountTtc         Decimal         @default(0)
 
   @@index([quotationId])
   @@index([productId])
@@ -1381,14 +1473,16 @@ model SalesOrder {
   notes        String?
   totalHt      Decimal        @default(0)
   totalTva     Decimal        @default(0)
-  totalTtc     Decimal        @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  createdById  String?
-  updatedById  String?
+   totalTtc     Decimal        @default(0)
+   exchangeRate Decimal        @default(1)
+   createdAt    DateTime       @default(now())
+   updatedAt    DateTime       @updatedAt
+   createdById  String?
+   updatedById  String?
+   meta         Json?
 
-  lines         SalesOrderLine[]
-  deliveryNotes DeliveryNote[]
+   lines         SalesOrderLine[]
+   deliveryNotes DeliveryNote[]
 
   @@unique([companyId, number])
   @@index([clientId])
@@ -1406,19 +1500,20 @@ model SalesOrderLine {
   salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   productId    String?
   product      Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
-  lineNumber   Int        @default(1)
-  label        String
-  unit         String?
-  quantity     Decimal    @default(1)
-  unitPrice    Decimal    @default(0)
-  discountPct  Decimal    @default(0)
-  taxPct       Decimal    @default(0)
-  amountHt     Decimal    @default(0)
-  amountTva    Decimal    @default(0)
-  amountTtc    Decimal    @default(0)
+   lineNumber   Int        @default(1)
+   kind         DocumentLineKind  @default(PRODUCT)
+   label        String
+   unit         String?
+   quantity     Decimal    @default(1)
+   unitPrice    Decimal    @default(0)
+   discountPct  Decimal    @default(0)
+   taxPct       Decimal    @default(0)
+   amountHt     Decimal    @default(0)
+   amountTva    Decimal    @default(0)
+   amountTtc    Decimal    @default(0)
 
-  @@index([salesOrderId])
-  @@index([productId])
+   @@index([salesOrderId])
+   @@index([productId])
 }
 
 model DeliveryNote {
@@ -1443,13 +1538,15 @@ model DeliveryNote {
   notes        String?
   totalHt      Decimal        @default(0)
   totalTva     Decimal        @default(0)
-  totalTtc     Decimal        @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  createdById  String?
-  updatedById  String?
+   totalTtc     Decimal        @default(0)
+   exchangeRate Decimal        @default(1)
+   createdAt    DateTime       @default(now())
+   updatedAt    DateTime       @updatedAt
+   createdById  String?
+   updatedById  String?
+   meta         Json?
 
-  lines DeliveryNoteLine[]
+   lines DeliveryNoteLine[]
 
   @@unique([companyId, number])
   @@index([clientId])
@@ -1468,6 +1565,7 @@ model DeliveryNoteLine {
   productId      String?
   product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber     Int          @default(1)
+  kind           DocumentLineKind @default(PRODUCT)
   label          String
   unit           String?
   quantity       Decimal      @default(1)
@@ -1503,12 +1601,14 @@ model Invoice {
   totalHt       Decimal        @default(0)
   totalTva      Decimal        @default(0)
   totalTtc      Decimal        @default(0)
+  exchangeRate  Decimal        @default(1)
   paidAmount    Decimal        @default(0)
   paymentStatus PaymentStatus  @default(UNPAID)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   createdById   String?
   updatedById   String?
+  meta          Json?
 
   lines       InvoiceLine[]
   creditNotes CreditNote[]
@@ -1531,6 +1631,7 @@ model InvoiceLine {
   productId   String?
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber  Int      @default(1)
+  kind        DocumentLineKind  @default(PRODUCT)
   label       String
   unit        String?
   quantity    Decimal  @default(1)
@@ -1568,10 +1669,12 @@ model CreditNote {
   totalHt     Decimal        @default(0)
   totalTva    Decimal        @default(0)
   totalTtc    Decimal        @default(0)
+  exchangeRate Decimal       @default(1)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   createdById String?
   updatedById String?
+  meta        Json?
 
   lines CreditNoteLine[]
 
@@ -1590,10 +1693,11 @@ model CreditNoteLine {
   creditNoteId String
   creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
   productId    String?
-  product      Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
-  lineNumber   Int        @default(1)
-  label        String
-  unit         String?
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  lineNumber     Int          @default(1)
+  kind           DocumentLineKind  @default(PRODUCT)
+  label          String
+  unit           String?
   quantity     Decimal    @default(1)
   unitPrice    Decimal    @default(0)
   discountPct  Decimal    @default(0)
@@ -1632,10 +1736,12 @@ model PurchaseRequest {
   totalHt     Decimal        @default(0)
   totalTva    Decimal        @default(0)
   totalTtc    Decimal        @default(0)
+  exchangeRate Decimal       @default(1)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   createdById String?
   updatedById String?
+  meta        Json?
 
   lines PurchaseRequestLine[]
 
@@ -1655,6 +1761,7 @@ model PurchaseRequestLine {
   productId         String?
   product           Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber        Int             @default(1)
+  kind              DocumentLineKind @default(PRODUCT)
   label             String
   unit              String?
   quantity          Decimal         @default(1)
@@ -1690,10 +1797,12 @@ model PurchaseOrder {
   totalHt      Decimal        @default(0)
   totalTva     Decimal        @default(0)
   totalTtc     Decimal        @default(0)
+  exchangeRate Decimal        @default(1)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   createdById  String?
   updatedById  String?
+  meta         Json?
 
   lines         PurchaseOrderLine[]
   goodsReceipts GoodsReceipt[]
@@ -1714,6 +1823,7 @@ model PurchaseOrderLine {
   productId       String?
   product         Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber      Int           @default(1)
+  kind            DocumentLineKind @default(PRODUCT)
   label           String
   unit            String?
   quantity        Decimal       @default(1)
@@ -1751,10 +1861,12 @@ model GoodsReceipt {
   totalHt         Decimal        @default(0)
   totalTva        Decimal        @default(0)
   totalTtc        Decimal        @default(0)
+  exchangeRate    Decimal        @default(1)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   createdById     String?
   updatedById     String?
+  meta            Json?
 
   lines GoodsReceiptLine[]
 
@@ -1775,6 +1887,7 @@ model GoodsReceiptLine {
   productId      String?
   product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber     Int          @default(1)
+  kind           DocumentLineKind @default(PRODUCT)
   label          String
   unit           String?
   quantity       Decimal      @default(1)
@@ -1810,12 +1923,14 @@ model SupplierInvoice {
   totalHt       Decimal        @default(0)
   totalTva      Decimal        @default(0)
   totalTtc      Decimal        @default(0)
+  exchangeRate  Decimal        @default(1)
   paidAmount    Decimal        @default(0)
   paymentStatus PaymentStatus  @default(UNPAID)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   createdById   String?
   updatedById   String?
+  meta          Json?
 
   lines SupplierInvoiceLine[]
 
@@ -1837,6 +1952,7 @@ model SupplierInvoiceLine {
   productId         String?
   product           Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
   lineNumber        Int             @default(1)
+  kind              DocumentLineKind @default(PRODUCT)
   label             String
   unit              String?
   quantity          Decimal         @default(1)
@@ -1849,4 +1965,30 @@ model SupplierInvoiceLine {
 
   @@index([supplierInvoiceId])
   @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Document Relations (Phase 6 Engine)
+// ---------------------------------------------------------------------------
+
+model DocumentRelation {
+  id              String               @id @default(uuid())
+  companyId       String
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceDocType   String
+  sourceDocId     String
+  targetDocType   String
+  targetDocId     String
+  relationType    DocumentRelationType
+  conversionRate  Decimal?             @default(1)
+  description     String?
+  createdAt       DateTime             @default(now())
+  createdById     String?
+  createdBy       User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([sourceDocType, sourceDocId, targetDocType, targetDocId])
+  @@index([companyId])
+  @@index([sourceDocType, sourceDocId])
+  @@index([targetDocType, targetDocId])
+  @@index([relationType])
 }

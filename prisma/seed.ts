@@ -27,6 +27,7 @@ async function main() {
   await prisma.counter.deleteMany();
   await prisma.documentSeries.deleteMany();
   await prisma.documentApproval.deleteMany();
+  await prisma.documentRelation.deleteMany();
   await prisma.commune.deleteMany();
   await prisma.wilaya.deleteMany();
   await prisma.bank.deleteMany();
@@ -53,6 +54,7 @@ async function main() {
   await prisma.quotationLine.deleteMany();
   await prisma.quotation.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.companyDraft.deleteMany();
   await prisma.permission.deleteMany();
   await prisma.role.deleteMany();
   await prisma.client.deleteMany();
@@ -82,6 +84,28 @@ async function main() {
       currency: "DZD",
       isDefault: true,
       isActive: true,
+      // Phase 5.5 : informations légales et commerciales.
+      status: "ACTIVE",
+      legalName: "DzERP Algérie SPA",
+      legalForm: "SPA",
+      activity: "Édition de logiciels",
+      commercialName: "DzERP",
+      taxId: "0999 15 00 000 00 00 00",
+      rc: "16/00-0000000B00",
+      nis: "099916000000000",
+      ai: "161616160000000",
+      establishedAt: new Date("2018-01-15"),
+      address: "12 Rue Didouche Mourad, Alger Centre",
+      country: "DZ",
+      wilaya: "16",
+      commune: "1601",
+      mobile: "+213 550 00 00 00",
+      bank: "BNA",
+      bankAgency: "Agence Didouche Mourad",
+      bankAccount: "001000123456789",
+      rib: "00100012345678912345",
+      language: "fr",
+      printFormat: "A4",
     },
     create: {
       code: "MAIN",
@@ -90,6 +114,27 @@ async function main() {
       currency: "DZD",
       isDefault: true,
       isActive: true,
+      status: "ACTIVE",
+      legalName: "DzERP Algérie SPA",
+      legalForm: "SPA",
+      activity: "Édition de logiciels",
+      commercialName: "DzERP",
+      taxId: "0999 15 00 000 00 00 00",
+      rc: "16/00-0000000B00",
+      nis: "099916000000000",
+      ai: "161616160000000",
+      establishedAt: new Date("2018-01-15"),
+      address: "12 Rue Didouche Mourad, Alger Centre",
+      country: "DZ",
+      wilaya: "16",
+      commune: "1601",
+      mobile: "+213 550 00 00 00",
+      bank: "BNA",
+      bankAgency: "Agence Didouche Mourad",
+      bankAccount: "001000123456789",
+      rib: "00100012345678912345",
+      language: "fr",
+      printFormat: "A4",
     },
   });
 
@@ -115,6 +160,15 @@ async function main() {
       create: { ...branch, companyId: mainCompany.id },
     });
     branchRecords[branch.code] = record.id;
+  }
+
+  // Phase 5.5 : succursale par défaut de la société (siège).
+  const hqBranchId = branchRecords["HQ"];
+  if (hqBranchId && mainCompany.defaultBranchId !== hqBranchId) {
+    await prisma.company.update({
+      where: { id: mainCompany.id },
+      data: { defaultBranchId: hqBranchId },
+    });
   }
 
   console.log("→ Permissions (catalogue)…");
@@ -163,11 +217,46 @@ async function main() {
     },
   });
 
+  // Phase 5.5 : administrateur d'une seule société (rôle par affectation).
+  // Gère sa société assignée (profil, succursales, numérotation, utilisateurs),
+  // sans accès aux autres sociétés ni aux opérations d'archivage/suppression.
+  const companyAdminRole = await prisma.role.upsert({
+    where: { key: "COMPANY_ADMIN" },
+    update: { name: "Administrateur de société", nameAr: "مدير الشركة" },
+    create: {
+      key: "COMPANY_ADMIN",
+      name: "Administrateur de société",
+      nameAr: "مدير الشركة",
+      description:
+        "Administration de la société assignée (sans gestion globale).",
+      isSystem: true,
+    },
+  });
+
   await prisma.rolePermission.createMany({
     data: Object.keys(permissionIds).map((key) => ({
       roleId: adminRole.id,
       permissionId: permissionIds[key],
     })),
+  });
+
+  const companyAdminPerms = [
+    "dashboard.view",
+    "crm.customer.view", "crm.customer.create", "crm.customer.update",
+    "crm.supplier.view", "crm.supplier.create", "crm.supplier.update",
+    "product.view", "product.create", "product.update",
+    "warehouse.view", "warehouse.create", "warehouse.update",
+    "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
+    "parametres.view", "parametres.manage",
+    "admin.company.view", "admin.company.update",
+    "admin.company.membership.manage",
+    "admin.audit.view",
+    "search.global", "files.upload",
+  ];
+  await prisma.rolePermission.createMany({
+    data: companyAdminPerms
+      .filter((key) => permissionIds[key])
+      .map((key) => ({ roleId: companyAdminRole.id, permissionId: permissionIds[key] })),
   });
 
   const managerPerms = [

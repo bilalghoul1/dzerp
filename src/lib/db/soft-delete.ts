@@ -8,6 +8,7 @@ export const SOFT_DELETABLE_MODELS = new Set<string>([
   "Client",
   "Product",
   "Warehouse",
+  "Company",
 ]);
 
 type QueryArgs = Record<string, unknown>;

@@ -31,6 +31,7 @@ export const COMPANY_SCOPED_MODELS = new Set<string>([
   "PurchaseOrder",
   "GoodsReceipt",
   "SupplierInvoice",
+  "DocumentRelation",
   "FileAsset",
 ]);
 

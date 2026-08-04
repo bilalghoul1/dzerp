@@ -7,6 +7,7 @@ export type ActivityInput = {
   entity: string;
   entityId?: string | null;
   actorId?: string | null;
+  companyId?: string | null;
   title: string;
   titleAr?: string | null;
   meta?: Prisma.InputJsonValue;
@@ -19,6 +20,7 @@ export async function recordActivity(input: ActivityInput): Promise<void> {
       entity: input.entity,
       entityId: input.entityId ?? null,
       actorId: input.actorId ?? null,
+      companyId: input.companyId ?? undefined,
       title: input.title,
       titleAr: input.titleAr ?? null,
       meta: input.meta ?? undefined,

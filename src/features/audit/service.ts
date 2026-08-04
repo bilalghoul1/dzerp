@@ -7,6 +7,7 @@ export type AuditInput = {
   entity: string;
   entityId?: string | null;
   actorId?: string | null;
+  companyId?: string | null;
   ip?: string | null;
   userAgent?: string | null;
   changes?: Prisma.InputJsonValue;
@@ -19,6 +20,7 @@ export async function recordAudit(input: AuditInput): Promise<void> {
       entity: input.entity,
       entityId: input.entityId ?? null,
       actorId: input.actorId ?? null,
+      companyId: input.companyId ?? undefined,
       ip: input.ip ?? null,
       userAgent: input.userAgent ?? null,
       changes: input.changes ?? undefined,

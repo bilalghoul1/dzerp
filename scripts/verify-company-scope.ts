@@ -7,12 +7,26 @@ import {
 } from "../src/features/company/context";
 import type { CompanyContext } from "../src/features/company/types";
 
-async function safe<T>(label: string, fn: () => Promise<T>): Promise<{ label: string; value: string; ok: boolean }> {
+type Result = { label: string; value: string; ok: boolean };
+
+async function safe(label: string, fn: () => Promise<unknown>): Promise<Result> {
   try {
     const result = await fn();
     return { label, value: String(result), ok: true };
   } catch (e) {
     return { label, value: `THROW: ${(e as Error).message.slice(0, 80)}`, ok: false };
+  }
+}
+
+async function safeThrow(label: string, fn: () => Promise<unknown>, expected: string): Promise<Result> {
+  try {
+    await fn();
+    return { label, value: "no error thrown (attendu: échec fail-closed)", ok: false };
+  } catch (e) {
+    const message = (e as Error).message;
+    return message.includes(expected)
+      ? { label, value: message.slice(0, 80), ok: true }
+      : { label, value: `THROW (message inattendu): ${message.slice(0, 80)}`, ok: false };
   }
 }
 
@@ -38,8 +52,10 @@ async function main() {
     }),
   ));
 
-  results.push(await safe("2. out-of-context count (should throw)", () =>
-    prisma.branch.count(),
+  results.push(await safeThrow(
+    "2. out-of-context count (fail-closed)",
+    () => prisma.branch.count(),
+    "companyScope: accès au modèle métier",
   ));
 
   results.push(await safe("3. explicit companyId", () =>

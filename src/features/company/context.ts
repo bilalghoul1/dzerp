@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { cache } from "react";
+import { getCompanyContextOrResolve } from "@/features/company/resolver";
 import type { CompanyContext } from "@/features/company/types";
 
 type CompanyStore = {
@@ -54,11 +56,18 @@ type FallbackResolver = () => Promise<CompanyContext | null>;
 let fallbackResolver: FallbackResolver | null = null;
 
 /**
- * Enregistre le résolveur de contexte de secours. Nécessaire car les rendus
- * asynchrones des pages RSC s'exécutent hors du contexte ALS du layout : les
- * requêtes Prisma scoped n'y trouvent aucun contexte ALS. Le résolveur doit
- * être mémorisé par requête (`React.cache`, layout racine) pour éviter une
- * résolution par requête Prisma.
+ * Résolution de secours par requête (`React.cache`) pour les rendus RSC : les
+ * pages s'exécutent hors du contexte ALS du layout, l'extension `companyScope`
+ * résout donc ici le contexte société, mémorisé pour la requête courante
+ * (aucun partage entre requêtes/utilisateurs). Dans ce module, la référence
+ * est partagée avec l'extension quel que soit le bundle d'exécution.
+ */
+const resolveContextCached = cache(() => getCompanyContextOrResolve());
+
+/**
+ * Enregistre un résolveur de contexte de secours personnalisé (tests, cas
+ * particuliers). Par défaut, la résolution par requête (`React.cache`) est
+ * utilisée.
  */
 export function setFallbackContextResolver(
   resolver: FallbackResolver | null,
@@ -75,9 +84,15 @@ export function setFallbackContextResolver(
 export async function getOrResolveCompanyContext(): Promise<CompanyContext | null> {
   const existing = getCompanyContext();
   if (existing) return existing;
-  if (!fallbackResolver) return null;
+  if (fallbackResolver) {
+    try {
+      return await fallbackResolver();
+    } catch {
+      return null;
+    }
+  }
   try {
-    return await fallbackResolver();
+    return await resolveContextCached();
   } catch {
     return null;
   }

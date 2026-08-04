@@ -1,0 +1,62 @@
+import { ApiError } from "@/lib/http";
+import type { CommercialDocType, InputDocument, InputLine } from "./types";
+import { getDocConfig } from "./config";
+
+export function validateDocumentInput(
+  data: InputDocument,
+  docType: CommercialDocType,
+): void {
+  const config = getDocConfig(docType);
+
+  if (!data.branchId) {
+    throw new ApiError(422, "La succursale est obligatoire", "VALIDATION", {
+      branchId: "required",
+    });
+  }
+
+  if (config.partyField === "customerId" && !data.customerId) {
+    throw new ApiError(422, "Le client est obligatoire", "VALIDATION", {
+      customerId: "required",
+    });
+  }
+
+  if (config.partyField === "supplierId" && !data.supplierId) {
+    throw new ApiError(422, "Le fournisseur est obligatoire", "VALIDATION", {
+      supplierId: "required",
+    });
+  }
+
+  if (!data.lines || data.lines.length === 0) {
+    throw new ApiError(422, "Au moins une ligne est requise", "VALIDATION", {
+      lines: "required",
+    });
+  }
+
+  validateLines(data.lines);
+}
+
+export function validateLines(lines: InputLine[]): void {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const kind = line.kind ?? "PRODUCT";
+
+    if (!line.label || line.label.trim().length === 0) {
+      throw new ApiError(422, `Ligne ${i + 1}: le libellé est obligatoire`, "VALIDATION");
+    }
+
+    if (kind === "PRODUCT" || kind === "SERVICE") {
+      if (line.quantity !== undefined && line.quantity < 0) {
+        throw new ApiError(422, `Ligne ${i + 1}: la quantité ne peut pas être négative`, "VALIDATION");
+      }
+      if (line.unitPrice !== undefined && line.unitPrice < 0) {
+        throw new ApiError(422, `Ligne ${i + 1}: le prix unitaire ne peut pas être négatif`, "VALIDATION");
+      }
+      if (line.discountPct !== undefined && (line.discountPct < 0 || line.discountPct > 100)) {
+        throw new ApiError(422, `Ligne ${i + 1}: la remise doit être entre 0 et 100%`, "VALIDATION");
+      }
+      if (line.taxPct !== undefined && (line.taxPct < 0 || line.taxPct > 100)) {
+        throw new ApiError(422, `Ligne ${i + 1}: la TVA doit être entre 0 et 100%`, "VALIDATION");
+      }
+    }
+  }
+}

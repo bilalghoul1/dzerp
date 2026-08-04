@@ -64,7 +64,10 @@ const DOC_TABLES: {
   { key: "SALES_ORDER", label: "Sales order", icon: "shopping_cart", hrefPrefix: "/ventes/commandes/", party: "customer", findMany: (a) => prisma.salesOrder.findMany(a as never) },
   { key: "DELIVERY_NOTE", label: "Delivery note", icon: "local_shipping", hrefPrefix: "/ventes/livraisons/", party: "customer", findMany: (a) => prisma.deliveryNote.findMany(a as never) },
   { key: "INVOICE", label: "Invoice", icon: "receipt", hrefPrefix: "/ventes/factures/", party: "customer", findMany: (a) => prisma.invoice.findMany(a as never) },
+  { key: "CREDIT_NOTE", label: "Credit note", icon: "assignment_return", hrefPrefix: "/ventes/avoirs/", party: "customer", findMany: (a) => prisma.creditNote.findMany(a as never) },
+  { key: "PURCHASE_REQUEST", label: "Purchase request", icon: "request_quote", hrefPrefix: "/achats/demandes/", party: "supplier", findMany: (a) => prisma.purchaseRequest.findMany(a as never) },
   { key: "PURCHASE_ORDER", label: "Purchase order", icon: "shopping_bag", hrefPrefix: "/achats/bons/", party: "supplier", findMany: (a) => prisma.purchaseOrder.findMany(a as never) },
+  { key: "GOODS_RECEIPT", label: "Goods receipt", icon: "inventory_2", hrefPrefix: "/achats/receptions/", party: "supplier", findMany: (a) => prisma.goodsReceipt.findMany(a as never) },
   { key: "SUPPLIER_INVOICE", label: "Supplier invoice", icon: "payments", hrefPrefix: "/achats/factures/", party: "supplier", findMany: (a) => prisma.supplierInvoice.findMany(a as never) },
 ];
 

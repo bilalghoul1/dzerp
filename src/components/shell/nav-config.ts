@@ -22,6 +22,7 @@ export const mainNav: NavItem[] = [
 
 export const footerNav: NavItem[] = [
   { labelKey: "nav.parametres", href: "/parametres", icon: "settings", permission: "parametres.view" },
+  { labelKey: "admin.title", href: "/admin/companies", icon: "shield", permission: "admin.company.view" },
   { labelKey: "nav.aide", href: "/aide", icon: "help" },
 ];
 
