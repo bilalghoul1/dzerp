@@ -9,7 +9,7 @@ export async function POST(
   request: Request,
   context: RouteContext,
 ): Promise<NextResponse> {
-  const guard = await adminGuard("admin.company.update");
+  const guard = await adminGuard("admin.company.restore");
   if (guard.response) return guard.response;
 
   const { companyId } = await context.params;

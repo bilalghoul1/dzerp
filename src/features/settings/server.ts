@@ -75,7 +75,9 @@ export async function setSetting(input: {
   });
 }
 
-export async function listSettings(): Promise<
+export async function listSettings(options?: {
+  includeSecrets?: boolean;
+}): Promise<
   {
     key: string;
     value: SettingValue;
@@ -88,9 +90,13 @@ export async function listSettings(): Promise<
   const settings = await prisma.setting.findMany({
     orderBy: { key: "asc" },
   });
+  const includeSecrets = options?.includeSecrets ?? false;
   return settings.map((s) => ({
     key: s.key,
-    value: parseValue(s.value, s.type),
+    value:
+      s.type === "SECRET" && !includeSecrets
+        ? "••••••••"
+        : parseValue(s.value, s.type),
     type: s.type,
     description: s.description,
     isPublic: s.isPublic,

@@ -7,7 +7,7 @@ import { nextDocumentNumber } from "@/features/documents/series";
 import type { CommercialDocType, InputDocument, UpdateDocument, DocumentContext } from "./types";
 import { getDocConfig } from "./config";
 import { computeAllLines } from "./calculation";
-import { validateDocumentInput, validateLines } from "./validation";
+import { validateDocumentInput, validateLines, validateDocumentReferences } from "./validation";
 import { transitionStatus, approveDocument } from "./workflow";
 
 const LINE_INCLUDE = {
@@ -66,6 +66,7 @@ export async function createDocument(
 ): Promise<Record<string, unknown>> {
   const config = getDocConfig(docType);
   validateDocumentInput(data, docType);
+  await validateDocumentReferences(data, docType, ctx.companyId);
 
   const { number, seriesId } = await nextDocumentNumber(docType);
   const computed = computeAllLines(data.lines);
@@ -163,6 +164,17 @@ export async function updateDocument(
   if (existing.status !== "DRAFT") {
     throw new ApiError(422, "Seuls les documents en brouillon peuvent être modifiés", "NOT_DRAFT");
   }
+
+  await validateDocumentReferences(
+    {
+      branchId: data.branchId,
+      customerId: data.customerId,
+      supplierId: data.supplierId,
+      lines: [],
+    } as InputDocument,
+    docType,
+    ctx.companyId,
+  );
 
   const updateData: Record<string, unknown> = { updatedById: ctx.userId };
 

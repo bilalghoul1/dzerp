@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiGuard } from "@/features/auth/api-guard";
 import { listSettings, setSetting, type SettingValue } from "@/features/settings/server";
+import { ALLOWED_SETTING_KEYS } from "@/features/settings/keys";
 import { okResponse } from "@/lib/http";
 
 const updateItemSchema = z.object({
@@ -19,7 +20,9 @@ export async function GET(): Promise<NextResponse> {
   if (guard.response) return guard.response;
 
   try {
-    const settings = await listSettings();
+    const settings = await listSettings({
+      includeSecrets: guard.session.permissions.includes("parametres.manage"),
+    });
     return okResponse(settings);
   } catch (error) {
     console.error("settings GET error:", error);
@@ -42,6 +45,20 @@ export async function PUT(request: Request): Promise<NextResponse> {
         { error: { message: "Requête invalide.", code: "INVALID_BODY", details: parsed.error.flatten() } },
         { status: 400 },
       );
+    }
+
+    for (const item of parsed.data.settings) {
+      if (!ALLOWED_SETTING_KEYS.has(item.key)) {
+        return NextResponse.json(
+          {
+            error: {
+              message: `Clé de paramètre inconnue : ${item.key}.`,
+              code: "INVALID_SETTING_KEY",
+            },
+          },
+          { status: 400 },
+        );
+      }
     }
 
     await Promise.all(

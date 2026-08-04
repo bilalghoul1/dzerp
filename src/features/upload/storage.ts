@@ -1,8 +1,12 @@
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { ApiError } from "@/lib/http";
 
 export const uploadRoot = path.join(process.cwd(), "uploads");
+
+/** Taille maximale d'un fichier uploadé (20 Mo). */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 export async function ensureUploadsDir(): Promise<void> {
   await mkdir(uploadRoot, { recursive: true });
@@ -29,6 +33,13 @@ export type StoredFile = {
 };
 
 export async function saveUploadFile(file: File): Promise<StoredFile> {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError(
+      413,
+      `Fichier trop volumineux (max ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} Mo).`,
+      "FILE_TOO_LARGE",
+    );
+  }
   await ensureUploadsDir();
   const originalName = sanitizeFileName(file.name || "fichier");
   const storageKey = `${Date.now()}-${randomUUID().slice(0, 8)}-${originalName}`;

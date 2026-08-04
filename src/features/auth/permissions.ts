@@ -369,6 +369,11 @@ export const PERMISSIONS = {
     name: "Supprimer une société (suppression logique)",
     nameAr: "حذف شركة (حذف منطقي)",
   },
+  "admin.company.restore": {
+    module: "admin",
+    name: "Restaurer une société",
+    nameAr: "استعادة شركة",
+  },
   "admin.company.membership.manage": {
     module: "admin",
     name: "Gérer les affectations utilisateurs aux sociétés",
@@ -388,6 +393,11 @@ export const PERMISSIONS = {
     module: "files",
     name: "Envoyer des fichiers",
     nameAr: "رفع الملفات",
+  },
+  "files.download": {
+    module: "files",
+    name: "Télécharger des fichiers",
+    nameAr: "تحميل الملفات",
   },
   "documents.read": {
     module: "documents",

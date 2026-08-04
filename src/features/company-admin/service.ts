@@ -39,6 +39,7 @@ const GLOBAL_ADMIN_KEYS: readonly string[] = [
   "admin.company.create",
   "admin.company.archive",
   "admin.company.delete",
+  "admin.company.restore",
 ];
 
 export function isGlobalAdmin(actor: AdminActor): boolean {
@@ -618,6 +619,13 @@ export async function restoreCompany(
 ): Promise<CompanyAdminDetail> {
   return runUnscoped(async () => {
     assertGlobalAdmin(actor);
+    if (!actor.permissions.includes("admin.company.restore")) {
+      throw new ApiError(
+        403,
+        "Accès réservé au Super Administrateur.",
+        "FORBIDDEN",
+      );
+    }
     const company = await prisma.company.findFirst({
       where: { id: companyId },
     });
@@ -1058,10 +1066,12 @@ export type CompanyAuditEntry = {
 };
 
 export async function listCompanyAudit(
+  actor: AdminActor,
   companyId: string,
   limit = 100,
 ): Promise<CompanyAuditEntry[]> {
   return runUnscoped(async () => {
+    assertCompanyAccess(actor, companyId);
     const logs = await prisma.auditLog.findMany({
       where: { companyId },
       orderBy: { createdAt: "desc" },
@@ -1090,10 +1100,12 @@ export type CompanyActivityEntry = {
 };
 
 export async function listCompanyActivity(
+  actor: AdminActor,
   companyId: string,
   limit = 100,
 ): Promise<CompanyActivityEntry[]> {
   return runUnscoped(async () => {
+    assertCompanyAccess(actor, companyId);
     const events = await prisma.activityEvent.findMany({
       where: { companyId },
       orderBy: { createdAt: "desc" },

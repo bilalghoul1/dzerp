@@ -38,8 +38,8 @@ export default async function CompanyDetailPage({
       listCompanyBranches(actor, companyId),
       listCompanySeries(actor, companyId),
       getStatistics(actor, companyId),
-      listCompanyAudit(companyId),
-      listCompanyActivity(companyId),
+      listCompanyAudit(actor, companyId),
+      listCompanyActivity(actor, companyId),
     ]);
 
   return (

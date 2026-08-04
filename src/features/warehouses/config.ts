@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApiError } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
@@ -34,8 +35,25 @@ export const warehouseUpdateSchema = warehouseCreateSchema.partial();
 export type WarehouseCreateInput = z.infer<typeof warehouseCreateSchema>;
 export type WarehouseUpdateInput = z.infer<typeof warehouseUpdateSchema>;
 
-export type WarehouseRow = {
-  id: string;
+/** Vérifie que la succursale appartient à la société courante (fail-closed). */
+async function assertBranchInCompany(
+  branchId: string,
+  companyId: string,
+): Promise<void> {
+  const count = await prisma.branch.count({
+    where: { id: branchId, companyId },
+  });
+  if (count === 0) {
+    throw new ApiError(
+      422,
+      "La succursale n'appartient pas à la société courante.",
+      "VALIDATION",
+      { branchId: "not_found_in_company" },
+    );
+  }
+}
+
+export type WarehouseRow = {  id: string;
   code: string;
   name: string;
   nameAr: string | null;
@@ -108,6 +126,10 @@ export async function createWarehouse(
   createdById: string,
 ): Promise<WarehouseRow> {
   const { number: code } = await nextDocumentNumber("WAREHOUSE");
+  const companyId = requireCompanyContext().company.id;
+  if (input.branchId) {
+    await assertBranchInCompany(input.branchId, companyId);
+  }
   const row = await prisma.warehouse.create({
     data: {
       code,
@@ -118,7 +140,7 @@ export async function createWarehouse(
       address: input.address ?? null,
       managerId: input.managerId ?? null,
       isActive: input.isActive ?? true,
-      companyId: requireCompanyContext().company.id,
+      companyId,
       createdById,
     },
     include: WAREHOUSE_INCLUDE,
@@ -131,6 +153,12 @@ export async function updateWarehouse(
   input: WarehouseUpdateInput,
   updatedById: string,
 ): Promise<WarehouseRow> {
+  if (input.branchId !== undefined) {
+    const companyId = requireCompanyContext().company.id;
+    if (input.branchId) {
+      await assertBranchInCompany(input.branchId, companyId);
+    }
+  }
   const row = await prisma.warehouse.update({
     where: { id },
     data: {

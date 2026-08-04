@@ -251,7 +251,7 @@ async function main() {
     "admin.company.view", "admin.company.update",
     "admin.company.membership.manage",
     "admin.audit.view",
-    "search.global", "files.upload",
+    "search.global", "files.upload", "files.download",
   ];
   await prisma.rolePermission.createMany({
     data: companyAdminPerms
@@ -279,7 +279,7 @@ async function main() {
     "compta.view",
     "rh.view",
     "rapports.view",
-    "search.global", "files.upload",
+    "search.global", "files.upload", "files.download",
   ];
   await prisma.rolePermission.createMany({
     data: managerPerms
@@ -296,6 +296,7 @@ async function main() {
     "achats.reception.view", "achats.facture.view",
     "product.view", "warehouse.view", "inventory.view",
     "production.view", "compta.view", "rh.view", "rapports.view", "search.global",
+    "files.download",
   ];
   await prisma.rolePermission.createMany({
     data: readerPerms
