@@ -64,6 +64,8 @@ export function normalizeDocumentRow(
   const party = getParty(raw, docType);
   const branch = getBranch(raw);
   const lines = Array.isArray(raw.lines) ? (raw.lines as unknown[]) : [];
+  const count = (raw._count as { lines?: number } | null | undefined)?.lines;
+  const linesCount = lines.length > 0 ? lines.length : (count ?? 0);
 
   return {
     id: String(raw.id ?? ""),
@@ -79,7 +81,7 @@ export function normalizeDocumentRow(
     totalHt: toNumber(raw.totalHt),
     totalTva: toNumber(raw.totalTva),
     totalTtc: toNumber(raw.totalTtc),
-    linesCount: lines.length,
+    linesCount,
   };
 }
 

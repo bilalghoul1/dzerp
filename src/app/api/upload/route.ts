@@ -3,6 +3,7 @@ import { apiGuardWithContext, runScoped } from "@/features/company/api";
 import {
   saveUploadFile,
   MAX_UPLOAD_BYTES,
+  isAllowedUploadType,
 } from "@/features/upload/storage";
 import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/features/audit/service";
@@ -38,6 +39,19 @@ export async function POST(request: Request): Promise<NextResponse> {
             },
           },
           { status: 413 },
+        );
+      }
+
+      const unsupported = files.find((f) => !isAllowedUploadType(f.type));
+      if (unsupported) {
+        return NextResponse.json(
+          {
+            error: {
+              message: `Type de fichier non autorisé (${unsupported.type || "inconnu"}).`,
+              code: "UNSUPPORTED_FILE_TYPE",
+            },
+          },
+          { status: 400 },
         );
       }
 

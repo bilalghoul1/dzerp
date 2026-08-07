@@ -45,7 +45,6 @@ const DEFAULT_TOOLBAR: DocumentActionId[] = [
   "convert",
   "duplicate",
   "print",
-  "archive",
 ];
 
 interface BaseUiConfig {

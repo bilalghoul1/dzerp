@@ -92,12 +92,22 @@ export async function switchCompany(
     path: "/",
     maxAge: 31536000,
     sameSite: "lax",
+    httpOnly: true,
+    secure:
+      process.env.COOKIE_SECURE === "false"
+        ? false
+        : process.env.NODE_ENV === "production",
   });
   if (branch) {
     store.set(BRANCH_COOKIE, branch.id, {
       path: "/",
       maxAge: 31536000,
       sameSite: "lax",
+      httpOnly: true,
+      secure:
+        process.env.COOKIE_SECURE === "false"
+          ? false
+          : process.env.NODE_ENV === "production",
     });
   } else {
     store.delete(BRANCH_COOKIE);

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { useCompany } from "@/features/company/company-provider";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { EmptyState } from "@/components/feedback/empty-state";
 import { DocumentStatusBadge } from "@/components/documents/document-status-badge";
 import { DocumentConvertDialog } from "@/components/documents/document-convert-dialog";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
@@ -63,6 +65,34 @@ const ALL_COLUMNS: DocumentListColumnId[] = [
 
 const PAGE_SIZES = [10, 20, 50];
 
+type SortKey = "date" | "number" | "party" | "status" | "total";
+
+const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
+  { key: "date", labelKey: "documentsUI.colDate" },
+  { key: "number", labelKey: "documentsUI.colNumber" },
+  { key: "party", labelKey: "documentsUI.colParty" },
+  { key: "status", labelKey: "documentsUI.colStatus" },
+  { key: "total", labelKey: "documentsUI.colTotal" },
+];
+
+function compareRows(a: DocumentRow, b: DocumentRow, key: SortKey): number {
+  switch (key) {
+    case "date":
+      return a.issuedAt.localeCompare(b.issuedAt);
+    case "number":
+      return a.number.localeCompare(b.number, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    case "party":
+      return (a.partyName ?? "").localeCompare(b.partyName ?? "");
+    case "status":
+      return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
+    case "total":
+      return a.totalTtc - b.totalTtc;
+  }
+}
+
 type SavedFilter = { name: string; status: string; search: string };
 
 function savedFilterKey(type: CommercialDocType): string {
@@ -84,6 +114,7 @@ export function DocumentList({
 }) {
   const { t, locale } = useI18n();
   const company = useCompany();
+  const router = useRouter();
   const ui = getUiConfig(type);
   const config = getDocConfig(type);
 
@@ -97,6 +128,8 @@ export function DocumentList({
   const [total, setTotal] = React.useState(initialTotal);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
+  const [sortKey, setSortKey] = React.useState<SortKey>("date");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
   const [status, setStatus] = React.useState<string>("");
   const [search, setSearch] = React.useState("");
   const [appliedSearch, setAppliedSearch] = React.useState("");
@@ -151,8 +184,16 @@ export function DocumentList({
     }
   }, [type, page, pageSize, status, appliedSearch, t]);
 
+  const initialHydrated = React.useRef(false);
+
   React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- chargement initial des données distantes
+    if (!initialHydrated.current) {
+      // Les données initiales sont rendues par le serveur (page 1, sans filtre) :
+      // ne pas re-fetch la même page au montage.
+      initialHydrated.current = true;
+      return;
+    }
+    // Rechargement après changement de page/filtre (le montage garde les données serveur).
     void load();
   }, [load]);
 
@@ -345,6 +386,15 @@ export function DocumentList({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageCount = totalPages;
 
+  const sortedItems = React.useMemo(() => {
+    const next = [...items];
+    next.sort((a, b) => {
+      const cmp = compareRows(a, b, sortKey);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return next;
+  }, [items, sortKey, sortDir]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -378,6 +428,32 @@ export function DocumentList({
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={sortKey}
+            onValueChange={(v) => setSortKey(v as SortKey)}
+          >
+            <SelectTrigger className="w-40" aria-label={t("documentsUI.sortBy")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {t(opt.labelKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+            aria-label={t("documentsUI.sortDirection")}
+            title={t("documentsUI.sortDirection")}
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+              {sortDir === "asc" ? "arrow_upward" : "arrow_downward"}
+            </span>
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -555,16 +631,32 @@ export function DocumentList({
                 <TableRow>
                   <TableCell
                     colSpan={columns.length + 1}
-                    className="py-10 text-center"
+                    className="py-6"
                   >
-                    <p className="text-sm font-medium">{t("documentsUI.emptyList")}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t("documentsUI.emptyListDescription")}
-                    </p>
+                    <EmptyState
+                      icon="description"
+                      title={t("documentsUI.emptyList")}
+                      description={t("documentsUI.emptyListDescription")}
+                      action={
+                        canCreate ? (
+                          <Button
+                            onClick={() => {
+                              if (basePath) window.location.href = `${basePath}/new`;
+                            }}
+                            className="mt-2"
+                          >
+                            <span className="material-symbols-outlined me-1 text-[18px]" aria-hidden="true">
+                              add
+                            </span>
+                            {t("documentsUI.newDocument")}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
-                items.map((row) => (
+                sortedItems.map((row) => (
                   <TableRow key={row.id} data-state={selected.has(row.id) ? "selected" : undefined}>
                     <TableCell className="w-10">
                       <Checkbox
@@ -601,7 +693,11 @@ export function DocumentList({
                     ) : null}
                     {columns.includes("status") ? (
                       <TableCell>
-                        <DocumentStatusBadge status={row.status} />
+                        <DocumentStatusBadge
+                          status={row.status}
+                          showDot={false}
+                          withHint
+                        />
                       </TableCell>
                     ) : null}
                     {columns.includes("total") ? (
@@ -732,7 +828,16 @@ export function DocumentList({
           }}
           sourceType={type}
           sourceId={convertFor.id}
-          onConverted={() => refresh()}
+          onConverted={(target) => {
+            setConvertFor(null);
+            if (target) {
+              // The resulting document lives in its own list — take the user there
+              // so the converted document never "disappears".
+              router.push(`/documents/${target.toLowerCase()}`);
+            } else {
+              void refresh();
+            }
+          }}
         />
       ) : null}
     </div>

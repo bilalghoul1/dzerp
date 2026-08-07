@@ -34,7 +34,13 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg rtl:translate-x-1/2",
+        // Centrage direction-agnostique : `left-1/2 top-1/2` place le coin en haut à
+        // gauche au centre de l'écran, puis `-translate-x-1/2 -translate-y-1/2` recule le
+        // panneau de la moitié de SA largeur/hauteur. Comme `left` est physique et le
+        // translate est symétrique autour du centre propre du panneau, cela centre
+        // parfaitement en LTR et en RTL. Aucun override `rtl:` (il décalait le dialogue
+        // vers la droite en RTL). Voir docs/ui/rtl-dialog-fix.md.
+        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
         className,
       )}
       {...props}

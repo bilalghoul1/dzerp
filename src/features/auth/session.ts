@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE, SESSION_TTL_SECONDS } from "@/lib/constants";
+import { SESSION_COOKIE, SESSION_TTL_SECONDS, COMPANY_COOKIE, BRANCH_COOKIE } from "@/lib/constants";
 
 type SessionPayload = {
   sid: string;
@@ -133,6 +133,8 @@ export async function revokeSession(): Promise<void> {
     }
   }
   store.delete(SESSION_COOKIE);
+  store.delete(COMPANY_COOKIE);
+  store.delete(BRANCH_COOKIE);
 }
 
 export function verifySessionCookie(value: string): SessionPayload | null {

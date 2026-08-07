@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE, verifySessionCookie } from "@/features/auth/session";
@@ -96,7 +96,7 @@ export async function requirePermission(
     redirect("/login");
   }
   if (!session.permissions.includes(key)) {
-    redirect("/");
+    notFound();
   }
   return session;
 }

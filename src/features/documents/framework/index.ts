@@ -51,4 +51,4 @@ export {
   uploadAttachments,
   listDocumentsUrl,
 } from "./api";
-export type { ListParams } from "./api";
+export type { ListParams, DocumentActivityEvent } from "./api";

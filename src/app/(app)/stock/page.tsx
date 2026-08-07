@@ -1,4 +1,6 @@
 import { requirePermission } from "@/features/auth/rbac";
+import { redirect } from "next/navigation";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import {
   listProducts,
   listProductCatalogOptions,
@@ -12,6 +14,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
   await requirePermission("product.view");
+  const context = await getOrResolveCompanyContext();
+  if (!context) redirect("/login");
+
   const [products, options, { t }] = await Promise.all([
     listProducts(),
     listProductCatalogOptions(),

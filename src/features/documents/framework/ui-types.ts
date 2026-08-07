@@ -15,7 +15,6 @@ export type DocumentActionId =
   | "reject"
   | "convert"
   | "duplicate"
-  | "archive"
   | "print";
 
 export type DocumentListColumnId =

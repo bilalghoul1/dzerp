@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 type QuickCreateItem = {
   key:
     | "quotation"
-    | "proforma"
     | "salesOrder"
     | "deliveryNote"
     | "invoice"
@@ -36,21 +35,20 @@ const GROUPS: {
   {
     labelKey: "quickCreate.sales",
     items: [
-      { key: "quotation", href: "/devis/nouveau", icon: "description", permission: "ventes.devis.create" },
-      { key: "proforma", href: "/ventes/proforma/nouveau", icon: "receipt_long", permission: "ventes.proforma.create" },
-      { key: "salesOrder", href: "/ventes/commandes/nouveau", icon: "shopping_cart", permission: "ventes.commande.create" },
-      { key: "deliveryNote", href: "/ventes/livraisons/nouveau", icon: "local_shipping", permission: "ventes.livraison.create" },
-      { key: "invoice", href: "/ventes/factures/nouveau", icon: "receipt", permission: "ventes.facture.create" },
-      { key: "creditNote", href: "/ventes/avoirs/nouveau", icon: "currency_exchange", permission: "ventes.avoir.create" },
+      { key: "quotation", href: "/documents/quotation/nouveau", icon: "description", permission: "ventes.devis.create" },
+      { key: "salesOrder", href: "/documents/sales_order/nouveau", icon: "shopping_cart", permission: "ventes.commande.create" },
+      { key: "deliveryNote", href: "/documents/delivery_note/nouveau", icon: "local_shipping", permission: "ventes.livraison.create" },
+      { key: "invoice", href: "/documents/invoice/nouveau", icon: "receipt", permission: "ventes.facture.create" },
+      { key: "creditNote", href: "/documents/credit_note/nouveau", icon: "currency_exchange", permission: "ventes.avoir.create" },
     ],
   },
   {
     labelKey: "quickCreate.purchasing",
     items: [
-      { key: "purchaseRequest", href: "/achats/besoins/nouveau", icon: "request_quote", permission: "achats.besoin.create" },
-      { key: "purchaseOrder", href: "/achats/bons/nouveau", icon: "shopping_bag", permission: "achats.bon.create" },
-      { key: "goodsReceipt", href: "/achats/receptions/nouveau", icon: "inventory", permission: "achats.reception.create" },
-      { key: "supplierInvoice", href: "/achats/factures/nouveau", icon: "payments", permission: "achats.facture.create" },
+      { key: "purchaseRequest", href: "/documents/purchase_request/nouveau", icon: "request_quote", permission: "achats.besoin.create" },
+      { key: "purchaseOrder", href: "/documents/purchase_order/nouveau", icon: "shopping_bag", permission: "achats.bon.create" },
+      { key: "goodsReceipt", href: "/documents/goods_receipt/nouveau", icon: "inventory", permission: "achats.reception.create" },
+      { key: "supplierInvoice", href: "/documents/supplier_invoice/nouveau", icon: "payments", permission: "achats.facture.create" },
     ],
   },
   {
@@ -65,7 +63,6 @@ const GROUPS: {
   {
     labelKey: "quickCreate.administration",
     items: [
-      { key: "user", href: "/parametres/utilisateurs/nouveau", icon: "person_add", permission: "admin.users.manage" },
       { key: "branch", href: "/parametres/branches", icon: "domain", permission: "parametres.manage" },
     ],
   },

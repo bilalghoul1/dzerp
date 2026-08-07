@@ -1,5 +1,6 @@
 import type { DocumentStatus } from "@/generated/prisma/enums";
 import type { CommercialDocType, DocumentTypeConfig, StatusTransition } from "./types";
+import { ApiError } from "@/lib/http";
 
 const SALES_TRANSITIONS: StatusTransition[] = [
   { from: "DRAFT", to: "PENDING_APPROVAL", label: "Soumettre", labelAr: "تقديم" },
@@ -169,4 +170,37 @@ export function getValidTransitions(
 ): StatusTransition[] {
   const config = getDocConfig(type);
   return config.transitions.filter((t) => t.from === currentStatus);
+}
+
+/**
+ * Paires source → cible autorisées pour la conversion de documents.
+ * Vérité serveur unique : l'UI (`framework/ui-config`) doit rester alignée.
+ */
+export const ALLOWED_CONVERSIONS: Record<
+  CommercialDocType,
+  CommercialDocType[]
+> = {
+  QUOTATION: ["SALES_ORDER", "INVOICE"],
+  SALES_ORDER: ["DELIVERY_NOTE", "INVOICE"],
+  DELIVERY_NOTE: ["INVOICE"],
+  INVOICE: ["CREDIT_NOTE"],
+  CREDIT_NOTE: [],
+  PURCHASE_REQUEST: ["PURCHASE_ORDER"],
+  PURCHASE_ORDER: ["GOODS_RECEIPT", "SUPPLIER_INVOICE"],
+  GOODS_RECEIPT: ["SUPPLIER_INVOICE"],
+  SUPPLIER_INVOICE: [],
+};
+
+export function assertAllowedConversion(
+  sourceDocType: CommercialDocType,
+  targetDocType: CommercialDocType,
+): void {
+  const allowed = ALLOWED_CONVERSIONS[sourceDocType];
+  if (!allowed || !allowed.includes(targetDocType)) {
+    throw new ApiError(
+      422,
+      `Conversion ${sourceDocType} → ${targetDocType} non autorisée`,
+      "INVALID_CONVERSION",
+    );
+  }
 }

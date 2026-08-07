@@ -31,11 +31,12 @@ function NotesTab() {
           <Label htmlFor="doc-notes-full">{t("documentsUI.fieldNotes")}</Label>
           <Textarea
             id="doc-notes-full"
-            rows={6}
+            rows={10}
             value={editor.header.notes}
             onChange={(e) => editor.setHeaderField("notes", e.target.value)}
             placeholder={t("documentsUI.notesPlaceholder")}
             disabled={!isEditable || editor.busy}
+            className="min-h-[220px] w-full resize-y px-4 py-3 text-sm leading-relaxed"
           />
         </div>
       </CardContent>

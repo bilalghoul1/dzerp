@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import { requirePermission } from "@/features/auth/rbac";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import { listActivity } from "@/features/activity/service";
 import { recentDocuments } from "@/features/search/server";
 import { getStockSummary } from "@/features/inventory/config";
@@ -11,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/page/page-header";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import {
   formatNumber,
   formatCurrency,
@@ -46,6 +50,10 @@ const DOC_ICONS: Record<string, string> = {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const context = await getOrResolveCompanyContext();
+  if (!context) redirect("/login");
+  await requirePermission("dashboard.view");
+
   const { t } = await getServerI18n();
 
   const [
@@ -67,7 +75,12 @@ export default async function DashboardPage() {
     prisma.customer.count(),
     prisma.product.count(),
     prisma.branch.count(),
-    prisma.user.count({ where: { status: "ACTIVE" } }),
+    prisma.user.count({
+      where: {
+        status: "ACTIVE",
+        userCompanies: { some: { companyId: context.company.id } },
+      },
+    }),
     prisma.quotation.count({ where: { status: "PENDING" } }),
     prisma.salesOrder.count({ where: { status: "PENDING" } }),
     prisma.deliveryNote.count({ where: { status: "PENDING" } }),
@@ -93,6 +106,7 @@ export default async function DashboardPage() {
     }),
     prisma.invoiceLine.groupBy({
       by: ["productId"],
+      where: { invoice: { companyId: context.company.id } },
       _sum: { quantity: true },
       orderBy: { _sum: { quantity: "desc" } },
       take: 5,
@@ -104,7 +118,7 @@ export default async function DashboardPage() {
 
   const [stockAlertProducts] = await Promise.all([
     prisma.product.findMany({
-      where: { deletedAt: null, isActive: true },
+      where: { deletedAt: null, isActive: true, minimumQuantity: { gt: 0 } },
       select: { id: true, minimumQuantity: true },
     }),
   ]);
@@ -142,10 +156,10 @@ export default async function DashboardPage() {
   ];
 
   const pending = [
-    { key: "quotations", label: t("dashboard.pendingQuotations"), value: pendingQuotations, icon: "description", tone: "text-primary" },
-    { key: "orders", label: t("quickCreate.salesOrder"), value: pendingOrders, icon: "shopping_cart", tone: "text-blue-600" },
-    { key: "deliveries", label: t("dashboard.pendingDeliveries"), value: pendingDeliveries, icon: "local_shipping", tone: "text-emerald-600" },
-    { key: "invoices", label: t("dashboard.pendingInvoices"), value: pendingInvoices, icon: "receipt", tone: "text-amber-600" },
+    { key: "quotations", label: t("dashboard.pendingQuotations"), value: pendingQuotations, icon: "description", tone: "text-primary", href: "/documents/quotation" },
+    { key: "orders", label: t("quickCreate.salesOrder"), value: pendingOrders, icon: "shopping_cart", tone: "text-blue-600", href: "/documents/sales_order" },
+    { key: "deliveries", label: t("dashboard.pendingDeliveries"), value: pendingDeliveries, icon: "local_shipping", tone: "text-emerald-600", href: "/documents/delivery_note" },
+    { key: "invoices", label: t("dashboard.pendingInvoices"), value: pendingInvoices, icon: "receipt", tone: "text-amber-600", href: "/documents/invoice" },
   ];
   const hasPending = pending.some((p) => p.value > 0);
 
@@ -176,9 +190,20 @@ export default async function DashboardPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{t("status.PENDING")}</CardTitle>
-            <CardDescription>{t("dashboard.pendingInvoices")}</CardDescription>
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+            <div>
+              <CardTitle>{t("dashboard.pendingInvoices")}</CardTitle>
+              <CardDescription>{t("dashboard.actNow")}</CardDescription>
+            </div>
+            <Link
+              href="/documents/quotation/nouveau"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                add
+              </span>
+              {t("dashboard.createQuotation")}
+            </Link>
           </CardHeader>
           <CardContent>
             {!hasPending ? (
@@ -188,7 +213,11 @@ export default async function DashboardPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {pending.map((item) => (
-                  <div key={item.key} className="flex items-center gap-3 rounded-lg border p-3">
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
+                  >
                     <span className={`material-symbols-outlined text-[22px] ${item.tone}`} aria-hidden="true">
                       {item.icon}
                     </span>
@@ -196,7 +225,10 @@ export default async function DashboardPage() {
                       <p className="text-xl font-semibold leading-none">{item.value}</p>
                       <p className="mt-1 truncate text-sm text-muted-foreground">{item.label}</p>
                     </div>
-                  </div>
+                    <span className="material-symbols-outlined text-[18px] text-muted-foreground rtl:-scale-x-100" aria-hidden="true">
+                      chevron_right
+                    </span>
+                  </Link>
                 ))}
               </div>
             )}

@@ -1,4 +1,6 @@
 import { hasPermission, requirePermission } from "@/features/auth/rbac";
+import { redirect } from "next/navigation";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import {
   getStockOnHand,
   listInventoryMovements,
@@ -13,6 +15,9 @@ export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
   const session = await requirePermission("inventory.view");
+  const context = await getOrResolveCompanyContext();
+  if (!context) redirect("/login");
+
   const [movements, stock, options, { t }] = await Promise.all([
     listInventoryMovements(),
     getStockOnHand(),

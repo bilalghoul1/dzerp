@@ -137,7 +137,7 @@ export function CompanyForm({
       </Card>
 
       <SectionCard title={t("parametres.companyGeneral")}>
-        <Field label={t("parametres.companyName")} span={2}>
+        <Field label={t("parametres.companyName")} span={2} required>
           <Input
             value={values.name}
             onChange={(e) => update({ name: e.target.value })}
@@ -458,15 +458,17 @@ function SectionCard({
 function Field({
   label,
   span,
+  required,
   children,
 }: {
   label: string;
   span?: number;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className={span === 2 ? "space-y-2 sm:col-span-2" : "space-y-2"}>
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

@@ -185,6 +185,41 @@ export async function getConversionHistory(
   return raw.map(normalizeRelation);
 }
 
+export type DocumentActivityEvent = {
+  id: string;
+  type: string;
+  title: string;
+  titleAr: string | null;
+  actorName: string | null;
+  createdAt: string;
+  meta: {
+    docType?: unknown;
+    from?: unknown;
+    to?: unknown;
+  } | null;
+};
+
+export async function getDocumentActivity(
+  type: CommercialDocType,
+  docId: string,
+): Promise<DocumentActivityEvent[]> {
+  const raw = await request<Record<string, unknown>[]>(
+    `/api/documents/${docId}/activity?type=${type}`,
+  );
+  return raw.map((item) => ({
+    id: String(item.id),
+    type: String(item.type),
+    title: String(item.title),
+    titleAr: item.titleAr == null ? null : String(item.titleAr),
+    actorName: item.actorName == null ? null : String(item.actorName),
+    createdAt: String(item.createdAt),
+    meta:
+      item.meta && typeof item.meta === "object"
+        ? (item.meta as DocumentActivityEvent["meta"])
+        : null,
+  }));
+}
+
 export async function convertDocument(input: {
   sourceDocType: CommercialDocType;
   sourceDocId: string;

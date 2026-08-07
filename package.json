@@ -15,7 +15,10 @@
     "verify:scope": "tsx scripts/verify-company-scope.ts"
   },
   "dependencies": {
+    "@expo-google-fonts/amiri": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@hookform/resolvers": "^5.7.1",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@radix-ui/react-avatar": "^1.2.6",
@@ -38,7 +41,10 @@
     "dotenv": "^17.4.2",
     "lucide-react": "^1.28.0",
     "material-symbols": "^0.45.10",
+    "naqqash": "^0.2.0",
     "next": "16.2.12",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38",
     "pg": "^8.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",

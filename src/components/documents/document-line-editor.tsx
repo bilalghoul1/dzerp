@@ -213,25 +213,25 @@ export function DocumentLineEditor() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead className="min-w-[220px]">
+                <TableHead className="w-9 whitespace-nowrap">#</TableHead>
+                <TableHead className="min-w-[200px]">
                   {t("documentsUI.lineDescription")}
                 </TableHead>
-                <TableHead className="w-32">
+                <TableHead className="w-[104px] whitespace-nowrap">
                   {t("documentsUI.lineKind")}
                 </TableHead>
-                <TableHead className="w-28">{t("documentsUI.lineUnit")}</TableHead>
-                <TableHead className="w-24">{t("documentsUI.lineQty")}</TableHead>
-                <TableHead className="w-28">{t("documentsUI.linePrice")}</TableHead>
-                <TableHead className="w-24">
+                <TableHead className="w-[88px] whitespace-nowrap">{t("documentsUI.lineUnit")}</TableHead>
+                <TableHead className="w-[104px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">{t("documentsUI.linePrice")}</TableHead>
+                <TableHead className="w-[100px] whitespace-nowrap">
                   {t("documentsUI.lineDiscount")}
                 </TableHead>
-                <TableHead className="w-24">{t("documentsUI.lineVat")}</TableHead>
-                <TableHead className="w-32 text-end">
+                <TableHead className="w-[108px] whitespace-nowrap">{t("documentsUI.lineVat")}</TableHead>
+                <TableHead className="w-[132px] whitespace-nowrap text-end">
                   {t("documentsUI.lineAmount")}
                 </TableHead>
                 {isEditable && (
-                  <TableHead className="w-24">{t("documentsUI.lineActions")}</TableHead>
+                  <TableHead className="w-[84px] whitespace-nowrap">{t("documentsUI.lineActions")}</TableHead>
                 )}
               </TableRow>
             </TableHeader>
@@ -267,7 +267,7 @@ export function DocumentLineEditor() {
                                 ? t("documentsUI.lineSectionPlaceholder")
                                 : t("documentsUI.lineDescriptionPlaceholder")
                           }
-                          className="h-8"
+                          className="h-9 w-full px-3"
                           disabled={!isEditable || editor.busy}
                           aria-label={t("documentsUI.lineDescription")}
                         />
@@ -284,8 +284,8 @@ export function DocumentLineEditor() {
                           }
                           disabled={editor.busy}
                         >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
+                          <SelectTrigger className="h-9 w-full">
+                              <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {LINE_KINDS.map((kind) => (
@@ -337,7 +337,7 @@ export function DocumentLineEditor() {
                           })
                         }
                         onKeyDown={(e) => onCellKeyDown(e, false)}
-                        className="h-8 text-end"
+                        className="h-9 w-full text-end px-3 min-w-[5.5rem]"
                         disabled={!isEditable || editor.busy}
                         inputMode="decimal"
                         aria-label={t("documentsUI.lineQty")}
@@ -355,7 +355,7 @@ export function DocumentLineEditor() {
                           })
                         }
                         onKeyDown={(e) => onCellKeyDown(e, false)}
-                        className="h-8 text-end"
+                        className="h-9 w-full text-end px-3 min-w-[5.5rem]"
                         disabled={!isEditable || editor.busy}
                         inputMode="decimal"
                         aria-label={t("documentsUI.linePrice")}
@@ -374,7 +374,7 @@ export function DocumentLineEditor() {
                           })
                         }
                         onKeyDown={(e) => onCellKeyDown(e, false)}
-                        className="h-8 text-end"
+                        className="h-9 w-full text-end px-3 min-w-[5.5rem]"
                         disabled={!isEditable || editor.busy}
                         inputMode="decimal"
                         aria-label={t("documentsUI.lineDiscount")}
@@ -391,8 +391,8 @@ export function DocumentLineEditor() {
                           }
                           disabled={editor.busy}
                         >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
+                          <SelectTrigger className="h-9 w-full">
+                              <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {editor.lookups.taxRates.map((rate) => (

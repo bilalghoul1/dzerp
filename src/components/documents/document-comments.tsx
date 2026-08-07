@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
+import { useCompany } from "@/features/company/company-provider";
 
 interface CommentItem {
   id: string;
@@ -14,11 +15,11 @@ interface CommentItem {
   at: string;
 }
 
-const EXAMPLE_AUTHOR = "current-user";
-
 export function DocumentComments() {
   const { t } = useI18n();
   const editor = useDocumentEditor();
+  const company = useCompany();
+  const author = company.user.fullName ?? company.user.username;
   const [items, setItems] = React.useState<CommentItem[]>([]);
   const [draft, setDraft] = React.useState("");
 
@@ -30,7 +31,7 @@ export function DocumentComments() {
       ...prev,
       {
         id: String(Date.now()),
-        author: EXAMPLE_AUTHOR,
+        author,
         text,
         at: new Date().toISOString(),
       },

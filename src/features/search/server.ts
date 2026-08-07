@@ -20,9 +20,9 @@ export type SearchHit = {
 };
 
 const quickActions: { title: string; titleAr: string; href: string; icon: string }[] = [
-  { title: "New quotation", titleAr: "عرض سعر جديد", href: "/devis/nouveau", icon: "note_add" },
+  { title: "New quotation", titleAr: "عرض سعر جديد", href: "/documents/quotation/nouveau", icon: "note_add" },
   { title: "New customer", titleAr: "عميل جديد", href: "/crm/customers", icon: "person_add" },
-  { title: "New purchase order", titleAr: "أمر شراء جديد", href: "/achats/nouveau", icon: "add_shopping_cart" },
+  { title: "New purchase order", titleAr: "أمر شراء جديد", href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart" },
   { title: "Reports", titleAr: "التقارير", href: "/rapports", icon: "bar_chart" },
   { title: "Settings", titleAr: "الإعدادات", href: "/parametres", icon: "settings" },
 ];
@@ -60,15 +60,15 @@ const DOC_TABLES: {
     select: { id: true; number: true; status: true; issuedAt: true };
   }) => Promise<Omit<DocRow, "customer" | "supplier">[]>;
 }[] = [
-  { key: "QUOTATION", label: "Quotation", icon: "description", hrefPrefix: "/ventes/devis/", party: "customer", findMany: (a) => prisma.quotation.findMany(a as never) },
-  { key: "SALES_ORDER", label: "Sales order", icon: "shopping_cart", hrefPrefix: "/ventes/commandes/", party: "customer", findMany: (a) => prisma.salesOrder.findMany(a as never) },
-  { key: "DELIVERY_NOTE", label: "Delivery note", icon: "local_shipping", hrefPrefix: "/ventes/livraisons/", party: "customer", findMany: (a) => prisma.deliveryNote.findMany(a as never) },
-  { key: "INVOICE", label: "Invoice", icon: "receipt", hrefPrefix: "/ventes/factures/", party: "customer", findMany: (a) => prisma.invoice.findMany(a as never) },
-  { key: "CREDIT_NOTE", label: "Credit note", icon: "assignment_return", hrefPrefix: "/ventes/avoirs/", party: "customer", findMany: (a) => prisma.creditNote.findMany(a as never) },
-  { key: "PURCHASE_REQUEST", label: "Purchase request", icon: "request_quote", hrefPrefix: "/achats/demandes/", party: "supplier", findMany: (a) => prisma.purchaseRequest.findMany(a as never) },
-  { key: "PURCHASE_ORDER", label: "Purchase order", icon: "shopping_bag", hrefPrefix: "/achats/bons/", party: "supplier", findMany: (a) => prisma.purchaseOrder.findMany(a as never) },
-  { key: "GOODS_RECEIPT", label: "Goods receipt", icon: "inventory_2", hrefPrefix: "/achats/receptions/", party: "supplier", findMany: (a) => prisma.goodsReceipt.findMany(a as never) },
-  { key: "SUPPLIER_INVOICE", label: "Supplier invoice", icon: "payments", hrefPrefix: "/achats/factures/", party: "supplier", findMany: (a) => prisma.supplierInvoice.findMany(a as never) },
+  { key: "QUOTATION", label: "Quotation", icon: "description", hrefPrefix: "/documents/quotation/", party: "customer", findMany: (a) => prisma.quotation.findMany(a as never) },
+  { key: "SALES_ORDER", label: "Sales order", icon: "shopping_cart", hrefPrefix: "/documents/sales_order/", party: "customer", findMany: (a) => prisma.salesOrder.findMany(a as never) },
+  { key: "DELIVERY_NOTE", label: "Delivery note", icon: "local_shipping", hrefPrefix: "/documents/delivery_note/", party: "customer", findMany: (a) => prisma.deliveryNote.findMany(a as never) },
+  { key: "INVOICE", label: "Invoice", icon: "receipt", hrefPrefix: "/documents/invoice/", party: "customer", findMany: (a) => prisma.invoice.findMany(a as never) },
+  { key: "CREDIT_NOTE", label: "Credit note", icon: "assignment_return", hrefPrefix: "/documents/credit_note/", party: "customer", findMany: (a) => prisma.creditNote.findMany(a as never) },
+  { key: "PURCHASE_REQUEST", label: "Purchase request", icon: "request_quote", hrefPrefix: "/documents/purchase_request/", party: "supplier", findMany: (a) => prisma.purchaseRequest.findMany(a as never) },
+  { key: "PURCHASE_ORDER", label: "Purchase order", icon: "shopping_bag", hrefPrefix: "/documents/purchase_order/", party: "supplier", findMany: (a) => prisma.purchaseOrder.findMany(a as never) },
+  { key: "GOODS_RECEIPT", label: "Goods receipt", icon: "inventory_2", hrefPrefix: "/documents/goods_receipt/", party: "supplier", findMany: (a) => prisma.goodsReceipt.findMany(a as never) },
+  { key: "SUPPLIER_INVOICE", label: "Supplier invoice", icon: "payments", hrefPrefix: "/documents/supplier_invoice/", party: "supplier", findMany: (a) => prisma.supplierInvoice.findMany(a as never) },
 ];
 
 async function searchDocuments(
@@ -240,7 +240,7 @@ export async function globalSearch(
       title: u.fullName ?? u.username,
       titleAr: null,
       subtitle: `User · ${u.username}${u.email ? ` · ${u.email}` : ""}`,
-      href: `/parametres/utilisateurs/${u.id}`,
+      href: "/parametres",
       icon: "person",
     })),
     ...branches.map((b) => ({
@@ -249,7 +249,7 @@ export async function globalSearch(
       title: b.name,
       titleAr: b.nameAr,
       subtitle: `Branch · ${b.code}${b.city ? ` · ${b.city}` : ""}`,
-      href: `/parametres/succursales/${b.id}`,
+      href: "/parametres/branches",
       icon: "domain",
     })),
     ...documents,

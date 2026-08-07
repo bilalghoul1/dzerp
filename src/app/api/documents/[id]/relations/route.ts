@@ -5,29 +5,13 @@ import {
   getDocumentRelations,
   getConversionHistory,
   getAllDocTypes,
-  getDocConfig,
+  resolveDocType,
 } from "@/features/documents/engine";
 import type { CommercialDocType } from "@/features/documents/engine";
-import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const VALID_TYPES = new Set(getAllDocTypes());
-
-async function resolveDocType(docId: string, companyId: string): Promise<CommercialDocType | null> {
-  for (const t of getAllDocTypes()) {
-    const config = getDocConfig(t);
-    const delegate = (prisma as Record<string, unknown>)[config.prismaModel] as {
-      findUnique: (args: { where: { id: string }; select: { id: boolean; companyId: boolean } }) => Promise<{ id: string; companyId: string } | null>;
-    };
-    const found = await delegate.findUnique({
-      where: { id: docId },
-      select: { id: true, companyId: true },
-    });
-    if (found && found.companyId === companyId) return t;
-  }
-  return null;
-}
 
 export async function GET(
   request: Request,

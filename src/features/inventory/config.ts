@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 import { ApiError } from "@/lib/http";
+import { optionalText, optionalDecimal } from "@/lib/zod-helpers";
 import type {
   InventoryMovementType,
   Product,
@@ -16,32 +17,10 @@ import type {
 
 const requiredId = z.string().trim().min(1, "Identifier is required.");
 
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((v) => (v === undefined ? undefined : v || null));
-
 const positiveQuantity = z.coerce
   .number({ message: "Quantity must be a number." })
   .positive("Quantity must be greater than zero.")
   .refine((v) => Number.isFinite(v), { message: "Quantity must be finite." });
-
-const optionalDecimal = z
-  .union([z.number(), z.string().trim()])
-  .optional()
-  .nullable()
-  .transform((v) => {
-    if (v === undefined || v === null || v === "") return undefined;
-    const n = typeof v === "number" ? v : Number(v);
-    return Number.isNaN(n) ? undefined : n;
-  })
-  .refine((v) => v === undefined || v >= 0, {
-    message: "Value must not be negative.",
-  });
 
 const optionalDate = z
   .union([z.string(), z.date()])
@@ -59,7 +38,7 @@ export const inventoryMovementSchema = z.object({
   productId: requiredId,
   warehouseId: requiredId,
   quantity: positiveQuantity,
-  unitCost: optionalDecimal,
+  unitCost: optionalDecimal(0),
   occurredAt: optionalDate,
   referenceNumber: optionalText(64),
   notes: optionalText(2000),
@@ -286,8 +265,9 @@ export async function assertStockAvailable(
   productId: string,
   warehouseId: string,
   outgoingQuantity: number,
+  client: StockCheckClient = prisma,
 ): Promise<void> {
-  const product = await prisma.product.findFirst({
+  const product = await client.product.findFirst({
     where: { id: productId, deletedAt: null },
   });
   if (!product) {
@@ -295,7 +275,7 @@ export async function assertStockAvailable(
   }
   if (product.allowNegativeStock) return;
 
-  const agg = await prisma.inventoryMovement.aggregate({
+  const agg = await client.inventoryMovement.aggregate({
     where: { productId, warehouseId },
     _sum: { quantity: true },
   });
@@ -324,6 +304,21 @@ function signedQuantity(
 // Écritures du journal (mouvements jamais supprimés).
 // ---------------------------------------------------------------------------
 
+/** Interface minimale satisfaite par le client étendu et le client de transaction. */
+type StockCheckClient = {
+  product: {
+    findFirst: (args: {
+      where: { id: string; deletedAt?: Date | null };
+    }) => Promise<{ allowNegativeStock: boolean } | null>;
+  };
+  inventoryMovement: {
+    aggregate: (args: {
+      where: { productId: string; warehouseId: string };
+      _sum: { quantity: true };
+    }) => Promise<{ _sum: { quantity: unknown } }>;
+  };
+};
+
 export type MovementCreationResult = {
   movement: InventoryMovementRow;
   stock: StockOnHandRow[];
@@ -339,31 +334,35 @@ export async function createInventoryMovement(
   );
 
   const quantity = signedQuantity(input.type, input.direction, input.quantity);
-  if (quantity < 0) {
-    await assertStockAvailable(
-      input.productId,
-      input.warehouseId,
-      quantity,
-    );
-  }
 
   const { number } = await nextDocumentNumber("INVENTORY_MOVEMENT");
 
-  const row = await prisma.inventoryMovement.create({
-    data: {
-      number,
-      type: input.type,
-      productId: product.id,
-      warehouseId: warehouse.id,
-      quantity,
-      unitCost: input.unitCost ?? null,
-      occurredAt: input.occurredAt ?? new Date(),
-      referenceNumber: input.referenceNumber ?? null,
-      notes: input.notes ?? null,
-      companyId: requireCompanyContext().company.id,
-      createdById,
-    },
-    include: MOVEMENT_INCLUDE,
+  const row = await prisma.$transaction(async (tx) => {
+    if (quantity < 0) {
+      await assertStockAvailable(
+        input.productId,
+        input.warehouseId,
+        quantity,
+        tx,
+      );
+    }
+
+    return tx.inventoryMovement.create({
+      data: {
+        number,
+        type: input.type,
+        productId: product.id,
+        warehouseId: warehouse.id,
+        quantity,
+        unitCost: input.unitCost ?? null,
+        occurredAt: input.occurredAt ?? new Date(),
+        referenceNumber: input.referenceNumber ?? null,
+        notes: input.notes ?? null,
+        companyId: requireCompanyContext().company.id,
+        createdById,
+      },
+      include: MOVEMENT_INCLUDE,
+    });
   });
 
   return { movement: normalizeMovement(row), stock: await getStockOnHand() };
@@ -395,12 +394,6 @@ export async function createTransfer(
     throw new ApiError(404, "Warehouse not found.", "NOT_FOUND");
   }
 
-  await assertStockAvailable(
-    input.productId,
-    input.fromWarehouseId,
-    -input.quantity,
-  );
-
   const occurredAt = input.occurredAt ?? new Date();
   const referenceNumber = input.referenceNumber ?? null;
   const notes = input.notes ?? null;
@@ -409,6 +402,13 @@ export async function createTransfer(
   const inNumber = (await nextDocumentNumber("INVENTORY_MOVEMENT")).number;
 
   const movements = await prisma.$transaction(async (tx) => {
+    await assertStockAvailable(
+      input.productId,
+      input.fromWarehouseId,
+      -input.quantity,
+      tx,
+    );
+
     const companyId = requireCompanyContext().company.id;
     const out = await tx.inventoryMovement.create({
       data: {

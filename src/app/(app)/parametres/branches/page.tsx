@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import { BranchesManager } from "@/components/settings/branches-manager";
 import { getServerI18n } from "@/features/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function BranchesPage() {
+  const context = await getOrResolveCompanyContext();
+  if (!context) redirect("/login");
+
   const branches = await prisma.branch.findMany({
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     select: {

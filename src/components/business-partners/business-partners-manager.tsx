@@ -282,8 +282,18 @@ export function BusinessPartnersManager({
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                  {t("parties.empty")}
+                <TableCell colSpan={6} className="py-10 text-center">
+                  <p className="text-sm font-medium">{t("parties.empty")}</p>
+                  <Button
+                    onClick={openCreate}
+                    disabled={busy}
+                    className="mt-3"
+                  >
+                    <span className="material-symbols-outlined text-[18px] me-1" aria-hidden="true">
+                      add
+                    </span>
+                    {t("parties.add")}
+                  </Button>
                 </TableCell>
               </TableRow>
             ) : (
@@ -291,7 +301,16 @@ export function BusinessPartnersManager({
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.code}</TableCell>
                   <TableCell>
-                    <p>{row.name}</p>
+                    {kind === "customer" ? (
+                      <a
+                        href={`/crm/customers/${row.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {row.name}
+                      </a>
+                    ) : (
+                      <p className="font-medium">{row.name}</p>
+                    )}
                     {row.nameAr && !showArabic ? (
                       <p className="text-xs text-muted-foreground" dir="rtl">
                         {row.nameAr}

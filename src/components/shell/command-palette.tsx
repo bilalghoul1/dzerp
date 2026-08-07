@@ -23,9 +23,9 @@ type SearchHit = {
 };
 
 const QUICK_ACTIONS: SearchHit[] = [
-  { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/devis/nouveau", icon: "note_add" },
+  { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/documents/quotation/nouveau", icon: "note_add" },
   { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add" },
-  { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/achats/bons/nouveau", icon: "add_shopping_cart" },
+  { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart" },
 ];
 
 export function CommandPalette({

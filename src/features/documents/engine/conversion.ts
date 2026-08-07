@@ -5,7 +5,8 @@ import { recordActivity } from "@/features/activity/service";
 import { nextDocumentNumber } from "@/features/documents/series";
 import { AuditAction, ActivityType, DocumentRelationType } from "@/generated/prisma/enums";
 import type { CommercialDocType, ConversionInput } from "./types";
-import { getDocConfig } from "./config";
+import { getDocConfig, assertAllowedConversion } from "./config";
+import { isActive } from "./status";
 
 const LINE_SELECT = {
   id: true,
@@ -27,6 +28,8 @@ export async function convertDocument(input: ConversionInput): Promise<{
   relationId: string;
   sourceNumber: string;
 }> {
+  assertAllowedConversion(input.sourceDocType, input.targetDocType);
+
   const sourceConfig = getDocConfig(input.sourceDocType);
   const targetConfig = getDocConfig(input.targetDocType);
 
@@ -34,6 +37,7 @@ export async function convertDocument(input: ConversionInput): Promise<{
     findUnique: (args: { where: { id: string }; include: { lines: { select: typeof LINE_SELECT } } }) => Promise<{
       id: string;
       number: string;
+      status: string;
       companyId: string;
       currency: string;
       exchangeRate: unknown;
@@ -70,6 +74,14 @@ export async function convertDocument(input: ConversionInput): Promise<{
     throw new ApiError(403, "Accès refusé", "FORBIDDEN");
   }
 
+  if (!isActive(source.status as Parameters<typeof isActive>[0])) {
+    throw new ApiError(
+      422,
+      "Un document annulé, clôturé ou archivé ne peut pas être converti",
+      "INVALID_STATUS_TRANSITION",
+    );
+  }
+
   const existingRelation = await prisma.documentRelation.findFirst({
     where: {
       sourceDocType: input.sourceDocType,
@@ -82,13 +94,11 @@ export async function convertDocument(input: ConversionInput): Promise<{
     throw new ApiError(409, "Une conversion existe déjà pour ce document", "ALREADY_CONVERTED");
   }
 
-  const targetDelegate = (prisma as Record<string, unknown>)[targetConfig.prismaModel] as {
-    create: (args: {
-      data: Record<string, unknown>;
-    }) => Promise<{ id: string; number: string }>;
-  };
-
   const conversionRate = input.conversionRate ?? 1;
+
+  if (!Number.isFinite(conversionRate) || conversionRate <= 0) {
+    throw new ApiError(422, "Le taux de conversion doit être un nombre positif", "INVALID_CONVERSION_RATE");
+  }
 
   const partyKey = sourceConfig.partyField;
   const targetPartyKey = targetConfig.partyField;
@@ -113,38 +123,53 @@ export async function convertDocument(input: ConversionInput): Promise<{
 
   const sourceTotals = source as Record<string, unknown>;
 
-  const target = await targetDelegate.create({
-    data: {
-      companyId: input.companyId,
-      number,
-      status: "DRAFT",
-      currency: source.currency,
-      exchangeRate: conversionRate,
-      notes: source.notes,
-      totalHt: sourceTotals.totalHt ?? 0,
-      totalTva: sourceTotals.totalTva ?? 0,
-      totalTtc: sourceTotals.totalTtc ?? 0,
-      [targetPartyKey]: partyValue,
-      branchId: sourceTotals.branchId,
-      createdById: input.actorId,
-      lines: {
-        create: targetLines,
-      },
-    },
-  });
+  const { target, relation } = await prisma.$transaction(async (tx) => {
+    const txDelegate = (tx as Record<string, unknown>)[targetConfig.prismaModel] as {
+      create: (args: {
+        data: Record<string, unknown>;
+      }) => Promise<{ id: string; number: string }>;
+    };
 
-  const relation = await prisma.documentRelation.create({
-    data: {
-      companyId: input.companyId,
-      sourceDocType: input.sourceDocType,
-      sourceDocId: input.sourceDocId,
-      targetDocType: input.targetDocType,
-      targetDocId: target.id,
-      relationType: DocumentRelationType.CONVERSION,
-      conversionRate,
-      description: input.description,
-      createdById: input.actorId,
-    },
+    const created = await txDelegate.create({
+      data: {
+        companyId: input.companyId,
+        number,
+        status: "DRAFT",
+        currency: source.currency,
+        exchangeRate: conversionRate,
+        notes: source.notes,
+        totalHt: sourceTotals.totalHt ?? 0,
+        totalTva: sourceTotals.totalTva ?? 0,
+        totalTtc: sourceTotals.totalTtc ?? 0,
+        [targetPartyKey]: partyValue,
+        branchId: sourceTotals.branchId,
+        createdById: input.actorId,
+        lines: {
+          create: targetLines,
+        },
+      },
+    });
+
+    const relationRecord = await ((tx as Record<string, unknown>)
+      .documentRelation as {
+      create: (args: {
+        data: Record<string, unknown>;
+      }) => Promise<{ id: string }>;
+    }).create({
+      data: {
+        companyId: input.companyId,
+        sourceDocType: input.sourceDocType,
+        sourceDocId: input.sourceDocId,
+        targetDocType: input.targetDocType,
+        targetDocId: created.id,
+        relationType: DocumentRelationType.CONVERSION,
+        conversionRate,
+        description: input.description,
+        createdById: input.actorId,
+      },
+    });
+
+    return { target: created, relation: relationRecord };
   });
 
   await Promise.all([

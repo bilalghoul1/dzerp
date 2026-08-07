@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { DocumentStatusBadge } from "@/components/documents/document-status-badge";
+import { WorkflowSteps } from "@/components/documents/workflow-steps";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { getDocConfig } from "@/features/documents/engine/config";
 import { formatDate } from "@/lib/utils";
@@ -104,6 +105,17 @@ export function DocumentHeader() {
                 ))}
               </SelectContent>
             </Select>
+            {config.partyField === "customerId" && editor.detail?.partyId ? (
+              <a
+                href={`/crm/customers/${editor.detail.partyId}`}
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
+                  open_in_new
+                </span>
+                {t("documentsUI.crmOpenCustomer")}
+              </a>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -177,6 +189,11 @@ export function DocumentHeader() {
           </div>
         </div>
       </CardContent>
+      {editor.docId ? (
+        <div className="border-t px-6 py-3">
+          <WorkflowSteps />
+        </div>
+      ) : null}
     </Card>
   );
 }

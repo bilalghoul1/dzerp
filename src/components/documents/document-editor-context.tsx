@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { useCompany } from "@/features/company/company-provider";
 import { computeAllLines } from "@/features/documents/engine/calculation";
@@ -173,6 +174,7 @@ export function DocumentEditorProvider({
 }) {
   const { t } = useI18n();
   const company = useCompany();
+  const router = useRouter();
 
   const defaultBranchId = company.branch?.id ?? company.branches[0]?.id ?? "";
   const defaultCurrency =
@@ -316,7 +318,14 @@ export function DocumentEditorProvider({
       setHeader(detailToHeader(saved));
       setLines(detailToLines(saved));
       setDirty(false);
-      toast.success(t("documentsUI.saved"));
+      if (!docId) {
+        // New document created: land on its detail page with a success banner
+        // (never leave the user on an empty editor).
+        toast.success(t("documentsUI.saved"));
+        router.push(`/documents/${type.toLowerCase()}/${saved.id}?created=1`);
+      } else {
+        toast.success(t("documentsUI.saved"));
+      }
       return saved;
     } catch (error) {
       const message =
@@ -330,7 +339,7 @@ export function DocumentEditorProvider({
     } finally {
       setBusy(false);
     }
-  }, [buildPayload, docId, type, t]);
+  }, [buildPayload, docId, type, t, router]);
 
   const applyStatus = React.useCallback(
     async (target: DocumentStatus) => {

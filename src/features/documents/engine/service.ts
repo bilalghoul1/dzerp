@@ -34,8 +34,8 @@ const HEADER_INCLUDE_SUPPLIER = {
   supplier: { select: { id: true, name: true } },
 };
 
-function getDelegate(model: string) {
-  return (prisma as Record<string, unknown>)[model] as {
+function getDelegate(model: string, client: unknown = prisma) {
+  return (client as Record<string, unknown>)[model] as {
     findUnique: (args: unknown) => Promise<unknown>;
     findMany: (args: unknown) => Promise<unknown[]>;
     create: (args: unknown) => Promise<unknown>;
@@ -56,6 +56,20 @@ function getHeaderInclude(docType: CommercialDocType) {
     branch: { select: { id: true, name: true } },
     issuedBy: { select: { id: true, fullName: true } },
     lines: { select: LINE_INCLUDE, orderBy: { lineNumber: "asc" as const } },
+  };
+}
+
+/** Version liste : pas de lignes complètes, seulement le nombre (compteur). */
+function getHeaderIncludeForList(docType: CommercialDocType) {
+  const config = getDocConfig(docType);
+  const partyInclude =
+    config.partyField === "customerId" ? HEADER_INCLUDE_PARTY : HEADER_INCLUDE_SUPPLIER;
+
+  return {
+    ...partyInclude,
+    branch: { select: { id: true, name: true } },
+    issuedBy: { select: { id: true, fullName: true } },
+    _count: { select: { lines: true } },
   };
 }
 
@@ -200,10 +214,6 @@ export async function updateDocument(
     updateData.totalTva = computed.totalTva;
     updateData.totalTtc = computed.totalTtc;
 
-    const lineModel = `${config.prismaModel}Line`;
-    const lineDelegate = getDelegate(lineModel);
-    await lineDelegate.deleteMany({ where: { [`${config.prismaModel}Id`]: docId } });
-
     updateData.lines = {
       create: data.lines.map((line, idx) => ({
         lineNumber: idx + 1,
@@ -222,10 +232,19 @@ export async function updateDocument(
     };
   }
 
-  const result = await delegate.update({
-    where: { id: docId },
-    data: updateData,
-    include: getHeaderInclude(docType),
+  // Remplacement des lignes + mise à jour de l'en-tête : atomique.
+  const result = await prisma.$transaction(async (tx) => {
+    if (updateData.lines) {
+      const lineModel = `${config.prismaModel}Line`;
+      await getDelegate(lineModel, tx).deleteMany({
+        where: { [`${config.prismaModel}Id`]: docId },
+      });
+    }
+    return getDelegate(config.prismaModel, tx).update({
+      where: { id: docId },
+      data: updateData,
+      include: getHeaderInclude(docType),
+    });
   });
 
   await recordAudit({
@@ -267,11 +286,14 @@ export async function deleteDocument(
     throw new ApiError(422, "Seuls les documents en brouillon peuvent être supprimés", "NOT_DRAFT");
   }
 
-  const lineModel = `${config.prismaModel}Line`;
-  const lineDelegate = getDelegate(lineModel);
-  await lineDelegate.deleteMany({ where: { [`${config.prismaModel}Id`]: docId } });
-
-  await delegate.delete({ where: { id: docId } });
+  // Lignes + en-tête : suppression atomique (aucune ligne orpheline possible).
+  await prisma.$transaction(async (tx) => {
+    const lineModel = `${config.prismaModel}Line`;
+    await getDelegate(lineModel, tx).deleteMany({
+      where: { [`${config.prismaModel}Id`]: docId },
+    });
+    await getDelegate(config.prismaModel, tx).delete({ where: { id: docId } });
+  });
 
   await Promise.all([
     recordAudit({
@@ -347,7 +369,7 @@ export async function listDocuments(
   const [items, total] = await Promise.all([
     delegate.findMany({
       where,
-      include: getHeaderInclude(docType),
+      include: getHeaderIncludeForList(docType),
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,

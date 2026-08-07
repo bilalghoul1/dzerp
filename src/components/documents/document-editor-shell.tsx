@@ -7,8 +7,7 @@ import type { DocumentDetailModel } from "@/features/documents/framework/ui-type
 import { DocumentWorkflowBar } from "@/components/documents/document-workflow-bar";
 import { DocumentHeader } from "@/components/documents/document-header";
 import { DocumentTabs } from "@/components/documents/document-tabs";
-import { DocumentTotalsPanel } from "@/components/documents/document-totals-panel";
-import { DocumentSidebar } from "@/components/documents/document-sidebar";
+import { DocumentWorkspace } from "@/components/documents/document-workspace";
 
 export function DocumentEditorShell({
   type,
@@ -30,16 +29,10 @@ export function DocumentEditorShell({
     >
       <div className="space-y-4 print:hidden">
         <DocumentWorkflowBar />
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 space-y-4">
-            <DocumentHeader />
-            <DocumentTabs />
-          </div>
-          <aside className="space-y-4">
-            <DocumentTotalsPanel />
-            <DocumentSidebar />
-          </aside>
-        </div>
+        <DocumentWorkspace>
+          <DocumentHeader />
+          <DocumentTabs />
+        </DocumentWorkspace>
       </div>
     </DocumentEditorProvider>
   );

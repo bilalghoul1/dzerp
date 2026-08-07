@@ -1,24 +1,9 @@
 import { z } from "zod";
 import { ApiError } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { requireCompanyContext } from "@/features/company/context";
+import { requireCompanyContext, getOrResolveCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
-
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((v) => (v === undefined ? undefined : v || null));
-
-const optionalId = z
-  .string()
-  .trim()
-  .optional()
-  .nullable()
-  .transform((v) => (v === undefined || v === null || v === "" ? null : v));
+import { optionalText, optionalId } from "@/lib/zod-helpers";
 
 export const warehouseCreateSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(160),
@@ -195,10 +180,16 @@ export type WarehouseManagerOptions = {
 };
 
 export async function listWarehouseOptions(): Promise<WarehouseManagerOptions> {
+  const context = await getOrResolveCompanyContext();
   const [branches, users] = await Promise.all([
     prisma.branch.findMany({ orderBy: { name: "asc" } }),
     prisma.user.findMany({
-      where: { status: "ACTIVE" },
+      where: {
+        status: "ACTIVE",
+        userCompanies: context
+          ? { some: { companyId: context.company.id } }
+          : undefined,
+      },
       orderBy: { username: "asc" },
       select: { id: true, username: true, fullName: true },
     }),

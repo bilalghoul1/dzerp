@@ -7,41 +7,12 @@ import type {
   CostingMethod,
   ProductType,
 } from "@/generated/prisma/enums";
+import { optionalText, optionalDecimal, optionalId } from "@/lib/zod-helpers";
 
 // ---------------------------------------------------------------------------
 // Validation (smart validation : les champs optionnels ne sont validés que
 // lorsqu'ils sont réellement renseignés).
 // ---------------------------------------------------------------------------
-
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((v) => (v === undefined ? undefined : v || null));
-
-const optionalDecimal = (min: number, max = 1_000_000_000) =>
-  z
-    .union([z.number(), z.string().trim()])
-    .optional()
-    .nullable()
-    .transform((v) => {
-      if (v === undefined || v === null || v === "") return undefined;
-      const n = typeof v === "number" ? v : Number(v);
-      return Number.isNaN(n) ? undefined : n;
-    })
-    .refine((v) => v === undefined || (v >= min && v <= max), {
-      message: `Value must be between ${min} and ${max}.`,
-    });
-
-const optionalId = z
-  .string()
-  .trim()
-  .optional()
-  .nullable()
-  .transform((v) => (v === undefined || v === null || v === "" ? null : v));
 
 const attributeInput = z
   .object({

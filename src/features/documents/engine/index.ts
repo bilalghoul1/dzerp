@@ -11,33 +11,19 @@ export type {
   DocumentContext,
 } from "./types";
 
-export {
-  getDocConfig,
-  getAllDocTypes,
-  getDocTypeByPrismaModel,
-  getValidTransitions,
-} from "./config";
+export { getDocConfig, getAllDocTypes, getDocTypeByPrismaModel, getValidTransitions } from "./config";
 
 export { computeLine, computeAllLines } from "./calculation";
 
-export {
-  assertTransition,
-  getDefaultStatus,
-  canApprove,
-  canCancel,
-  isActive,
-  isTerminal,
-} from "./status";
+export { assertTransition, getDefaultStatus, canApprove, canCancel, isActive, isTerminal } from "./status";
 
 export { validateDocumentInput, validateLines } from "./validation";
 
 export { transitionStatus, approveDocument } from "./workflow";
 
-export {
-  convertDocument,
-  getDocumentRelations,
-  getConversionHistory,
-} from "./conversion";
+export { convertDocument, getDocumentRelations, getConversionHistory } from "./conversion";
+
+export { resolveDocType } from "./resolve";
 
 export {
   createDocument,

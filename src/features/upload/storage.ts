@@ -8,6 +8,46 @@ export const uploadRoot = path.join(process.cwd(), "uploads");
 /** Taille maximale d'un fichier uploadé (20 Mo). */
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Types MIME autorisés à l'upload (pièces jointes métier). Tout type exécutable
+ * côté client (HTML, SVG, XML, JS) est refusé.
+ */
+export const ALLOWED_UPLOAD_MIME_TYPES: ReadonlySet<string> = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "text/plain",
+  "text/csv",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/octet-stream",
+]);
+
+/** Types pouvant être rendus `inline` sans risque d'exécution dans l'origine. */
+export const INLINE_SAFE_MIME_TYPES: ReadonlySet<string> = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "text/plain",
+  "text/csv",
+]);
+
+export function isAllowedUploadType(mimeType: string): boolean {
+  return ALLOWED_UPLOAD_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
+export function isInlineSafeMime(mimeType: string): boolean {
+  return INLINE_SAFE_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
 export async function ensureUploadsDir(): Promise<void> {
   await mkdir(uploadRoot, { recursive: true });
 }

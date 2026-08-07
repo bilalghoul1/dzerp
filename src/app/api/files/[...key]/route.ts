@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { apiGuardWithContext, runScoped } from "@/features/company/api";
-import { readUploadFile } from "@/features/upload/storage";
+import {
+  readUploadFile,
+  isInlineSafeMime,
+} from "@/features/upload/storage";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +17,9 @@ export async function GET(
 
   // Authentification + résolution du contexte société. Le scoping de la
   // requête FileAsset ci-dessous limite la lecture à la société active :
-  // toute tentative d'accès inter-sociétés se solde par un 404.
-  const guard = await apiGuardWithContext();
+  // toute tentative d'accès inter-sociétés se solde par un 404. La permission
+  // `files.download` est requise (catalogue + migration phase 6.5).
+  const guard = await apiGuardWithContext("files.download");
   if (guard.response) return guard.response;
 
   return runScoped(guard.context, async () => {
@@ -36,11 +40,14 @@ export async function GET(
       result.buffer.byteOffset,
       result.buffer.byteOffset + result.buffer.byteLength,
     ) as ArrayBuffer;
+    const mimeType = asset.mimeType || "application/octet-stream";
+    const disposition = isInlineSafeMime(mimeType) ? "inline" : "attachment";
     return new NextResponse(body, {
       headers: {
-        "Content-Type": asset.mimeType || "application/octet-stream",
+        "Content-Type": mimeType,
         "Content-Length": String(asset.size ?? result.buffer.byteLength),
-        "Content-Disposition": "inline",
+        "Content-Disposition": disposition,
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=3600",
       },
     });

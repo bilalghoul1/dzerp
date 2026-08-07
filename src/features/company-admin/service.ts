@@ -78,6 +78,33 @@ function assertNotArchived(company: { status: CompanyStatus }): void {
   }
 }
 
+/**
+ * Empêche toute escalade de privilèges : un acteur ne peut attribuer qu'un rôle
+ * dont l'ensemble de permissions est un sous-ensemble des siennes (il ne peut
+ * jamais octroyer plus qu'il ne possède). Un non-Super Administrateur ne peut
+ * donc pas attribuer le rôle ADMIN global.
+ */
+async function assertAssignableRole(
+  actor: AdminActor,
+  roleId: string,
+): Promise<void> {
+  const role = await prisma.role.findUnique({
+    where: { id: roleId },
+    include: { permissions: { include: { permission: true } } },
+  });
+  if (!role) throw new ApiError(404, "Rôle introuvable.", "NOT_FOUND");
+
+  const roleKeys = role.permissions.map((rp) => rp.permission.key);
+  const missing = roleKeys.filter((key) => !actor.permissions.includes(key));
+  if (missing.length > 0) {
+    throw new ApiError(
+      403,
+      "Ce rôle octroie des permissions supérieures aux vôtres.",
+      "FORBIDDEN",
+    );
+  }
+}
+
 function toDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const date = new Date(value);
@@ -817,6 +844,10 @@ export async function addMember(
       );
     }
 
+    if (input.roleId) {
+      await assertAssignableRole(actor, input.roleId);
+    }
+
     let defaultBranchId: string | null = null;
     if (input.defaultBranchCode) {
       const branch = await prisma.branch.findFirst({
@@ -897,6 +928,10 @@ export async function updateMember(
     });
     if (!membership) {
       throw new ApiError(404, "Adhésion introuvable.", "NOT_FOUND");
+    }
+
+    if (input.roleId) {
+      await assertAssignableRole(actor, input.roleId);
     }
 
     let defaultBranchId: string | null = membership.defaultBranchId;

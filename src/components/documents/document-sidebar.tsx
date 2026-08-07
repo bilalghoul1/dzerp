@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { getRelations, getConversionHistory } from "@/features/documents/framework/api";
-import { getUiConfig } from "@/features/documents/framework/ui-config";
+import { getUiConfig, docTypeSlug } from "@/features/documents/framework/ui-config";
 import type { RelationItem } from "@/features/documents/framework/ui-types";
 import { formatDate } from "@/lib/utils";
 
@@ -110,25 +110,28 @@ export function DocumentSidebar() {
           </p>
         ) : (
           <ul className="space-y-1.5">
-            {linkedTargets.map((relation) => (
-              <li key={relation.id}>
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 font-medium">
-                    <span
-                      className="material-symbols-outlined text-[14px]"
-                      style={{ color: getUiConfig(relation.targetDocType).accent }}
-                      aria-hidden="true"
-                    >
-                      {getUiConfig(relation.targetDocType).icon}
-                    </span>
-                    {t(`docTypes.${relation.targetDocType}`)}
+          {linkedTargets.map((relation) => (
+            <li key={relation.id}>
+              <a
+                href={`/documents/${docTypeSlug(relation.targetDocType)}/${relation.targetDocId}`}
+                className="flex items-center justify-between gap-2 text-xs hover:underline"
+              >
+                <span className="inline-flex items-center gap-1 font-medium">
+                  <span
+                    className="material-symbols-outlined text-[14px]"
+                    style={{ color: getUiConfig(relation.targetDocType).accent }}
+                    aria-hidden="true"
+                  >
+                    {getUiConfig(relation.targetDocType).icon}
                   </span>
-                  <span className="text-muted-foreground">
-                    {formatDate(relation.createdAt, dateLocale)}
-                  </span>
-                </div>
-              </li>
-            ))}
+                  {t(`docTypes.${relation.targetDocType}`)}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatDate(relation.createdAt, dateLocale)}
+                </span>
+              </a>
+            </li>
+          ))}
           </ul>
         )}
         <Separator className="my-3" />

@@ -1,4 +1,6 @@
 import { requirePermission } from "@/features/auth/rbac";
+import { redirect } from "next/navigation";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import {
   listWarehouses,
   listWarehouseOptions,
@@ -12,6 +14,9 @@ export const dynamic = "force-dynamic";
 
 export default async function WarehousesPage() {
   await requirePermission("warehouse.view");
+  const context = await getOrResolveCompanyContext();
+  if (!context) redirect("/login");
+
   const [warehouses, options, { t }] = await Promise.all([
     listWarehouses(),
     listWarehouseOptions(),

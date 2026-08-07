@@ -3,10 +3,12 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/feedback/spinner";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { DocumentConvertDialog } from "@/components/documents/document-convert-dialog";
+import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
 import { getTransitions } from "@/features/documents/framework/api";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
 import type { StatusTransition } from "@/features/documents/engine/types";
@@ -35,6 +37,7 @@ export function DocumentWorkflowBar() {
 
   const [transitions, setTransitions] = React.useState<StatusTransition[]>([]);
   const [convertOpen, setConvertOpen] = React.useState(false);
+  const [previewOpen, setPreviewOpen] = React.useState(false);
 
   const loadTransitions = React.useCallback(async () => {
     if (!editor.docId) return;
@@ -70,9 +73,13 @@ export function DocumentWorkflowBar() {
 
   const handleConverted = (target: string) => {
     setConvertOpen(false);
-    void target;
-    void router.refresh();
-    void editor.refresh();
+    if (target) {
+      void router.push(`/documents/${target.toLowerCase()}`);
+      toast.success(t("documentsUI.convertedSuccess"));
+    } else {
+      void router.refresh();
+      void editor.refresh();
+    }
   };
 
   const handleDuplicate = async () => {
@@ -119,6 +126,9 @@ export function DocumentWorkflowBar() {
           </span>
         )}
         {transitions.map((transition) => {
+          const requiresApproval =
+            transition.to === "APPROVED" || transition.to === "REJECTED";
+          if (requiresApproval && !editor.permissions.approve) return null;
           const className = transitionButtonClass(transition.to);
           return (
             <Button
@@ -166,7 +176,22 @@ export function DocumentWorkflowBar() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => window.print()}
+            onClick={() => setPreviewOpen(true)}
+            disabled={editor.busy}
+          >
+            <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
+              picture_as_pdf
+            </span>
+            {t("documentsUI.actionPreview")}
+          </Button>
+        )}
+
+        {editor.permissions.print && editor.docId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPreviewOpen(true)}
             disabled={editor.busy}
           >
             <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
@@ -214,6 +239,20 @@ export function DocumentWorkflowBar() {
         <p className="text-xs text-muted-foreground">
           {t("documentsUI.onlyDraftEditable")}
         </p>
+      )}
+
+      {editor.permissions.print && editor.docId && (
+        <DocumentPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          docId={editor.docId}
+          docType={editor.type}
+          title={
+            editor.detail?.number
+              ? t("documentsUI.preview")
+              : t("documentsUI.preview")
+          }
+        />
       )}
     </div>
   );
