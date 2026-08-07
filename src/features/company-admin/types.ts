@@ -23,6 +23,8 @@ export type CompanyAdminRow = {
   ai: string | null;
   status: CompanyStatus;
   isActive: boolean;
+  /** Renseigné uniquement dans la vue « sociétés supprimées ». */
+  deletedAt: string | null;
   createdAt: string;
   logoKey: string | null;
   branchCount: number;
@@ -203,4 +205,51 @@ export type CompanyMemberView = {
     active: boolean;
     expiresAt: string | null;
   }[];
+};
+
+/** Vue branche complète (réutilisée par BranchesManager). */
+export type CompanyBranchAdmin = {
+  id: string;
+  code: string;
+  name: string;
+  nameAr: string | null;
+  type: "HEADQUARTER" | "DIRECTION" | "AGENCY";
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  manager: string | null;
+  country: string | null;
+  wilaya: string | null;
+  commune: string | null;
+  postalCode: string | null;
+  rc: string | null;
+  nif: string | null;
+  nis: string | null;
+  ai: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+};
+
+/** Données de création / mise à jour d'une branche (sous-ressource admin). */
+export type CompanyBranchInput = {
+  /** Requis à la création (le code n'est pas modifiable à la mise à jour). */
+  code?: string;
+  name?: string;
+  nameAr?: string | null;
+  type?: "HEADQUARTER" | "DIRECTION" | "AGENCY";
+  city?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  manager?: string | null;
+  country?: string | null;
+  wilaya?: string | null;
+  commune?: string | null;
+  postalCode?: string | null;
+  rc?: string | null;
+  nif?: string | null;
+  nis?: string | null;
+  ai?: string | null;
+  isActive?: boolean;
 };

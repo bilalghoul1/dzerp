@@ -42,9 +42,13 @@ export default async function CompanyDetailPage({
       listCompanyActivity(actor, companyId),
     ]);
 
+  const accessibleIds = new Set((context.companies ?? []).map((c) => c.id));
+
   return (
     <CompanyDetail
       company={detail}
+      canUpdate={context.permissions.includes("admin.company.update")}
+      isMember={accessibleIds.has(companyId)}
       members={members}
       branches={branches}
       series={series}

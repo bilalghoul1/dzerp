@@ -16,6 +16,8 @@ import type {
   AdminActor,
   CompanyAdminDetail,
   CompanyAdminRow,
+  CompanyBranchAdmin,
+  CompanyBranchInput,
   CompanyCreateInput,
   CompanyMemberView,
   CompanyStatistics,
@@ -103,6 +105,28 @@ async function assertAssignableRole(
       "FORBIDDEN",
     );
   }
+}
+
+/**
+ * Rôle global le plus élevé que l'acteur peut attribuer (sous-ensemble de ses
+ * permissions — jamais plus que ce qu'il possède). Utilisé pour auto-affecter
+ * le créateur à la société qu'il vient de créer, afin qu'elle apparaisse
+ * immédiatement dans le sélecteur de société. `null` si aucun rôle n'est
+ * attribuable (l'adhésion sans rôle conserve le repli UserRole).
+ */
+async function pickAssignableAdminRole(
+  actor: AdminActor,
+): Promise<{ id: string; key: string } | null> {
+  const roles = await prisma.role.findMany({
+    orderBy: [{ key: "asc" }],
+    include: { permissions: { include: { permission: { select: { key: true } } } } },
+  });
+  const assignable = roles.filter((role) =>
+    role.permissions.every((rp) => actor.permissions.includes(rp.permission.key)),
+  );
+  return (
+    assignable.find((r) => r.key === "ADMIN") ?? assignable[0] ?? null
+  );
 }
 
 function toDate(value: string | null | undefined): Date | null {
@@ -269,9 +293,13 @@ function toBranchInput(branch: WizardBranch) {
   };
 }
 
-export async function listCompanies(actor: AdminActor): Promise<CompanyAdminRow[]> {
+export async function listCompanies(
+  actor: AdminActor,
+  opts?: { includeDeleted?: boolean },
+): Promise<CompanyAdminRow[]> {
   return runUnscoped(async () => {
-    const where: Prisma.CompanyWhereInput = { deletedAt: null };
+    const includeDeleted = opts?.includeDeleted ?? false;
+    const where: Prisma.CompanyWhereInput = includeDeleted ? {} : { deletedAt: null };
     if (!isGlobalAdmin(actor)) {
       where.id = actor.activeCompanyId ?? "__none__";
     }
@@ -296,6 +324,7 @@ export async function listCompanies(actor: AdminActor): Promise<CompanyAdminRow[
       ai: c.ai,
       status: c.status,
       isActive: c.isActive,
+      deletedAt: c.deletedAt?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
       logoKey: c.logoKey,
       branchCount: c._count.branches,
@@ -408,6 +437,11 @@ export async function createCompany(
       );
     }
 
+    // Auto-adhésion du créateur : rôle attribuable le plus élevé (sous-ensemble
+    // de ses permissions). Garantit que la société créée apparaît immédiatement
+    // dans le sélecteur et est accessible à son créateur.
+    const autoRole = await pickAssignableAdminRole(actor);
+
     const company = await prisma.$transaction(async (tx) => {
       const created = await tx.company.create({
         data: { ...pickCompanyFields(input), createdById: actor.userId },
@@ -484,6 +518,31 @@ export async function createCompany(
               },
             });
           }
+        }
+      }
+
+      // Le créateur n'est pas nécessairement dans input.members : on l'auto-
+      // affecte pour que la société soit immédiatement visible dans le
+      // sélecteur et opérationnelle pour lui.
+      const memberIds = new Set((input.members ?? []).map((m) => m.userId));
+      if (!memberIds.has(actor.userId)) {
+        const creatorMembership = await tx.userCompany.create({
+          data: {
+            userId: actor.userId,
+            companyId: created.id,
+            active: true,
+            isDefault: false,
+          },
+        });
+        if (autoRole) {
+          await tx.roleAssignment.create({
+            data: {
+              userCompanyId: creatorMembership.id,
+              roleId: autoRole.id,
+              active: true,
+              assignedBy: actor.userId,
+            },
+          });
         }
       }
 
@@ -1224,21 +1283,7 @@ export async function clearDraft(userId: string): Promise<{ cleared: boolean }> 
 export async function listCompanyBranches(
   actor: AdminActor,
   companyId: string,
-): Promise<
-  {
-    id: string;
-    code: string;
-    name: string;
-    nameAr: string | null;
-    type: BranchType;
-    city: string | null;
-    phone: string | null;
-    email: string | null;
-    manager: string | null;
-    isActive: boolean;
-    isDefault: boolean;
-  }[]
-> {
+): Promise<CompanyBranchAdmin[]> {
   return runUnscoped(async () => {
     assertCompanyAccess(actor, companyId);
     const rows = await prisma.branch.findMany({
@@ -1258,12 +1303,183 @@ export async function listCompanyBranches(
       nameAr: r.nameAr,
       type: r.type,
       city: r.city,
+      address: r.address,
       phone: r.phone,
       email: r.email,
       manager: r.manager,
+      country: r.country,
+      wilaya: r.wilaya,
+      commune: r.commune,
+      postalCode: r.postalCode,
+      rc: r.rc,
+      nif: r.nif,
+      nis: r.nis,
+      ai: r.ai,
       isActive: r.isActive,
       isDefault: r.id === defaultId,
     }));
+  });
+}
+
+/**
+ * Création d'une succursale d'une société précise (sous-ressource admin).
+ * Respecte l'isolation (`assertCompanyAccess`) et le verrou en lecture seule des
+ * sociétés archivées (`assertNotArchived`). Le code est unique par société.
+ */
+export async function createCompanyBranch(
+  actor: AdminActor,
+  companyId: string,
+  input: CompanyBranchInput,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<CompanyBranchAdmin> {
+  return runUnscoped(async () => {
+    assertCompanyAccess(actor, companyId);
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, deletedAt: null },
+    });
+    if (!company) throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+    assertNotArchived(company);
+
+    if (!input.code?.trim() || !input.name?.trim()) {
+      throw new ApiError(
+        400,
+        "Le code et le nom de la succursale sont obligatoires.",
+        "VALIDATION",
+      );
+    }
+    const code = input.code.trim().toUpperCase();
+    const existing = await prisma.branch.findFirst({ where: { companyId, code } });
+    if (existing) {
+      throw new ApiError(
+        409,
+        `Une succursale porte déjà le code ${code}.`,
+        "CONFLICT",
+      );
+    }
+
+    const branch = await prisma.branch.create({
+      data: {
+        code,
+        name: input.name,
+        nameAr: input.nameAr ?? null,
+        type: input.type ?? "DIRECTION",
+        city: input.city ?? null,
+        address: input.address ?? null,
+        phone: input.phone ?? null,
+        email: input.email ?? null,
+        manager: input.manager ?? null,
+        country: input.country ?? null,
+        wilaya: input.wilaya ?? null,
+        commune: input.commune ?? null,
+        postalCode: input.postalCode ?? null,
+        rc: input.rc ?? null,
+        nif: input.nif ?? null,
+        nis: input.nis ?? null,
+        ai: input.ai ?? null,
+        companyId,
+        createdById: actor.userId,
+      },
+    });
+
+    await recordAudit({
+      action: "CREATE" as AuditAction,
+      entity: "Branch",
+      entityId: branch.id,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { code, name: input.name },
+    });
+    await recordActivity({
+      type: "CREATE" as ActivityType,
+      entity: "Branch",
+      entityId: branch.id,
+      actorId: actor.userId,
+      companyId,
+      title: `Succursale créée : ${input.name}`,
+      titleAr: `تم إنشاء الفرع: ${input.name}`,
+    });
+
+    const list = await listCompanyBranches(actor, companyId);
+    const row = list.find((b) => b.id === branch.id);
+    if (!row) throw new ApiError(500, "Succursale créée mais introuvable.", "INTERNAL");
+    return row;
+  });
+}
+
+/**
+ * Mise à jour d'une succursale (champs + activation/désactivation). Le siège
+ * (HEADQUARTER) ne peut pas être désactivé. Le code n'est pas modifiable.
+ */
+export async function updateCompanyBranch(
+  actor: AdminActor,
+  companyId: string,
+  branchId: string,
+  input: CompanyBranchInput,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<CompanyBranchAdmin> {
+  return runUnscoped(async () => {
+    assertCompanyAccess(actor, companyId);
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, deletedAt: null },
+    });
+    if (!company) throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+    assertNotArchived(company);
+
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId } });
+    if (!branch) throw new ApiError(404, "Succursale introuvable.", "NOT_FOUND");
+
+    const data: Prisma.BranchUncheckedUpdateInput = {};
+    if (input.isActive !== undefined) {
+      if (input.isActive === false && branch.type === "HEADQUARTER") {
+        throw new ApiError(
+          400,
+          "La succursale siège ne peut pas être désactivée.",
+          "PROTECTED",
+        );
+      }
+      data.isActive = input.isActive;
+    }
+    if (input.name !== undefined) data.name = input.name;
+    if (input.nameAr !== undefined) data.nameAr = input.nameAr ?? null;
+    if (input.type !== undefined) data.type = input.type;
+    if (input.city !== undefined) data.city = input.city ?? null;
+    if (input.address !== undefined) data.address = input.address ?? null;
+    if (input.phone !== undefined) data.phone = input.phone ?? null;
+    if (input.email !== undefined) data.email = input.email ?? null;
+    if (input.manager !== undefined) data.manager = input.manager ?? null;
+    if (input.country !== undefined) data.country = input.country ?? null;
+    if (input.wilaya !== undefined) data.wilaya = input.wilaya ?? null;
+    if (input.commune !== undefined) data.commune = input.commune ?? null;
+    if (input.postalCode !== undefined) data.postalCode = input.postalCode ?? null;
+    if (input.rc !== undefined) data.rc = input.rc ?? null;
+    if (input.nif !== undefined) data.nif = input.nif ?? null;
+    if (input.nis !== undefined) data.nis = input.nis ?? null;
+    if (input.ai !== undefined) data.ai = input.ai ?? null;
+
+    const updated = await prisma.branch.update({
+      where: { id: branchId },
+      data: { ...data, updatedById: actor.userId },
+    });
+
+    await recordAudit({
+      action: "UPDATE" as AuditAction,
+      entity: "Branch",
+      entityId: branchId,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { code: branch.code, name: updated.name },
+    });
+
+    const list = await listCompanyBranches(actor, companyId);
+    const row = list.find((b) => b.id === branchId);
+    if (!row) {
+      throw new ApiError(500, "Succursale introuvable après mise à jour.", "INTERNAL");
+    }
+    return row;
   });
 }
 

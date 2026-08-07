@@ -1,3 +1,4 @@
+import { setDefaultResultOrder } from "node:dns";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { companyScopeExtension } from "@/lib/db/company-scope";
@@ -7,6 +8,14 @@ import {
   uncapitalize,
   type SoftDeleteDelegate,
 } from "@/lib/db/soft-delete";
+
+// Certaines machines n'ont pas de route IPv6 (réseau/FAI IPv4 uniquement) alors
+// que les DNS publics renvoient les enregistrements AAAA (IPv6) AVANT les A
+// (IPv4). Node ≥20 résout alors la socket vers une adresse IPv6 injoignable :
+// le handshake TCP expire (ETIMEDOUT) ou retarde la connexion de plusieurs
+// secondes avant de retomber sur IPv4. On force l'ordre IPv4 d'abord pour que
+// l'ouverture de connexion PostgreSQL soit déterministe et rapide.
+setDefaultResultOrder("ipv4first");
 
 function resolveConnectionUrl(): string {
   return (

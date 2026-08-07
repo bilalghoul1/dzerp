@@ -1,6 +1,9 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +61,8 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 type DetailProps = {
   company: CompanyAdminDetail;
+  canUpdate: boolean;
+  isMember: boolean;
   members: CompanyMemberView[];
   branches: {
     id: string;
@@ -91,6 +96,8 @@ type DetailProps = {
 
 export function CompanyDetail({
   company,
+  canUpdate,
+  isMember,
   members,
   branches,
   series,
@@ -99,6 +106,28 @@ export function CompanyDetail({
   activity,
 }: DetailProps) {
   const { t } = useI18n();
+  const router = useRouter();
+  const [switching, setSwitching] = React.useState(false);
+
+  const switchTo = async () => {
+    setSwitching(true);
+    try {
+      const res = await fetch("/api/session/company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: company.id }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      toast.success(t("admin.switchedCompany"));
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -115,14 +144,44 @@ export function CompanyDetail({
             {t(`admin.status_${company.status}` as "admin.status_ACTIVE")}
           </Badge>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/admin/companies">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-              arrow_back
-            </span>
-            {t("common.back")}
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {isMember ? (
+            <Button variant="outline" size="sm" onClick={() => void switchTo()} disabled={switching}>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                swap_horiz
+              </span>
+              {t("admin.switchToCompany")}
+            </Button>
+          ) : null}
+          {canUpdate ? (
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/admin/companies/${company.id}/branches`}>
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                    account_tree
+                  </span>
+                  {t("admin.manageBranches")}
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href={`/admin/companies/${company.id}/edit`}>
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                    edit
+                  </span>
+                  {t("admin.editCompany")}
+                </Link>
+              </Button>
+            </>
+          ) : null}
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/admin/companies">
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                arrow_back
+              </span>
+              {t("common.back")}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {company.status === "ARCHIVED" ? (

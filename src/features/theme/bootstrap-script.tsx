@@ -11,8 +11,19 @@ const script = `(function(){
   } catch (e) {}
 })();`;
 
+/**
+ * Script inline anti-flash exécuté pendant le parsing HTML (avant le premier
+ * paint). React avertit en dev quand un composant produit une balise `<script>`
+ * ; le pattern documenté consiste à servir `text/javascript` côté serveur et
+ * `text/plain` côté client (le script est alors ignoré à l'hydratation).
+ * `suppressHydrationWarning` couvre ce changement de `type`.
+ */
 export function BootstrapScript() {
   return (
-    <script dangerouslySetInnerHTML={{ __html: script }} />
+    <script
+      type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
   );
 }

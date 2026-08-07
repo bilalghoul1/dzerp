@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmModal } from "@/components/feedback/modal";
 import {
   Card,
   CardContent,
@@ -103,9 +104,12 @@ const EMPTY_FORM: BranchInput = {
 export function BranchesManager({
   branches,
   description,
+  basePath = "/api/branches",
 }: {
   branches: BranchRow[];
   description: string;
+  /** Endpoint API (société active par défaut, ou sous-ressource admin). */
+  basePath?: string;
 }) {
   const { t } = useI18n();
   const [rows, setRows] = React.useState<BranchRow[]>(branches);
@@ -113,6 +117,8 @@ export function BranchesManager({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<BranchInput>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] =
+    React.useState<BranchRow | null>(null);
 
   const openCreate = () => {
     setEditingId(null);
@@ -155,7 +161,7 @@ export function BranchesManager({
           })()
         : form;
       const res = await fetch(
-        editingId ? `/api/branches?id=${editingId}` : "/api/branches",
+        editingId ? `${basePath}?id=${editingId}` : basePath,
         {
           method: editingId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -178,10 +184,23 @@ export function BranchesManager({
     }
   };
 
+  /** Désactivation : confirmation (le siège est protégé côté client et serveur). */
+  const handleToggle = (branch: BranchRow) => {
+    if (branch.isActive) {
+      if (branch.type === "HEADQUARTER") {
+        toast.error(t("parametres.branchProtected"));
+        return;
+      }
+      setConfirmDeactivate(branch);
+      return;
+    }
+    void toggleActive(branch);
+  };
+
   const toggleActive = async (branch: BranchRow) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/branches?id=${branch.id}`, {
+      const res = await fetch(`${basePath}?id=${branch.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !branch.isActive }),
@@ -275,7 +294,7 @@ export function BranchesManager({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggleActive(branch)}
+                        onClick={() => handleToggle(branch)}
                         disabled={busy}
                       >
                         {branch.isActive
@@ -486,6 +505,23 @@ export function BranchesManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmModal
+        open={!!confirmDeactivate}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeactivate(null);
+        }}
+        title={t("parametres.deactivateBranch")}
+        description={t("parametres.confirmDeactivateBranch")}
+        confirmLabel={t("parametres.deactivateBranch")}
+        destructive
+        busy={busy}
+        onConfirm={() => {
+          const target = confirmDeactivate;
+          setConfirmDeactivate(null);
+          if (target) void toggleActive(target);
+        }}
+      />
     </Card>
   );
 }
