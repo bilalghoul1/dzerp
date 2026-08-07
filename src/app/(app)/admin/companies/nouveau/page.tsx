@@ -1,5 +1,5 @@
 import { requirePermission } from "@/features/auth/rbac";
-import { getCompanyContext } from "@/features/company/context";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import { getCurrencies } from "@/features/settings/config";
 import {
   listLookups,
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewCompanyPage() {
   await requirePermission("admin.company.create");
-  const context = getCompanyContext();
+  const context = await getOrResolveCompanyContext();
   const userId = context?.user.id ?? "";
 
   const [currencies, lookups, wilayas, communes, users, roles, draft] =

@@ -103,7 +103,7 @@ export function DocumentWorkflowBar() {
       m.createDocument(editor.type, payload),
     );
     if (created) {
-      router.push(`/documents/${editor.type.toLowerCase()}/edit/${created.id}`);
+      router.push(`/documents/${editor.type.toLowerCase()}/${created.id}`);
     }
   };
 

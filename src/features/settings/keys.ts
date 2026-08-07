@@ -1,0 +1,47 @@
+/**
+ * Clés de paramètres autorisées via l'API générique `PUT /api/settings`.
+ * Toute autre clé est refusée (le système de paramètres est global : un
+ * administrateur de société ne doit pas pouvoir créer des clés arbitraires
+ * affectant toutes les sociétés).
+ */
+export const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "company.name",
+  "company.legalName",
+  "company.legalForm",
+  "company.activity",
+  "company.secondaryActivity",
+  "company.establishedAt",
+  "company.taxId",
+  "company.rc",
+  "company.nis",
+  "company.ai",
+  "company.vatNumber",
+  "company.country",
+  "company.wilaya",
+  "company.commune",
+  "company.postalCode",
+  "company.address",
+  "company.phone",
+  "company.mobile",
+  "company.email",
+  "company.website",
+  "company.bank",
+  "company.bankAgency",
+  "company.bankAccount",
+  "company.rib",
+  "company.iban",
+  "company.swift",
+  "company.logoKey",
+  "company.stampKey",
+  "company.signatureKey",
+  "company.currency",
+  "fiscal.year",
+  "locale.default",
+  "theme.default",
+  "notifications.email",
+  "print.defaultFormat",
+  "documents.qr.enabled",
+  "tax.rates",
+  "currency.list",
+  "units.list",
+]);

@@ -1,11 +1,11 @@
-import { getCompanyContext } from "@/features/company/context";
+import { getOrResolveCompanyContext } from "@/features/company/context";
 import { listCompanies } from "@/features/company-admin/service";
 import { CompaniesTable } from "@/components/admin/companies-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCompaniesPage() {
-  const context = getCompanyContext();
+  const context = await getOrResolveCompanyContext();
   const companies = await listCompanies({
     userId: context?.user.id ?? "",
     permissions: context?.permissions ?? [],

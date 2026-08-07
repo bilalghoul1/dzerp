@@ -83,15 +83,17 @@ export async function PATCH(
   request: Request,
   context: RouteContext,
 ): Promise<NextResponse> {
-  const guard = await apiGuardWithContext("documents.approve");
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get("action");
+  const guard = await apiGuardWithContext(
+    action === "approve" ? "documents.approve" : "documents.update",
+  );
   if (guard.response) return guard.response;
 
   return runScoped(guard.context, async () => {
     try {
       const { id } = await context.params;
-      const { searchParams } = new URL(request.url);
       const typeParam = searchParams.get("type") as CommercialDocType | null;
-      const action = searchParams.get("action");
 
       let docType = typeParam;
       if (!docType || !VALID_TYPES.has(docType)) {

@@ -14,7 +14,7 @@ export async function GET(
 
   const { companyId } = await context.params;
   try {
-    const logs = await listCompanyAudit(companyId);
+    const logs = await listCompanyAudit(guard.actor, companyId);
     return okResponse(logs);
   } catch (error) {
     return errorResponse(error);

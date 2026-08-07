@@ -10,7 +10,13 @@ type SessionPayload = {
 };
 
 function getSecret(): string {
-  return process.env.SESSION_SECRET ?? "dzerp-insecure-secret";
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret === "dzerp-insecure-secret") {
+    throw new Error(
+      "[env] SESSION_SECRET is required and must not use the insecure default value.",
+    );
+  }
+  return secret;
 }
 
 function encode(value: SessionPayload): string {

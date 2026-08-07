@@ -1,6 +1,50 @@
 import { ApiError } from "@/lib/http";
+import { prisma } from "@/lib/prisma";
 import type { CommercialDocType, InputDocument, InputLine } from "./types";
 import { getDocConfig } from "./config";
+
+/**
+ * Valide que les références rattachées au document (succursale, tiers)
+ * appartiennent bien à la société du contexte. Les requêtes passent par
+ * l'extension companyScope (filtrage automatique par `companyId`) : toute
+ * référence d'une autre société est introuvable → rejetée (fail-closed).
+ */
+async function assertCompanyReference(
+  model: "branch" | "customer" | "supplier",
+  id: string,
+  companyId: string,
+  label: string,
+): Promise<void> {
+  const delegate = (prisma as unknown as Record<string, { count: (args: unknown) => Promise<number> }>)[model];
+  const count = await delegate.count({
+    where: { id, companyId },
+  });
+  if (count === 0) {
+    throw new ApiError(
+      422,
+      `${label} invalide ou ne faisant pas partie de la société courante.`,
+      "VALIDATION",
+      { [model]: "not_found_in_company" },
+    );
+  }
+}
+
+export async function validateDocumentReferences(
+  data: InputDocument,
+  docType: CommercialDocType,
+  companyId: string,
+): Promise<void> {
+  const config = getDocConfig(docType);
+  if (data.branchId) {
+    await assertCompanyReference("branch", data.branchId, companyId, "La succursale");
+  }
+  if (config.partyField === "customerId" && data.customerId) {
+    await assertCompanyReference("customer", data.customerId, companyId, "Le client");
+  }
+  if (config.partyField === "supplierId" && data.supplierId) {
+    await assertCompanyReference("supplier", data.supplierId, companyId, "Le fournisseur");
+  }
+}
 
 export function validateDocumentInput(
   data: InputDocument,

@@ -6,6 +6,8 @@ import { Prisma } from "@/generated/prisma/client";
  */
 export const SOFT_DELETABLE_MODELS = new Set<string>([
   "Client",
+  "Customer",
+  "Supplier",
   "Product",
   "Warehouse",
   "Company",

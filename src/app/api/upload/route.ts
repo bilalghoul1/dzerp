@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { apiGuardWithContext, runScoped } from "@/features/company/api";
-import { saveUploadFile } from "@/features/upload/storage";
+import {
+  saveUploadFile,
+  MAX_UPLOAD_BYTES,
+} from "@/features/upload/storage";
 import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/features/audit/service";
+import { errorResponse } from "@/lib/http";
 
 export const maxDuration = 30;
 
@@ -21,6 +25,19 @@ export async function POST(request: Request): Promise<NextResponse> {
         return NextResponse.json(
           { error: { message: "Aucun fichier reçu.", code: "NO_FILES" } },
           { status: 400 },
+        );
+      }
+
+      const tooLarge = files.find((f) => f.size > MAX_UPLOAD_BYTES);
+      if (tooLarge) {
+        return NextResponse.json(
+          {
+            error: {
+              message: `Fichier trop volumineux (max ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} Mo).`,
+              code: "FILE_TOO_LARGE",
+            },
+          },
+          { status: 413 },
         );
       }
 
@@ -53,10 +70,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ data: saved }, { status: 201 });
     } catch (error) {
       console.error("upload error:", error);
-      return NextResponse.json(
-        { error: { message: "Erreur interne.", code: "INTERNAL_ERROR" } },
-        { status: 500 },
-      );
+      return errorResponse(error);
     }
   });
 }

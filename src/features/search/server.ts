@@ -145,6 +145,7 @@ export async function recentDocuments(limit = 6): Promise<SearchHit[]> {
 export async function globalSearch(
   query: string,
   limit = 5,
+  companyId?: string | null,
 ): Promise<SearchHit[]> {
   const q = query.trim();
   if (!q) return [];
@@ -181,7 +182,14 @@ export async function globalSearch(
       }),
       prisma.user.findMany({
         where: {
-          OR: [{ username: containsQ }, { fullName: containsQ }, { email: containsQ }],
+          AND: [
+            {
+              OR: [{ username: containsQ }, { fullName: containsQ }, { email: containsQ }],
+            },
+            ...(companyId
+              ? [{ userCompanies: { some: { companyId } } }]
+              : []),
+          ],
         },
         take: limit,
         orderBy: { username: "asc" },

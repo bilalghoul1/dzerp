@@ -53,29 +53,26 @@ ALTER TABLE "SupplierInvoice"   ADD COLUMN "exchangeRate" DECIMAL(65,30) NOT NUL
 -- 4. DocumentRelation — cross-document links + conversion history
 -- ---------------------------------------------------------------------------
 CREATE TABLE "DocumentRelation" (
-  "id"              TEXT NOT NULL,
-  "companyId"       TEXT NOT NULL,
-  "sourceDocType"   "DocType" NOT NULL,
-  "sourceDocId"     TEXT NOT NULL,
-  "sourceDocNumber" TEXT,
-  "targetDocType"   "DocType" NOT NULL,
-  "targetDocId"     TEXT NOT NULL,
-  "targetDocNumber" TEXT,
-  "relationType"    "DocumentRelationType" NOT NULL,
-  "status"          TEXT NOT NULL DEFAULT 'FULL',
-  "lineMapping"     JSONB,
-  "notes"           TEXT,
-  "createdById"     TEXT,
-  "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "id"             TEXT NOT NULL,
+  "companyId"      TEXT NOT NULL,
+  "sourceDocType"  TEXT NOT NULL,
+  "sourceDocId"    TEXT NOT NULL,
+  "targetDocType"  TEXT NOT NULL,
+  "targetDocId"    TEXT NOT NULL,
+  "relationType"   "DocumentRelationType" NOT NULL,
+  "conversionRate" DECIMAL(65,30) DEFAULT 1,
+  "description"    TEXT,
+  "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdById"    TEXT,
 
-  CONSTRAINT "DocumentRelation_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "DocumentRelation_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT "DocumentRelation_pkey" PRIMARY KEY ("id")
 );
 
 CREATE INDEX "DocumentRelation_companyId_idx" ON "DocumentRelation"("companyId");
-CREATE INDEX "DocumentRelation_sourceDocId_idx" ON "DocumentRelation"("sourceDocId");
-CREATE INDEX "DocumentRelation_targetDocId_idx" ON "DocumentRelation"("targetDocId");
 CREATE INDEX "DocumentRelation_sourceDocType_sourceDocId_idx" ON "DocumentRelation"("sourceDocType", "sourceDocId");
 CREATE INDEX "DocumentRelation_targetDocType_targetDocId_idx" ON "DocumentRelation"("targetDocType", "targetDocId");
 CREATE INDEX "DocumentRelation_relationType_idx" ON "DocumentRelation"("relationType");
-CREATE INDEX "DocumentRelation_createdById_idx" ON "DocumentRelation"("createdById");
+CREATE UNIQUE INDEX "DocumentRelation_sourceDocType_sourceDocId_targetDocType_ta_key" ON "DocumentRelation"("sourceDocType", "sourceDocId", "targetDocType", "targetDocId");
+
+ALTER TABLE "DocumentRelation" ADD CONSTRAINT "DocumentRelation_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "DocumentRelation" ADD CONSTRAINT "DocumentRelation_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
