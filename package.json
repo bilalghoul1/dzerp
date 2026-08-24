@@ -24,7 +24,16 @@
     "verify:phase75-maintenance": "tsx scripts/verify-phase75-maintenance.ts",
     "verify:phase75": "tsx scripts/verify-phase75.ts",
     "db:seed:scf": "tsx prisma/seed-scf.ts",
-    "db:seed:irg": "tsx prisma/seed-irg.ts"
+    "db:seed:irg": "tsx prisma/seed-irg.ts",
+    "postinstall": "prisma generate"
+  },
+  "allowScripts": {
+    "prisma": true,
+    "@prisma/engines": true,
+    "@file:prisma/engines": true,
+    "esbuild": true,
+    "sharp": true,
+    "unrs-resolver": true
   },
   "dependencies": {
     "@expo-google-fonts/amiri": "^0.4.1",
