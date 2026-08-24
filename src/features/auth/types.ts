@@ -8,6 +8,7 @@ export type SessionUser = {
   title: string | null;
   branchId: string | null;
   lastLoginAt: Date | null;
+  mustChangePassword: boolean;
   branch: {
     id: string;
     code: string;
@@ -15,11 +16,13 @@ export type SessionUser = {
     nameAr: string | null;
   } | null;
   roles: {
-    role: { name: string; nameAr: string | null };
+    role: { key: string; name: string; nameAr: string | null };
   }[];
 };
 
 export type SessionContext = {
   user: SessionUser;
   permissions: PermissionKey[];
+  /** L'utilisateur porte le rôle global SUPER_ADMIN (niveau plateforme, hors société). */
+  isSuperAdmin: boolean;
 };

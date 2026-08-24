@@ -1,5 +1,4 @@
-import { requirePermission } from "@/features/auth/rbac";
-import { getOrResolveCompanyContext } from "@/features/company/context";
+import { getCurrentUser, requirePermission } from "@/features/auth/rbac";
 import { getCurrencies } from "@/features/settings/config";
 import {
   listLookups,
@@ -17,8 +16,10 @@ export const dynamic = "force-dynamic";
 
 export default async function NewCompanyPage() {
   await requirePermission("admin.company.create");
-  const context = await getOrResolveCompanyContext();
-  const userId = context?.user.id ?? "";
+  // Identifiant de l'utilisateur authentifié (le SUPER_ADMIN n'a pas de contexte
+  // société) : il faut donc lire le brouillon sur son identifiant réel.
+  const session = await getCurrentUser();
+  const userId = session?.user.id ?? "";
 
   const [currencies, lookups, wilayas, communes, users, roles, draft] =
     await Promise.all([

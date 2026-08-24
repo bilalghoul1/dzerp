@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 const DOC_TYPE_ORDER = [
   "QUOTATION",
+  "PROFORMA",
   "SALES_ORDER",
   "DELIVERY_NOTE",
   "INVOICE",
@@ -84,33 +85,61 @@ export default async function CustomerCenterPage({
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`/documents/quotation/nouveau`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                add
-              </span>
-              {t("documentsUI.crmQuickQuotation")}
-            </a>
-            <a
-              href={`/documents/invoice/nouveau`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                receipt_long
-              </span>
-              {t("documentsUI.crmQuickInvoice")}
-            </a>
-            <a
-              href={`/documents/delivery_note/nouveau`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                local_shipping
-              </span>
-              {t("documentsUI.crmQuickDelivery")}
-            </a>
+            {context.permissions.includes("ventes.devis.create") ? (
+              <a
+                href={`/documents/quotation/nouveau?customerId=${id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  add
+                </span>
+                {t("documentsUI.crmQuickQuotation")}
+              </a>
+            ) : null}
+            {context.permissions.includes("ventes.proforma.create") ? (
+              <a
+                href={`/documents/proforma/nouveau?customerId=${id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  receipt_long
+                </span>
+                {t("documentsUI.crmQuickProforma")}
+              </a>
+            ) : null}
+            {context.permissions.includes("ventes.commande.create") ? (
+              <a
+                href={`/documents/sales_order/nouveau?customerId=${id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  shopping_cart
+                </span>
+                {t("documentsUI.crmQuickOrder")}
+              </a>
+            ) : null}
+            {context.permissions.includes("ventes.facture.create") ? (
+              <a
+                href={`/documents/invoice/nouveau?customerId=${id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  receipt_long
+                </span>
+                {t("documentsUI.crmQuickInvoice")}
+              </a>
+            ) : null}
+            {context.permissions.includes("ventes.livraison.create") ? (
+              <a
+                href={`/documents/delivery_note/nouveau?customerId=${id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-accent"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  local_shipping
+                </span>
+                {t("documentsUI.crmQuickDelivery")}
+              </a>
+            ) : null}
           </div>
         }
       />
@@ -159,7 +188,7 @@ export default async function CustomerCenterPage({
                 </span>
                 {customer.name}
               </span>
-              {(["QUOTATION", "SALES_ORDER", "DELIVERY_NOTE", "INVOICE"] as CommercialDocType[]).map(
+              {(["QUOTATION", "PROFORMA", "SALES_ORDER", "DELIVERY_NOTE", "INVOICE"] as CommercialDocType[]).map(
                 (type) => {
                   const cfg = getUiConfig(type);
                   const count = grouped.find((g) => g.type === type)?.rows.length ?? 0;

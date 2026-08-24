@@ -44,6 +44,28 @@ export async function validateDocumentReferences(
   if (config.partyField === "supplierId" && data.supplierId) {
     await assertCompanyReference("supplier", data.supplierId, companyId, "Le fournisseur");
   }
+
+  // Les produits des lignes doivent appartenir à la société active (fail-closed).
+  const productIds = (data.lines ?? [])
+    .map((line) => line.productId)
+    .filter((id): id is string => Boolean(id));
+
+  if (productIds.length > 0) {
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds }, companyId },
+      select: { id: true },
+    });
+    const found = new Set(products.map((product) => product.id));
+    const missing = productIds.find((id) => !found.has(id));
+    if (missing) {
+      throw new ApiError(
+        422,
+        "Produit invalide ou ne faisant pas partie de la société courante.",
+        "VALIDATION",
+        { productId: "not_found_in_company" },
+      );
+    }
+  }
 }
 
 export function validateDocumentInput(

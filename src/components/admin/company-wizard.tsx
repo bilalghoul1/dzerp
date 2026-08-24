@@ -67,6 +67,13 @@ type MemberRow = {
   defaultBranchCode: string;
 };
 
+type OwnerRow = {
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+};
+
 type WizardForm = {
   code: string;
   name: string;
@@ -116,6 +123,7 @@ type WizardForm = {
   series: SeriesRow[];
   branches: BranchRow[];
   members: MemberRow[];
+  owner: OwnerRow;
   defaultBranchCode: string;
 };
 
@@ -189,6 +197,12 @@ function defaultForm(): WizardForm {
       },
     ],
     members: [],
+    owner: {
+      fullName: "",
+      username: "",
+      email: "",
+      password: "",
+    },
     defaultBranchCode: "HQ",
   };
 }
@@ -210,6 +224,12 @@ function mergeDraft(base: WizardForm, draft: unknown): WizardForm {
   if (!Array.isArray(data.members)) {
     merged.members = [];
   }
+  merged.owner = {
+    fullName: data.owner?.fullName ?? "",
+    username: data.owner?.username ?? "",
+    email: data.owner?.email ?? "",
+    password: data.owner?.password ?? "",
+  };
   return merged;
 }
 
@@ -278,6 +298,12 @@ export function CompanyWizard({
   const [dirty, setDirty] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  const [created, setCreated] = React.useState<{
+    id: string;
+    code: string;
+    name: string;
+    owner: { username: string; temporaryPassword: string } | null;
+  } | null>(null);
 
   const update = <K extends keyof WizardForm>(key: K, value: WizardForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -418,6 +444,15 @@ export function CompanyWizard({
           roleId: m.roleId,
           defaultBranchCode: m.defaultBranchCode || null,
         })),
+        owner:
+          form.owner.fullName.trim() && form.owner.username.trim() && form.owner.password
+            ? {
+                fullName: form.owner.fullName.trim(),
+                username: form.owner.username.trim(),
+                email: form.owner.email.trim() || null,
+                password: form.owner.password,
+              }
+            : null,
       };
 
       const res = await fetch("/api/admin/companies", {
@@ -430,9 +465,13 @@ export function CompanyWizard({
       await fetch("/api/admin/companies/draft", { method: "DELETE" }).catch(
         () => null,
       );
-      toast.success(t("admin.created"));
-      router.push(`/admin/companies/${json.data.id}`);
-      router.refresh();
+      setCreated({
+        id: json.data.company.id,
+        code: json.data.company.code,
+        name: json.data.company.name,
+        owner: json.data.owner ?? null,
+      });
+      await router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error");
     } finally {
@@ -451,6 +490,48 @@ export function CompanyWizard({
       { userId, roleId, defaultBranchCode: form.defaultBranchCode || "" },
     ]);
   };
+
+  if (created) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("admin.creationSuccess")}</CardTitle>
+          <CardDescription>
+            {created.code} · {created.name}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {created.owner ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="mb-2 font-medium">
+                <span className="material-symbols-outlined align-middle text-[18px]" aria-hidden="true">
+                  key
+                </span>{" "}
+                {t("admin.ownerCredentials")}
+              </p>
+              <p>
+                {t("auth.username")} : <strong>{created.owner.username}</strong>
+              </p>
+              <p>
+                {t("admin.ownerPassword")} :{" "}
+                <strong>{created.owner.temporaryPassword}</strong>
+              </p>
+              <p className="mt-2 text-amber-700">
+                {t("admin.ownerPasswordOnce")}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("admin.noOwnerCreated")}
+            </p>
+          )}
+          <Button onClick={() => router.push(`/admin/companies/${created.id}`)}>
+            {t("admin.viewCompany")}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -1204,6 +1285,75 @@ export function CompanyWizard({
 
             {step === 8 ? (
               <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {t("admin.ownerTitle")}
+                    </CardTitle>
+                    <CardDescription>{t("admin.ownerHint")}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label={t("profile.fullName")}>
+                        <Input
+                          value={form.owner.fullName}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              owner: { ...prev.owner, fullName: e.target.value },
+                            }))
+                          }
+                          placeholder="Ali Benali"
+                        />
+                      </Field>
+                      <Field label={t("auth.username")}>
+                        <Input
+                          value={form.owner.username}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              owner: { ...prev.owner, username: e.target.value },
+                            }))
+                          }
+                          placeholder="ali.benali"
+                        />
+                      </Field>
+                      <Field label={t("profile.email")}>
+                        <Input
+                          type="email"
+                          value={form.owner.email}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              owner: { ...prev.owner, email: e.target.value },
+                            }))
+                          }
+                          placeholder="ali@entreprise.dz"
+                        />
+                      </Field>
+                      <Field label={t("admin.ownerPassword")}>
+                        <Input
+                          type="password"
+                          value={form.owner.password}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              owner: { ...prev.owner, password: e.target.value },
+                            }))
+                          }
+                          placeholder="••••••••"
+                          minLength={8}
+                        />
+                      </Field>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {form.owner.fullName.trim() && form.owner.username.trim() && form.owner.password
+                        ? t("admin.ownerWillBeCreated")
+                        : t("admin.ownerOptional")}
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">

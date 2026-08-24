@@ -3,7 +3,6 @@ import type { Locale } from "@/lib/constants";
 import { getDocConfig } from "@/features/documents/engine/config";
 import type { CommercialDocType } from "@/features/documents/engine/types";
 import { resolveDocType } from "@/features/documents/engine/resolve";
-import { getServerI18n } from "@/features/i18n/server";
 import { assertFontsAvailable } from "./fonts";
 import { mapToPrintableDocument } from "./map-document";
 import { PdfEngine } from "./renderer";
@@ -36,10 +35,12 @@ export interface PrintDocumentParams {
   locale?: Locale;
 }
 
-async function resolveLocale(hint: Locale | undefined): Promise<Locale> {
-  if (hint) return hint;
-  const { locale } = await getServerI18n();
-  return locale;
+async function resolveLocale(_hint: Locale | undefined): Promise<Locale> {
+  // DzERP documents render in French only (Arabic shaping is disabled to avoid
+  // broken ligatures/connectivity in the generated PDFs). French is the
+  // validated, fully-supported print language.
+  void _hint;
+  return "fr";
 }
 
 export async function printDocument(params: PrintDocumentParams): Promise<PrintResult> {
@@ -59,7 +60,7 @@ export async function printDocument(params: PrintDocumentParams): Promise<PrintR
   const engine = await PdfEngine.create({
     format: doc.company.printFormat,
     margins: doc.company.printMargins ?? undefined,
-    rtl: locale === "ar",
+    rtl: false,
     onPage: createRunningHeader(doc, labels),
     onFooter: createFooter(doc, labels),
   });

@@ -1,8 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaBase } from "@/lib/prisma";
 import { ApiError } from "@/lib/http";
 import { runUnscoped } from "@/features/company/unscoped";
 import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
+import { deleteUploadFile } from "@/features/upload/storage";
+import { hashPassword } from "@/features/auth/password";
 import { Prisma } from "@/generated/prisma/client";
 import type {
   AuditAction,
@@ -10,6 +12,7 @@ import type {
   BranchType,
   CompanyStatus,
   DocType,
+  UserStatus,
 } from "@/generated/prisma/enums";
 import { DEFAULT_SERIES, DEFAULT_HEADQUARTER_BRANCH } from "./defaults";
 import type {
@@ -17,10 +20,27 @@ import type {
   CompanyAdminDetail,
   CompanyAdminRow,
   CompanyCreateInput,
+  CompanyCreateResult,
   CompanyMemberView,
+  CompanyOwnerView,
   CompanyStatistics,
   CompanyUpdateInput,
+  DatabaseTableStat,
+  PlatformAuditEntry,
+  PlatformAuditQuery,
+  PlatformAnalytics,
+  PlatformHealth,
+  PlatformHealthCheck,
+  PlatformSessionRow,
+  PlatformSessionsQuery,
+  PlatformSecurityOverview,
+  PlatformStats,
+  PlatformUserRow,
+  PlatformUsersQuery,
 } from "./types";
+
+/** Clé du rôle de société unique : Administrateur de société (COMPANY_ADMIN). */
+const COMPANY_ADMIN_ROLE_KEY = "COMPANY_ADMIN";
 
 /**
  * Module d'administration globale des sociétés (Phase 5.5).
@@ -35,15 +55,13 @@ import type {
  *    pas être filtrés par le contexte société de l'acteur.
  */
 
-const GLOBAL_ADMIN_KEYS: readonly string[] = [
-  "admin.company.create",
-  "admin.company.archive",
-  "admin.company.delete",
-  "admin.company.restore",
-];
-
+/**
+ * Administration PLATEFORME : réservée au porteur du rôle global SUPER_ADMIN.
+ * Une permission `admin.company.*` octroyée via un rôle de société (RoleAssignment)
+ * ne suffit JAMAIS — un administrateur de société reste confiné à sa société.
+ */
 export function isGlobalAdmin(actor: AdminActor): boolean {
-  return actor.permissions.some((p) => GLOBAL_ADMIN_KEYS.includes(p));
+  return actor.isSuperAdmin === true;
 }
 
 function assertGlobalAdmin(actor: AdminActor): void {
@@ -79,10 +97,14 @@ function assertNotArchived(company: { status: CompanyStatus }): void {
 }
 
 /**
- * Empêche toute escalade de privilèges : un acteur ne peut attribuer qu'un rôle
- * dont l'ensemble de permissions est un sous-ensemble des siennes (il ne peut
- * jamais octroyer plus qu'il ne possède). Un non-Super Administrateur ne peut
- * donc pas attribuer le rôle ADMIN global.
+ * Empêche toute escalade de privilèges :
+ *  - Les rôles GLOBAUX de plateforme (ADMIN, SUPER_ADMIN) ne sont JAMAIS
+ *    assignables à une société (GLOBAL ROLE ≠ COMPANY ROLE).
+ *  - Un non-Super Administrateur ne peut attribuer qu'un rôle dont l'ensemble
+ *    de permissions est un sous-ensemble des siennes (il ne peut jamais
+ *    octroyer plus qu'il ne possède).
+ *  - Le Super Administrateur peut attribuer n'importe quel rôle DE SOCIÉTÉ
+ *    (OWNER, COMPANY_ADMIN, MANAGER, READER...).
  */
 async function assertAssignableRole(
   actor: AdminActor,
@@ -93,6 +115,17 @@ async function assertAssignableRole(
     include: { permissions: { include: { permission: true } } },
   });
   if (!role) throw new ApiError(404, "Rôle introuvable.", "NOT_FOUND");
+
+  if (role.key === "ADMIN" || role.key === "SUPER_ADMIN") {
+    throw new ApiError(
+      403,
+      "Ce rôle global de plateforme ne peut pas être assigné à une société.",
+      "GLOBAL_ROLE_FORBIDDEN",
+    );
+  }
+
+  // Le Super Administrateur assigne librement n'importe quel rôle de société.
+  if (actor.isSuperAdmin) return;
 
   const roleKeys = role.permissions.map((rp) => rp.permission.key);
   const missing = roleKeys.filter((key) => !actor.permissions.includes(key));
@@ -109,6 +142,48 @@ function toDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Propriétaire (role OWNER) d'une société, ou `null`. */
+async function findCompanyOwner(
+  companyId: string,
+): Promise<CompanyOwnerView | null> {
+  const assignment = await prisma.roleAssignment.findFirst({
+    where: {
+      active: true,
+      role: { key: COMPANY_ADMIN_ROLE_KEY },
+      userCompany: { companyId },
+    },
+    orderBy: { assignedAt: "asc" },
+    include: {
+      userCompany: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              fullName: true,
+              email: true,
+              status: true,
+              mustChangePassword: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!assignment) return null;
+  const { user, id, joinedAt } = assignment.userCompany;
+  return {
+    userId: user.id,
+    userCompanyId: id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    status: user.status,
+    mustChangePassword: user.mustChangePassword,
+    joinedAt: joinedAt.toISOString(),
+  };
 }
 
 function pickCompanyFields(input: CompanyCreateInput): Prisma.CompanyUncheckedCreateInput {
@@ -282,25 +357,128 @@ export async function listCompanies(actor: AdminActor): Promise<CompanyAdminRow[
         _count: { select: { branches: true, userCompanies: true } },
       },
     });
-    return companies.map((c) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      nameAr: c.nameAr,
-      commercialName: c.commercialName,
-      legalName: c.legalName,
-      type: c.type,
-      taxId: c.taxId,
-      rc: c.rc,
-      nis: c.nis,
-      ai: c.ai,
-      status: c.status,
-      isActive: c.isActive,
-      createdAt: c.createdAt.toISOString(),
-      logoKey: c.logoKey,
-      branchCount: c._count.branches,
-      memberCount: c._count.userCompanies,
-    }));
+
+    const ownerAssignments =
+      companies.length === 0
+        ? []
+        : await prisma.roleAssignment.findMany({
+            where: {
+              active: true,
+              role: { key: COMPANY_ADMIN_ROLE_KEY },
+              userCompany: { companyId: { in: companies.map((c) => c.id) } },
+            },
+            select: {
+              userCompany: {
+                select: {
+                  companyId: true,
+                  user: { select: { username: true, fullName: true } },
+                },
+              },
+            },
+          });
+    const ownerByCompany = new Map<string, { username: string; fullName: string | null }>();
+    for (const a of ownerAssignments) {
+      if (!ownerByCompany.has(a.userCompany.companyId)) {
+        ownerByCompany.set(a.userCompany.companyId, {
+          username: a.userCompany.user.username,
+          fullName: a.userCompany.user.fullName,
+        });
+      }
+    }
+
+    return companies.map((c) => {
+      const owner = ownerByCompany.get(c.id);
+      return {
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        nameAr: c.nameAr,
+        commercialName: c.commercialName,
+        legalName: c.legalName,
+        type: c.type,
+        taxId: c.taxId,
+        rc: c.rc,
+        nis: c.nis,
+        ai: c.ai,
+        status: c.status,
+        isActive: c.isActive,
+        createdAt: c.createdAt.toISOString(),
+        logoKey: c.logoKey,
+        branchCount: c._count.branches,
+        memberCount: c._count.userCompanies,
+        ownerName: owner?.fullName ?? null,
+        ownerUsername: owner?.username ?? null,
+      };
+    });
+  });
+}
+
+/**
+ * Statistiques globales de la plateforme (tableau de bord Super Admin).
+ * Lecture seule, réservée au Super Administrateur : les compteurs balayent
+ * toutes les sociétés hors contexte société actif (`runUnscoped`).
+ */
+export async function getPlatformStats(actor: AdminActor): Promise<PlatformStats> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const [companies, users, sessionsActive, branchesTotal, recentActivityRows] =
+      await Promise.all([
+        prisma.company.groupBy({
+          by: ["status"],
+          where: { deletedAt: null },
+          _count: { _all: true },
+        }),
+        prisma.user.groupBy({
+          by: ["status"],
+          _count: { _all: true },
+        }),
+        prisma.session.count({
+          where: { revokedAt: null, expiresAt: { gt: new Date() } },
+        }),
+        prismaBase.branch.count(),
+        prisma.activityEvent.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          include: {
+            actor: { select: { fullName: true, username: true } },
+            company: { select: { name: true } },
+          },
+        }),
+      ]);
+
+    const byStatus = new Map(
+      companies.map((c) => [c.status, c._count._all]),
+    );
+    const usersByStatus = new Map(
+      users.map((u) => [u.status, u._count._all]),
+    );
+    const recentCompanies = (await listCompanies(actor))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 5);
+
+    return {
+      companiesTotal: companies.reduce((sum, c) => sum + c._count._all, 0),
+      companiesActive: byStatus.get("ACTIVE") ?? 0,
+      companiesInactive: byStatus.get("INACTIVE") ?? 0,
+      companiesSuspended: byStatus.get("SUSPENDED") ?? 0,
+      companiesArchived: byStatus.get("ARCHIVED") ?? 0,
+      usersTotal: users.reduce((sum, u) => sum + u._count._all, 0),
+      usersActive: usersByStatus.get("ACTIVE") ?? 0,
+      usersInactive: usersByStatus.get("INACTIVE") ?? 0,
+      usersSuspended: usersByStatus.get("SUSPENDED") ?? 0,
+      sessionsActive,
+      branchesTotal,
+      recentCompanies,
+      recentActivity: recentActivityRows.map((event) => ({
+        id: event.id,
+        type: event.type,
+        title: event.title,
+        titleAr: event.titleAr,
+        actorName: event.actor?.fullName ?? event.actor?.username ?? null,
+        companyName: event.company?.name ?? null,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    };
   });
 }
 
@@ -373,6 +551,7 @@ export async function getCompanyDetail(
       isActive: company.isActive,
       isDefault: company.isDefault,
       defaultBranch: company.defaultBranch,
+      owner: await findCompanyOwner(companyId),
       createdAt: company.createdAt.toISOString(),
       updatedAt: company.updatedAt.toISOString(),
     };
@@ -383,7 +562,7 @@ export async function createCompany(
   actor: AdminActor,
   input: CompanyCreateInput,
   meta: { ip?: string | null; userAgent?: string | null } = {},
-): Promise<CompanyAdminDetail> {
+): Promise<CompanyCreateResult> {
   return runUnscoped(async () => {
     assertGlobalAdmin(actor);
     if (!input.code?.trim() || !input.name?.trim()) {
@@ -408,7 +587,25 @@ export async function createCompany(
       );
     }
 
-    const company = await prisma.$transaction(async (tx) => {
+    // Validation des rôles des membres AVANT toute écriture : aucun rôle global
+    // (ADMIN / SUPER_ADMIN) ne peut être assigné à une société, et le rôle est
+    // OBLIGATOIRE (invariant : toute adhésion ACTIVE porte au moins un rôle).
+    for (const member of input.members ?? []) {
+      if (!member.roleId) {
+        throw new ApiError(
+          400,
+          "Le rôle est obligatoire pour chaque membre ajouté.",
+          "VALIDATION",
+        );
+      }
+      await assertAssignableRole(actor, member.roleId);
+    }
+
+    // Identifiant du Propriétaire créé — rendu UNE SEULE fois dans la réponse.
+    let ownerCredentials: { username: string; temporaryPassword: string } | null =
+      null;
+
+    const txResult = await prisma.$transaction(async (tx) => {
       const created = await tx.company.create({
         data: { ...pickCompanyFields(input), createdById: actor.userId },
       });
@@ -474,22 +671,99 @@ export async function createCompany(
                 : {}),
             },
           });
-          if (member.roleId) {
-            await tx.roleAssignment.create({
-              data: {
-                userCompanyId: userCompany.id,
-                roleId: member.roleId,
-                active: true,
-                assignedBy: actor.userId,
-              },
-            });
-          }
+          // Invariant : rôle OBLIGATOIRE — le rôle a été validé en amont.
+          await tx.roleAssignment.create({
+            data: {
+              userCompanyId: userCompany.id,
+              roleId: member.roleId,
+              active: true,
+              assignedBy: actor.userId,
+            },
+          });
         }
       }
 
-      return created;
+      // Compte Administrateur de société : User + UserCompany + RoleAssignment(COMPANY_ADMIN),
+      // atomiques avec la société.
+      if (input.owner) {
+        const ownerRole = await tx.role.findUnique({
+          where: { key: COMPANY_ADMIN_ROLE_KEY },
+          select: { id: true },
+        });
+        if (!ownerRole) {
+          throw new ApiError(
+            500,
+            "Le rôle COMPANY_ADMIN n'existe pas — exécutez la migration des rôles.",
+            "MISSING_COMPANY_ADMIN_ROLE",
+          );
+        }
+
+        const username = input.owner.username.trim();
+        const takenUser = await tx.user.findUnique({
+          where: { username },
+          select: { id: true },
+        });
+        if (takenUser) {
+          throw new ApiError(
+            409,
+            `L'identifiant ${username} est déjà utilisé.`,
+            "CONFLICT",
+          );
+        }
+        if (input.owner.email) {
+          const takenEmail = await tx.user.findUnique({
+            where: { email: input.owner.email },
+            select: { id: true },
+          });
+          if (takenEmail) {
+            throw new ApiError(
+              409,
+              "Cet email est déjà associé à un autre compte.",
+              "CONFLICT",
+            );
+          }
+        }
+
+        const owner = await tx.user.create({
+          data: {
+            username,
+            email: input.owner.email ?? null,
+            fullName: input.owner.fullName,
+            passwordHash: await hashPassword(input.owner.password),
+            mustChangePassword: true,
+            createdById: actor.userId,
+          },
+        });
+
+        // Permission unique : le compte Propriétaire est lié à sa société.
+        const ownerUserCompany = await tx.userCompany.create({
+          data: {
+            userId: owner.id,
+            companyId: created.id,
+            active: true,
+            isDefault: true,
+            defaultBranchId: defaultBranchId ?? null,
+          },
+        });
+        await tx.roleAssignment.create({
+          data: {
+            userCompanyId: ownerUserCompany.id,
+            roleId: ownerRole.id,
+            active: true,
+            assignedBy: actor.userId,
+          },
+        });
+
+        ownerCredentials = {
+          username,
+          temporaryPassword: input.owner.password,
+        };
+      }
+
+      return { company: created, ownerCredentials };
     });
 
+    const company = txResult.company;
     await recordAudit({
       action: "CREATE" as AuditAction,
       entity: "Company",
@@ -510,7 +784,20 @@ export async function createCompany(
       titleAr: `تم إنشاء الشركة: ${company.name}`,
     });
 
-    return getCompanyDetail(actor, company.id);
+    if (txResult.ownerCredentials) {
+      await recordActivity({
+        type: "CREATE" as ActivityType,
+        entity: "User",
+        entityId: null,
+        actorId: actor.userId,
+        companyId: company.id,
+        title: `Propriétaire créé : ${txResult.ownerCredentials.username}`,
+        titleAr: `تم إنشاء المالك: ${txResult.ownerCredentials.username}`,
+      });
+    }
+
+    const companyDetail = await getCompanyDetail(actor, company.id);
+    return { company: companyDetail, owner: txResult.ownerCredentials };
   });
 }
 
@@ -768,6 +1055,224 @@ export async function softDeleteCompany(
   });
 }
 
+/**
+ * Suppression DÉFINITIVE d'une société — réservée au Super Administrateur
+ * (plateforme). Purge transactionnelle en ordre de dépendances :
+ *  - les lignes référencées par des contraintes RESTRICT (documents → Branch,
+ *    InventoryMovement → Product/Warehouse) sont supprimées AVANT leurs parents,
+ *    pour ne pas dépendre de l'ordre des cascades PostgreSQL ;
+ *  - les fichiers uploadés sont nettoyés après commit (best-effort) ;
+ *  - l'événement d'audit est de niveau plateforme (companyId null) : il survit
+ *    à la purge de la société ;
+ *  - aucun compte utilisateur n'est supprimé (les adhésions UserCompany le sont) ;
+ *  - une autre société n'est jamais touchée (filtres strictement par companyId).
+ */
+export async function permanentlyDeleteCompany(
+  actor: AdminActor,
+  companyId: string,
+  confirmation: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ ok: true; companyId: string }> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+
+    // Client brut (`prismaBase`) : sans l'extension `softDelete`, les
+    // `deleteMany` effectuent de vraies suppressions physiques (et non une
+    // mise à jour `deletedAt`), y compris pour Company/Customer/Supplier/
+    // Product/Warehouse. Il permet aussi de retrouver une société déjà
+    // soft-déléguée et de la purger définitivement.
+    const company = await prismaBase.company.findFirst({
+      where: { id: companyId },
+    });
+    if (!company) {
+      throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+    }
+    // Pas de restriction `isDefault` : le SUPER_ADMIN (acteur global, déjà
+    // garanti par `assertGlobalAdmin`) peut supprimer n'importe quelle
+    // société, y compris la société par défaut, la dernière société restante,
+    // ou laisser la base contenir zéro société. Aucune société de remplacement
+    // n'est créée.
+    if (!confirmation || confirmation !== company.name) {
+      throw new ApiError(
+        422,
+        "Confirmation invalide : saisissez le nom exact de la société pour confirmer la suppression définitive.",
+        "CONFIRMATION_MISMATCH",
+      );
+    }
+
+    const fileKeys = await prismaBase.fileAsset.findMany({
+      where: { companyId },
+      select: { storageKey: true },
+    });
+
+    const branchIds = (
+      await prismaBase.branch.findMany({
+        where: { companyId },
+        select: { id: true },
+      })
+    ).map((b) => b.id);
+
+    // Timeout allongé : la purge enchaîne ~30 requêtes (délais de base par
+    // défaut de Prisma : 5 s pour une transaction interactive).
+    await prismaBase.$transaction(
+      async (tx) => {
+        // 0. Révoquer les sessions ouvertes sur cette société (jamais supprimées).
+        await tx.session.updateMany({
+          where: { activeCompanyId: companyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+
+        // 1. Relations documentaires + en-têtes (leurs lignes sont supprimées
+        //    par cascade, ce qui lève la contrainte RESTRICT DocumentLine->Client).
+        await tx.documentRelation.deleteMany({ where: { companyId } });
+        await tx.documentApproval.deleteMany({ where: { companyId } });
+        await tx.quotation.deleteMany({ where: { companyId } });
+        await tx.salesOrder.deleteMany({ where: { companyId } });
+        await tx.deliveryNote.deleteMany({ where: { companyId } });
+        await tx.invoice.deleteMany({ where: { companyId } });
+        await tx.creditNote.deleteMany({ where: { companyId } });
+        await tx.purchaseRequest.deleteMany({ where: { companyId } });
+        await tx.purchaseOrder.deleteMany({ where: { companyId } });
+        await tx.goodsReceipt.deleteMany({ where: { companyId } });
+        await tx.supplierInvoice.deleteMany({ where: { companyId } });
+        // En-têtes manquants précédemment (leurs lignes référencent Product /
+        // Branch en RESTRICT -> doivent être supprimées avant Product / Branch).
+        await tx.customerOrder.deleteMany({ where: { companyId } });
+        await tx.proforma.deleteMany({ where: { companyId } });
+
+        // 2. Enfants RESTRICT de Product (supprimés AVANT Product).
+        //    ProductBOMItem.productId -> Product (RESTRICT).
+        await tx.productBOMItem.deleteMany({ where: { product: { companyId } } });
+        //    ProductionOrder/Item/Consumption/Output.productId -> Product (RESTRICT);
+        //    les lignes cascadent depuis ProductionOrder.
+        await tx.productionOrder.deleteMany({ where: { companyId } });
+        //    ProductBOM enfant de Product (cascade) et de Company.
+        await tx.productBOM.deleteMany({ where: { companyId } });
+        await tx.productSupplier.deleteMany({ where: { product: { companyId } } });
+
+        // 3. Stocks AVANT produits / entrepôts.
+        await tx.inventoryMovement.deleteMany({ where: { companyId } });
+
+        // 4. RH : enfants RESTRICT d'abord.
+        //    Position -> Department (RESTRICT) et Position -> JobTitle (RESTRICT).
+        await tx.position.deleteMany({ where: { companyId } });
+        //    EmploymentContract -> Employee (RESTRICT).
+        await tx.employmentContract.deleteMany({ where: { companyId } });
+        await tx.employee.deleteMany({ where: { companyId } });
+        await tx.department.deleteMany({ where: { companyId } });
+        await tx.jobTitle.deleteMany({ where: { companyId } });
+
+        // 5. Comptabilité : enfants RESTRICT d'abord.
+        //    JournalEntry -> Account (RESTRICT).
+        await tx.journalEntry.deleteMany({ where: { companyId } });
+        //    PaymentAllocation (cascade depuis Payment) puis Payment (branch RESTRICT).
+        await tx.paymentAllocation.deleteMany({ where: { payment: { companyId } } });
+        await tx.payment.deleteMany({ where: { companyId } });
+        await tx.account.deleteMany({ where: { companyId } });
+        await tx.fiscalPeriod.deleteMany({ where: { companyId } });
+
+        // 6. Production : Machine (cascade depuis WorkCenter) puis WorkCenter.
+        await tx.machine.deleteMany({ where: { companyId } });
+        await tx.workCenter.deleteMany({ where: { companyId } });
+
+        // 7. Arborescence produit (tous les enfants RESTRICT sont partis).
+        await tx.product.deleteMany({ where: { companyId } });
+        await tx.productCategory.deleteMany({ where: { companyId } });
+        await tx.brand.deleteMany({ where: { companyId } });
+        await tx.manufacturer.deleteMany({ where: { companyId } });
+
+        // 8. Données maîtres commerciales.
+        await tx.customer.deleteMany({ where: { companyId } });
+        await tx.supplier.deleteMany({ where: { companyId } });
+
+        // 9. Entrepôts (cascade des emplacements + mouvements déjà supprimés).
+        await tx.warehouse.deleteMany({ where: { companyId } });
+
+        // 10. Fichiers / séries (companyId).
+        await tx.fileAsset.deleteMany({ where: { companyId } });
+        await tx.documentSeries.deleteMany({ where: { companyId } });
+
+        // 11. Adhésions (cascade des RoleAssignment) — comptes utilisateurs préservés.
+        await tx.userCompany.deleteMany({ where: { companyId } });
+
+        // 12. Historique d'audit (SetNull sur les FK userId, conservé).
+        await tx.auditLog.deleteMany({ where: { companyId } });
+        await tx.activityEvent.deleteMany({ where: { companyId } });
+
+        // 13. Dissociation des références RESTRICT hors société (User/Session/Branch)
+        //     avant suppression des branches.
+        if (branchIds.length > 0) {
+          await tx.user.updateMany({
+            where: { branchId: { in: branchIds } },
+            data: { branchId: null },
+          });
+          await tx.session.updateMany({
+            where: { activeBranchId: { in: branchIds } },
+            data: { activeBranchId: null },
+          });
+          await tx.company.updateMany({
+            where: { id: companyId },
+            data: { defaultBranchId: null },
+          });
+        }
+
+        // 14. Branches APRÈS tous les en-têtes (branchId RESTRICT) et HR.
+        await tx.branch.deleteMany({ where: { companyId } });
+
+        // 15. Suppression finale idempotente de la société.
+        const deleted = await tx.company.deleteMany({ where: { id: companyId } });
+        if (deleted.count === 0) {
+          throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+        }
+      },
+      { timeout: 120000 },
+    );
+
+    // Audit de niveau plateforme : survit à la purge (companyId null).
+    await recordAudit({
+      action: "DELETE" as AuditAction,
+      entity: "Company",
+      entityId: companyId,
+      actorId: actor.userId,
+      companyId: null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: {
+        permanent: true,
+        code: company.code,
+        name: company.name,
+        filesPurged: fileKeys.length > 0,
+      },
+    });
+    await recordActivity({
+      type: "DELETE" as ActivityType,
+      entity: "Company",
+      entityId: companyId,
+      actorId: actor.userId,
+      companyId: null,
+      title: `Société supprimée définitivement : ${company.name}`,
+      titleAr: `تم حذف الشركة نهائيًا: ${company.name}`,
+    });
+
+    // Nettoyage physique des fichiers (best-effort après commit).
+    const keys = Array.from(
+      new Set(
+        [
+          company.logoKey,
+          company.stampKey,
+          company.signatureKey,
+          ...fileKeys.map((f) => f.storageKey),
+        ].filter((k): k is string => Boolean(k)),
+      ),
+    );
+    for (const key of keys) {
+      await deleteUploadFile(key).catch(() => false);
+    }
+
+    return { ok: true, companyId };
+  });
+}
+
 export async function listMembers(
   actor: AdminActor,
   companyId: string,
@@ -821,7 +1326,7 @@ export async function listMembers(
 export async function addMember(
   actor: AdminActor,
   companyId: string,
-  input: { userId: string; roleId?: string; defaultBranchCode?: string | null },
+  input: { userId: string; roleId: string; defaultBranchCode?: string | null },
   meta: { ip?: string | null; userAgent?: string | null } = {},
 ): Promise<CompanyMemberView> {
   return runUnscoped(async () => {
@@ -844,9 +1349,17 @@ export async function addMember(
       );
     }
 
-    if (input.roleId) {
-      await assertAssignableRole(actor, input.roleId);
+    // Invariant : le rôle est OBLIGATOIRE — une adhésion ACTIVE sans rôle
+    // n'est jamais créée. Aucun rôle global (ADMIN / SUPER_ADMIN) n'est
+    // assignable à une société.
+    if (!input.roleId) {
+      throw new ApiError(
+        400,
+        "Le rôle est obligatoire pour ajouter un membre.",
+        "VALIDATION",
+      );
     }
+    await assertAssignableRole(actor, input.roleId);
 
     let defaultBranchId: string | null = null;
     if (input.defaultBranchCode) {
@@ -867,16 +1380,15 @@ export async function addMember(
           defaultBranchId,
         },
       });
-      if (input.roleId) {
-        await tx.roleAssignment.create({
-          data: {
-            userCompanyId: created.id,
-            roleId: input.roleId,
-            active: true,
-            assignedBy: actor.userId,
-          },
-        });
-      }
+      // Invariant : rôle OBLIGATOIRE — atomique avec l'adhésion.
+      await tx.roleAssignment.create({
+        data: {
+          userCompanyId: created.id,
+          roleId: input.roleId,
+          active: true,
+          assignedBy: actor.userId,
+        },
+      });
       return created;
     });
 
@@ -888,7 +1400,7 @@ export async function addMember(
       companyId,
       ip: meta.ip,
       userAgent: meta.userAgent,
-      changes: { companyId, userId: input.userId, roleId: input.roleId ?? null },
+      changes: { companyId, userId: input.userId, roleId: input.roleId },
     });
     await recordActivity({
       type: "PERMISSION_CHANGE" as ActivityType,
@@ -947,6 +1459,20 @@ export async function updateMember(
       }
     }
 
+    // Invariant (fail-closed) : une adhésion ACTIVE ne peut jamais rester
+    // sans rôle. On refuse toute mise à jour qui laisserait une adhésion
+    // active dénuée d'attribution de rôle active.
+    const currentRole = membership.roleAssignments.find((r) => r.active);
+    const nextRole = input.roleId ?? currentRole?.roleId ?? null;
+    const willBeActive = input.active ?? membership.active;
+    if (willBeActive && !nextRole) {
+      throw new ApiError(
+        400,
+        "Le membre doit conserver au moins un rôle actif.",
+        "VALIDATION",
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.userCompany.update({
         where: { id: userCompanyId },
@@ -955,8 +1481,6 @@ export async function updateMember(
           ...(input.defaultBranchCode !== undefined ? { defaultBranchId } : {}),
         },
       });
-      const currentRole = membership.roleAssignments.find((r) => r.active);
-      const nextRole = input.roleId ?? currentRole?.roleId ?? null;
       if (nextRole) {
         await tx.roleAssignment.updateMany({
           where: { userCompanyId, active: true },
@@ -1051,6 +1575,327 @@ export async function removeMember(
     });
 
     return { ok: true };
+  });
+}
+
+export async function resetOwnerPassword(
+  actor: AdminActor,
+  companyId: string,
+  newPassword: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<CompanyOwnerView> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, deletedAt: null },
+    });
+    if (!company) throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+    assertNotArchived(company);
+
+    const owner = await findCompanyOwner(companyId);
+    if (!owner) {
+      throw new ApiError(404, "Aucun propriétaire pour cette société.", "NOT_FOUND");
+    }
+
+    await prisma.user.update({
+      where: { id: owner.userId },
+      data: {
+        passwordHash: await hashPassword(newPassword),
+        mustChangePassword: true,
+        updatedById: actor.userId,
+      },
+    });
+
+    await recordAudit({
+      action: "UPDATE" as AuditAction,
+      entity: "User",
+      entityId: owner.userId,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { passwordReset: true, username: owner.username },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE" as ActivityType,
+      entity: "User",
+      entityId: owner.userId,
+      actorId: actor.userId,
+      companyId,
+      title: `Mot de passe du propriétaire réinitialisé : ${owner.username}`,
+      titleAr: `تمت إعادة تعيين كلمة مرور المالك: ${owner.username}`,
+    });
+
+    const refreshed = await findCompanyOwner(companyId);
+    if (!refreshed) {
+      throw new ApiError(404, "Aucun propriétaire pour cette société.", "NOT_FOUND");
+    }
+    return refreshed;
+  });
+}
+
+/**
+ * Gestion des identifiants des utilisateurs de sociétés — Phase 5.6.
+ * Réservée au SUPER_ADMIN global (plateforme) : `assertGlobalAdmin` garantit
+ * qu'un administrateur de société (COMPANY_ADMIN…) reçoit 403 même s'il porte
+ * `admin.company.membership.manage`. Un porteur du rôle global SUPER_ADMIN ne
+ * peut jamais être la cible de ces opérations (protection anti-escalade).
+ */
+
+async function assertNotProtectedUser(userId: string): Promise<void> {
+  const protectedRole = await prisma.userRole.findFirst({
+    where: { userId, role: { key: "SUPER_ADMIN" } },
+    select: { roleId: true },
+  });
+  if (protectedRole) {
+    throw new ApiError(
+      403,
+      "Le compte d'un Super Administrateur ne peut pas être modifié.",
+      "SUPER_ADMIN_PROTECTED",
+    );
+  }
+}
+
+async function findTargetMembership(
+  actor: AdminActor,
+  companyId: string,
+  userCompanyId: string,
+) {
+  assertGlobalAdmin(actor);
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
+  });
+  if (!company) throw new ApiError(404, "Société introuvable.", "NOT_FOUND");
+  assertNotArchived(company);
+
+  const membership = await prisma.userCompany.findFirst({
+    where: { id: userCompanyId, companyId },
+    include: {
+      user: { select: { id: true, username: true, fullName: true, email: true, status: true } },
+    },
+  });
+  if (!membership) throw new ApiError(404, "Adhésion introuvable.", "NOT_FOUND");
+  await assertNotProtectedUser(membership.user.id);
+  return { company, membership };
+}
+
+export type MemberPasswordResetResult = {
+  ok: true;
+  username: string;
+  mustChangePassword: boolean;
+  revokedSessions: number;
+};
+
+/**
+ * Réinitialise le mot de passe d'un membre de société (SUPER_ADMIN uniquement).
+ * Le compte passe en `mustChangePassword` et toutes ses sessions actives sont
+ * révoquées — la session du SUPER_ADMIN exécutant appartient à un autre compte
+ * et n'est donc jamais touchée.
+ */
+export async function resetMemberPassword(
+  actor: AdminActor,
+  companyId: string,
+  userCompanyId: string,
+  newPassword: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<MemberPasswordResetResult> {
+  return runUnscoped(async () => {
+    const { membership } = await findTargetMembership(
+      actor,
+      companyId,
+      userCompanyId,
+    );
+
+    const revoked = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: membership.user.id },
+        data: {
+          passwordHash: await hashPassword(newPassword),
+          mustChangePassword: true,
+          updatedById: actor.userId,
+        },
+      });
+      const result = await tx.session.updateMany({
+        where: { userId: membership.user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return result.count;
+    });
+
+    await recordAudit({
+      action: "UPDATE",
+      entity: "User",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: {
+        passwordReset: true,
+        username: membership.user.username,
+        sessionsRevoked: revoked,
+      },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "User",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      title: `Mot de passe réinitialisé : ${membership.user.username}`,
+      titleAr: `تمت إعادة تعيين كلمة المرور: ${membership.user.username}`,
+    });
+
+    return {
+      ok: true,
+      username: membership.user.username,
+      mustChangePassword: true,
+      revokedSessions: revoked,
+    };
+  });
+}
+
+/**
+ * Révoque toutes les sessions actives d'un membre de société (SUPER_ADMIN
+ * uniquement). Le compte est déconnecté de tous ses appareils.
+ */
+export async function revokeMemberSessions(
+  actor: AdminActor,
+  companyId: string,
+  userCompanyId: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ ok: true; revokedSessions: number }> {
+  return runUnscoped(async () => {
+    const { membership } = await findTargetMembership(
+      actor,
+      companyId,
+      userCompanyId,
+    );
+
+    const result = await prisma.session.updateMany({
+      where: { userId: membership.user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await recordAudit({
+      action: "REVOKE",
+      entity: "Session",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: {
+        sessionsRevoked: result.count,
+        username: membership.user.username,
+      },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "Session",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      title: `Sessions révoquées : ${membership.user.username}`,
+      titleAr: `تم إلغاء الجلسات: ${membership.user.username}`,
+    });
+
+    return { ok: true, revokedSessions: result.count };
+  });
+}
+
+export type MemberIdentityInput = {
+  fullName?: string | null;
+  username?: string;
+  email?: string | null;
+  status?: UserStatus;
+};
+
+/**
+ * Modifie les identifiants d'un membre de société (SUPER_ADMIN uniquement) :
+ * nom complet, identifiant, email et statut du compte. Ne renvoie jamais de
+ * mot de passe ni de hash ; l'audit n'enregistre que les champs modifiés.
+ */
+export async function updateMemberIdentity(
+  actor: AdminActor,
+  companyId: string,
+  userCompanyId: string,
+  input: MemberIdentityInput,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<CompanyMemberView> {
+  return runUnscoped(async () => {
+    const { membership } = await findTargetMembership(
+      actor,
+      companyId,
+      userCompanyId,
+    );
+
+    const data: Prisma.UserUpdateInput = {};
+    const changes: Record<string, unknown> = {};
+
+    if (input.fullName !== undefined) {
+      data.fullName = input.fullName;
+      changes.fullName = input.fullName;
+    }
+    if (input.username !== undefined) {
+      const candidate = input.username.trim();
+      const taken = await prisma.user.findUnique({
+        where: { username: candidate },
+        select: { id: true },
+      });
+      if (taken && taken.id !== membership.user.id) {
+        throw new ApiError(409, `L'identifiant ${candidate} est déjà utilisé.`, "CONFLICT");
+      }
+      data.username = candidate;
+      changes.username = candidate;
+    }
+    if (input.email !== undefined) {
+      if (input.email) {
+        const taken = await prisma.user.findUnique({
+          where: { email: input.email },
+          select: { id: true },
+        });
+        if (taken && taken.id !== membership.user.id) {
+          throw new ApiError(409, "Cet email est déjà associé à un autre compte.", "CONFLICT");
+        }
+      }
+      data.email = input.email ?? null;
+      changes.email = input.email ?? null;
+    }
+    if (input.status !== undefined) {
+      data.status = input.status;
+      changes.status = input.status;
+    }
+
+    await prisma.user.update({
+      where: { id: membership.user.id },
+      data: { ...data, updatedById: actor.userId },
+    });
+
+    await recordAudit({
+      action: "UPDATE",
+      entity: "User",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { identityUpdate: true, username: membership.user.username, ...changes },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "User",
+      entityId: membership.user.id,
+      actorId: actor.userId,
+      companyId,
+      title: `Identifiants mis à jour : ${membership.user.username}`,
+      titleAr: `تم تحديث بيانات المستخدم: ${membership.user.username}`,
+    });
+
+    const rows = await listMembers(actor, companyId);
+    const row = rows.find((r) => r.userCompanyId === userCompanyId);
+    if (!row) throw new ApiError(500, "Membre mis à jour mais introuvable.", "INTERNAL");
+    return row;
   });
 }
 
@@ -1195,7 +2040,10 @@ export async function listAssignableRoles(): Promise<
   { id: string; key: string; name: string; nameAr: string | null }[]
 > {
   return runUnscoped(async () => {
+    // Uniquement les rôles DE SOCIÉTÉ : les rôles globaux de plateforme
+    // (ADMIN, SUPER_ADMIN) ne sont jamais proposés à l'assignation d'un membre.
     const roles = await prisma.role.findMany({
+      where: { key: { notIn: ["ADMIN", "SUPER_ADMIN"] } },
       orderBy: [{ name: "asc" }],
       select: { id: true, key: true, name: true, nameAr: true },
     });
@@ -1303,4 +2151,949 @@ export async function listCompanySeries(
       isActive: r.isActive,
     }));
   });
+}
+
+// ---------------------------------------------------------------------------
+// Administration PLATEFORME — utilisateurs & sessions (Phase 7.5)
+// ---------------------------------------------------------------------------
+// Contrôle central réservé au porteur du rôle global SUPER_ADMIN
+// (`assertGlobalAdmin`). Aucun administrateur de société — même porteur de
+// `admin.users.manage` via un RoleAssignment — n'y accède.
+
+function toPlatformUserRow(user: {
+  id: string;
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  status: UserStatus;
+  lastLoginAt: Date | null;
+  mustChangePassword: boolean;
+  createdAt: Date;
+  roles: { role: { key: string } }[];
+  userCompanies: {
+    id: string;
+    active: boolean;
+    isDefault: boolean;
+    joinedAt: Date;
+    company: { id: string; code: string; name: string };
+    roleAssignments: {
+      active: boolean;
+      role: { id: string; key: string; name: string };
+    }[];
+  }[];
+}): PlatformUserRow {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    status: user.status,
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+    mustChangePassword: user.mustChangePassword,
+    isSuperAdmin: user.roles.some((r) => r.role.key === "SUPER_ADMIN"),
+    createdAt: user.createdAt.toISOString(),
+    memberships: user.userCompanies.map((uc) => ({
+      userCompanyId: uc.id,
+      companyId: uc.company.id,
+      companyCode: uc.company.code,
+      companyName: uc.company.name,
+      active: uc.active,
+      isDefault: uc.isDefault,
+      joinedAt: uc.joinedAt.toISOString(),
+      roles: uc.roleAssignments
+        .filter((a) => a.active)
+        .map((a) => ({
+          roleId: a.role.id,
+          roleKey: a.role.key,
+          roleName: a.role.name,
+        })),
+    })),
+  };
+}
+
+/** Liste plateforme des comptes utilisateurs (recherche + filtre statut). */
+export async function listPlatformUsers(
+  actor: AdminActor,
+  query: PlatformUsersQuery = {},
+): Promise<PlatformUserRow[]> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const q = query.q?.trim();
+    const where: Prisma.UserWhereInput = {};
+    if (query.status) where.status = query.status;
+    if (q) {
+      where.OR = [
+        { username: { contains: q, mode: "insensitive" } },
+        { fullName: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    const users = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        email: true,
+        status: true,
+        lastLoginAt: true,
+        mustChangePassword: true,
+        createdAt: true,
+        roles: { select: { role: { select: { key: true } } } },
+        userCompanies: {
+          include: {
+            company: { select: { id: true, code: true, name: true } },
+            roleAssignments: {
+              include: { role: { select: { id: true, key: true, name: true } } },
+            },
+          },
+        },
+      },
+    });
+    return users.map(toPlatformUserRow);
+  });
+}
+
+/** Liste plateforme des sessions (actives ou révoquées), toutes sociétés. */
+export async function listPlatformSessions(
+  actor: AdminActor,
+  query: PlatformSessionsQuery = {},
+): Promise<PlatformSessionRow[]> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const q = query.q?.trim();
+    const where: Prisma.SessionWhereInput = {};
+    if (query.active === true) where.revokedAt = null;
+    if (query.active === false) where.revokedAt = { not: null };
+    if (q) {
+      where.user = {
+        OR: [
+          { username: { contains: q, mode: "insensitive" } },
+          { fullName: { contains: q, mode: "insensitive" } },
+        ],
+      };
+    }
+    const sessions = await prisma.session.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        user: { select: { username: true, fullName: true } },
+        activeCompany: { select: { name: true } },
+      },
+    });
+    return sessions.map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      username: s.user.username,
+      fullName: s.user.fullName,
+      ip: s.ip,
+      userAgent: s.userAgent,
+      createdAt: s.createdAt.toISOString(),
+      expiresAt: s.expiresAt.toISOString(),
+      revokedAt: s.revokedAt?.toISOString() ?? null,
+      activeCompanyId: s.activeCompanyId,
+      activeCompanyName: s.activeCompany?.name ?? null,
+    }));
+  });
+}
+
+async function getPlatformUserRow(userId: string): Promise<PlatformUserRow | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      fullName: true,
+      email: true,
+      status: true,
+      lastLoginAt: true,
+      mustChangePassword: true,
+      createdAt: true,
+      roles: { select: { role: { select: { key: true } } } },
+      userCompanies: {
+        include: {
+          company: { select: { id: true, code: true, name: true } },
+          roleAssignments: {
+            include: { role: { select: { id: true, key: true, name: true } } },
+          },
+        },
+      },
+    },
+  });
+  return user ? toPlatformUserRow(user) : null;
+}
+
+/**
+ * Modification des identifiants d'un compte, au niveau plateforme. Réutilise
+ * les mêmes règles que la gestion des membres : `assertNotProtectedUser`
+ * garantit qu'un SUPER_ADMIN ne peut jamais être la cible.
+ */
+export async function updatePlatformUserIdentity(
+  actor: AdminActor,
+  userId: string,
+  input: MemberIdentityInput,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<PlatformUserRow> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new ApiError(404, "Utilisateur introuvable.", "NOT_FOUND");
+    await assertNotProtectedUser(userId);
+
+    const data: Prisma.UserUpdateInput = {};
+    const changes: Record<string, unknown> = {};
+    if (input.fullName !== undefined) {
+      data.fullName = input.fullName;
+      changes.fullName = { from: user.fullName, to: input.fullName };
+    }
+    if (input.username !== undefined && input.username !== user.username) {
+      const existing = await prisma.user.findUnique({
+        where: { username: input.username },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ApiError(
+          409,
+          "Cet identifiant est déjà utilisé.",
+          "USERNAME_TAKEN",
+        );
+      }
+      data.username = input.username;
+      changes.username = { from: user.username, to: input.username };
+    }
+    if (input.email !== undefined && input.email !== user.email) {
+      if (input.email) {
+        const existing = await prisma.user.findUnique({
+          where: { email: input.email },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new ApiError(409, "Cet email est déjà utilisé.", "EMAIL_TAKEN");
+        }
+      }
+      data.email = input.email;
+      changes.email = { from: user.email, to: input.email };
+    }
+    if (input.status !== undefined && input.status !== user.status) {
+      data.status = input.status;
+      changes.status = { from: user.status, to: input.status };
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { ...data, updatedById: actor.userId },
+    });
+
+    await recordAudit({
+      action: "UPDATE",
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { identityUpdate: true, username: user.username, ...changes },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      title: `Identité modifiée : ${user.username}`,
+      titleAr: `تم تعديل بيانات: ${user.username}`,
+    });
+
+    const row = await getPlatformUserRow(userId);
+    if (!row) throw new ApiError(404, "Utilisateur introuvable.", "NOT_FOUND");
+    return row;
+  });
+}
+
+/**
+ * Suppression DÉFINITIVE d'un compte utilisateur — réservée au SUPER_ADMIN
+ * (plateforme). Aucun contexte société requis.
+ *
+ * Protections (défense en couches, idempotent) :
+ *  - le compte exécutant ne peut pas se supprimer lui-même (auto-verrouillage) ;
+ *  - tout compte portant le rôle global SUPER_ADMIN est protégé via
+ *    `assertNotProtectedUser` (ce qui couvre aussi le dernier SUPER_ADMIN
+ *    restant et tout autre SUPER_ADMIN) ;
+ *  - l'historique d'audit est préservé : les références `userId` optionnelles
+ *    (AuditLog, ActivityEvent, documents émis, etc.) sont conservées (SET NULL
+ *    par le schéma). Seules les données propriétaires du compte — sessions,
+ *    adhésions société (cascade des RoleAssignment), rôles globaux — sont
+ *    purgées. Les enregistrements Employee liés conservent leur historique
+ *    (userId basculé à NULL).
+ *
+ * La confirmation doit être l'identifiant exact (`user.username`).
+ */
+export async function permanentlyDeleteUser(
+  actor: AdminActor,
+  userId: string,
+  confirmation: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ ok: true; userId: string }> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    if (actor.userId === userId) {
+      throw new ApiError(
+        400,
+        "Vous ne pouvez pas supprimer votre propre compte.",
+        "CANNOT_DELETE_SELF",
+      );
+    }
+    const user = await prismaBase.user.findFirst({ where: { id: userId } });
+    if (!user) throw new ApiError(404, "Utilisateur introuvable.", "NOT_FOUND");
+    if (!confirmation || confirmation.trim() !== user.username) {
+      throw new ApiError(
+        422,
+        "Confirmation invalide : saisissez l'identifiant exact de l'utilisateur pour confirmer la suppression définitive.",
+        "CONFIRMATION_MISMATCH",
+      );
+    }
+    await assertNotProtectedUser(userId);
+
+    await prismaBase.$transaction(
+      async (tx) => {
+        // Révoque explicitement les sessions (sinon cascadées) puis purge les
+        // données propriétaires du compte. Les RoleAssignment suivent la
+        // suppression de UserCompany (onDelete: Cascade). Le reste des
+        // références optionnelles vers User bascule à NULL (schéma).
+        await tx.session.deleteMany({ where: { userId } });
+        await tx.userCompany.deleteMany({ where: { userId } });
+        await tx.userRole.deleteMany({ where: { userId } });
+        await tx.user.delete({ where: { id: userId } });
+      },
+      { timeout: 60000 },
+    );
+
+    await recordAudit({
+      action: "DELETE" as AuditAction,
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      companyId: null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { permanent: true, username: user.username },
+    });
+    await recordActivity({
+      type: "DELETE" as ActivityType,
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      companyId: null,
+      title: `Utilisateur supprimé définitivement : ${user.username}`,
+      titleAr: `تم حذف المستخدم نهائيًا: ${user.username}`,
+    });
+
+    return { ok: true, userId };
+  });
+}
+
+/**
+ * Réinitialisation du mot de passe d'un compte au niveau plateforme.
+ * Force `mustChangePassword` et révoque les sessions actives du compte ciblé.
+ */
+export async function resetPlatformUserPassword(
+  actor: AdminActor,
+  userId: string,
+  newPassword: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<MemberPasswordResetResult> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true },
+    });
+    if (!user) throw new ApiError(404, "Utilisateur introuvable.", "NOT_FOUND");
+    await assertNotProtectedUser(userId);
+
+    const revoked = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: await hashPassword(newPassword),
+          mustChangePassword: true,
+          updatedById: actor.userId,
+        },
+      });
+      const result = await tx.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return result.count;
+    });
+
+    await recordAudit({
+      action: "UPDATE",
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { passwordReset: true, username: user.username, sessionsRevoked: revoked },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "User",
+      entityId: userId,
+      actorId: actor.userId,
+      title: `Mot de passe réinitialisé : ${user.username}`,
+      titleAr: `تمت إعادة تعيين كلمة المرور: ${user.username}`,
+    });
+
+    return {
+      ok: true,
+      username: user.username,
+      mustChangePassword: true,
+      revokedSessions: revoked,
+    };
+  });
+}
+
+/**
+ * Révoque toutes les sessions actives d'un compte, au niveau plateforme.
+ * Le compte est déconnecté de tous ses appareils (jamais la session courante
+ * si elle appartient au SUPER_ADMIN exécutant).
+ */
+export async function revokePlatformUserSessions(
+  actor: AdminActor,
+  userId: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ ok: true; revokedSessions: number }> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true },
+    });
+    if (!user) throw new ApiError(404, "Utilisateur introuvable.", "NOT_FOUND");
+    await assertNotProtectedUser(userId);
+
+    const result = await prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await recordAudit({
+      action: "REVOKE",
+      entity: "Session",
+      entityId: userId,
+      actorId: actor.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { sessionsRevoked: result.count, username: user.username },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "Session",
+      entityId: userId,
+      actorId: actor.userId,
+      title: `Sessions révoquées : ${user.username}`,
+      titleAr: `تم إلغاء الجلسات: ${user.username}`,
+    });
+
+    return { ok: true, revokedSessions: result.count };
+  });
+}
+
+/**
+ * Révoque une session précise (tous comptes confondus). Une session déjà
+ * révoquée ou expirée renvoie 404.
+ */
+export async function revokePlatformSession(
+  actor: AdminActor,
+  sessionId: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ ok: true; revokedSession: string }> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { id: true, userId: true, revokedAt: true, expiresAt: true },
+    });
+    if (
+      !session ||
+      session.revokedAt !== null ||
+      session.expiresAt.getTime() < Date.now()
+    ) {
+      throw new ApiError(404, "Session introuvable ou déjà révoquée.", "NOT_FOUND");
+    }
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date() },
+    });
+
+    await recordAudit({
+      action: "REVOKE",
+      entity: "Session",
+      entityId: sessionId,
+      actorId: actor.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      changes: { sessionId, userId: session.userId },
+    });
+    await recordActivity({
+      type: "PERMISSION_CHANGE",
+      entity: "Session",
+      entityId: sessionId,
+      actorId: actor.userId,
+      title: "Session révoquée",
+      titleAr: "تم إلغاء جلسة",
+    });
+
+    return { ok: true, revokedSession: sessionId };
+  });
+}
+
+/**
+ * Vue d'ensemble de sécurité de la plateforme (Phase 7.5 — Security Center).
+ * Données réelles uniquement : comptes protégés, sessions, hygiène des mots de
+ * passe, répartition par statut, matrice rôles/permissions et événements de
+ * sécurité récents (connexions, permissions, changements de statut).
+ */
+export async function getPlatformSecurityOverview(
+  actor: AdminActor,
+): Promise<PlatformSecurityOverview> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const now = Date.now();
+
+    const [
+      protectedAccounts,
+      totalUsers,
+      activeSessions,
+      sessionsLast24h,
+      revokedSessionsLast30d,
+      mustChangePassword,
+      usersGrouped,
+      roleModels,
+      roleAssignments,
+      recentEvents,
+    ] = await Promise.all([
+      prisma.user.findMany({
+        where: { roles: { some: { role: { key: "SUPER_ADMIN" } } } },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          lastLoginAt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.user.count(),
+      prisma.session.count({
+        where: { revokedAt: null, expiresAt: { gt: new Date(now) } },
+      }),
+      prisma.session.count({ where: { createdAt: { gte: new Date(now - 86_400_000) } } }),
+      prisma.session.count({
+        where: { revokedAt: { gte: new Date(now - 30 * 86_400_000) } },
+      }),
+      prisma.user.count({ where: { mustChangePassword: true } }),
+      prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.role.findMany({
+        orderBy: [{ isSystem: "desc" }, { key: "asc" }],
+        include: {
+          _count: { select: { assignments: true, users: true } },
+          permissions: { select: { permissionId: true } },
+        },
+      }),
+      prisma.roleAssignment.findMany({
+        select: { roleId: true, userCompanyId: true },
+      }),
+      prisma.activityEvent.findMany({
+        where: {
+          type: {
+            in: [
+              "LOGIN",
+              "LOGOUT",
+              "PERMISSION_CHANGE",
+              "STATUS_CHANGE",
+              "SYSTEM",
+            ] as ActivityType[],
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 25,
+        include: {
+          actor: { select: { username: true } },
+          company: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const memberCountByRole = new Map<string, number>();
+    for (const { roleId, userCompanyId } of roleAssignments) {
+      const key = `${roleId}:${userCompanyId}`;
+      if (!memberCountByRole.has(key)) memberCountByRole.set(key, 0);
+    }
+    const distinctByRole = new Map<string, number>();
+    for (const key of memberCountByRole.keys()) {
+      const [roleId] = key.split(":");
+      distinctByRole.set(roleId, (distinctByRole.get(roleId) ?? 0) + 1);
+    }
+
+    const roles = roleModels.map((role) => ({
+      roleId: role.id,
+      roleKey: role.key,
+      roleName: role.name,
+      roleNameAr: role.nameAr,
+      isSystem: role.isSystem,
+      memberCount: role._count.users + (distinctByRole.get(role.id) ?? 0),
+      permissionCount: role.permissions.length,
+    }));
+
+    return {
+      protectedAccounts: protectedAccounts.map((user) => ({
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+        createdAt: user.createdAt.toISOString(),
+      })),
+      totalUsers,
+      activeSessions,
+      sessionsLast24h,
+      revokedSessionsLast30d,
+      usersByStatus: usersGrouped.map((g) => ({
+        status: g.status,
+        count: g._count._all,
+      })),
+      mustChangePassword,
+      roles,
+      recentSecurityEvents: recentEvents.map((event) => ({
+        id: event.id,
+        type: event.type,
+        entity: event.entity,
+        title: event.title,
+        titleAr: event.titleAr,
+        actorName: event.actor?.username ?? null,
+        companyName: event.company?.name ?? null,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    };
+  });
+}
+
+/**
+ * Journal d'audit de la plateforme (Phase 7.5). Portée globale : aucune
+ * contrainte de société — le SUPER_ADMIN voit toutes les écritures d'audit.
+ * Filtres : recherche libre, action, entité, acteur, société, plage de dates.
+ */
+export async function listPlatformAudit(
+  actor: AdminActor,
+  query: PlatformAuditQuery = {},
+): Promise<PlatformAuditEntry[]> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+    const where: Prisma.AuditLogWhereInput = {};
+
+    if (query.q) {
+      const q = query.q.trim();
+      if (q) {
+        where.OR = [
+          { entity: { contains: q, mode: "insensitive" } },
+          { entityId: { contains: q, mode: "insensitive" } },
+        ];
+      }
+    }
+    if (query.action) where.action = query.action as AuditAction;
+    if (query.entity) where.entity = query.entity;
+    if (query.actorId) where.actorId = query.actorId;
+    if (query.companyId) where.companyId = query.companyId;
+    if (query.from) where.createdAt = { gte: new Date(query.from) };
+    if (query.to) {
+      where.createdAt = { ...(where.createdAt as object), lte: new Date(query.to) };
+    }
+
+    const logs = await prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        actor: { select: { fullName: true, username: true } },
+        company: { select: { name: true } },
+      },
+    });
+
+    return logs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      entity: log.entity,
+      entityId: log.entityId,
+      actorName: log.actor?.fullName ?? log.actor?.username ?? null,
+      actorUsername: log.actor?.username ?? null,
+      companyName: log.company?.name ?? null,
+      changes: log.changes,
+      createdAt: log.createdAt.toISOString(),
+    }));
+  });
+}
+
+/** Noms des modèles de documents comptabilisés dans l'analyse (Phase 7.5). */
+const ANALYTICS_DOC_MODELS = [
+  "quotation",
+  "salesOrder",
+  "deliveryNote",
+  "invoice",
+  "creditNote",
+  "purchaseRequest",
+  "purchaseOrder",
+  "goodsReceipt",
+  "supplierInvoice",
+] as const;
+
+/**
+ * Agrégats d'activité de la plateforme (Phase 7.5 — Analytics). Tous les
+ * indicateurs sont calculés depuis la base (aucune valeur fictive).
+ */
+export async function getPlatformAnalytics(
+  actor: AdminActor,
+): Promise<PlatformAnalytics> {
+  return runUnscoped(async () => {
+    assertGlobalAdmin(actor);
+
+    const dayMs = 86_400_000;
+    const now = Date.now();
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const [
+      companiesGrouped,
+      usersGrouped,
+      activeSessions,
+      auditTotal,
+      auditGrouped,
+      activityGrouped,
+      docCounts,
+      activityDays,
+      sessionsDays,
+    ] = await Promise.all([
+      prisma.company.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.session.count({ where: { revokedAt: null } }),
+      prisma.auditLog.count(),
+      prisma.auditLog.groupBy({ by: ["action"], _count: { _all: true } }),
+      prisma.activityEvent.groupBy({ by: ["type"], _count: { _all: true } }),
+      Promise.all(
+        ANALYTICS_DOC_MODELS.map(async (model) => {
+          // Les modèles de documents sont strictement scoped (`companyScope`) :
+          // on les lit via `prismaBase` (client brut, dédié à l'administration
+          // globale) pour ne pas dépendre du contexte ALS du rendu RSC.
+          const delegate = prismaBase[model] as unknown as {
+            count: (args?: object) => Promise<number>;
+          };
+          return { model, count: await delegate.count() };
+        }),
+      ),
+      Promise.all(
+        Array.from({ length: 7 }, (_, i) => {
+          const start = new Date(todayStart.getTime() - (6 - i) * dayMs);
+          const end = new Date(start.getTime() + dayMs);
+          return prisma.activityEvent.count({
+            where: { createdAt: { gte: start, lt: end } },
+          });
+        }),
+      ),
+      Promise.all(
+        Array.from({ length: 7 }, (_, i) => {
+          const start = new Date(todayStart.getTime() - (6 - i) * dayMs);
+          const end = new Date(start.getTime() + dayMs);
+          return prisma.session.count({
+            where: { createdAt: { gte: start, lt: end } },
+          });
+        }),
+      ),
+    ]);
+
+    const seriesLabel = new Map(DEFAULT_SERIES.map((s) => [s.docType, s]));
+    const documentsByType = docCounts.map(({ model, count }) => {
+      const docType = model.toUpperCase() as DocType;
+      const meta = seriesLabel.get(docType);
+      return {
+        docType,
+        label: meta?.label ?? docType,
+        labelAr: meta?.labelAr ?? null,
+        count,
+      };
+    });
+
+    const dayKey = (start: Date): string => start.toISOString().slice(0, 10);
+    const activityLast7d = activityDays.map((count, i) => ({
+      day: dayKey(new Date(todayStart.getTime() - (6 - i) * dayMs)),
+      count,
+    }));
+    const sessionsLast7d = sessionsDays.map((count, i) => ({
+      day: dayKey(new Date(todayStart.getTime() - (6 - i) * dayMs)),
+      count,
+    }));
+
+    return {
+      companiesByStatus: companiesGrouped.map((g) => ({
+        status: g.status,
+        count: g._count._all,
+      })),
+      usersByStatus: usersGrouped.map((g) => ({ status: g.status, count: g._count._all })),
+      documentsByType,
+      auditByAction: auditGrouped.map((g) => ({ action: g.action, count: g._count._all })),
+      activityByType: activityGrouped.map((g) => ({ type: g.type, count: g._count._all })),
+      activityLast7d,
+      sessionsLast7d,
+      totals: {
+        companies: companiesGrouped.reduce((sum, g) => sum + g._count._all, 0),
+        users: usersGrouped.reduce((sum, g) => sum + g._count._all, 0),
+        activeSessions,
+        auditEntries: auditTotal,
+      },
+    };
+  });
+}
+
+/**
+ * État de santé de la plateforme (Phase 7.5 — Maintenance). Diagnostic réel :
+ * connectivité de la base, temps de réponse, compteurs d'intégrité et données
+ * opérationnelles. Lecture via `prismaBase` (aucune extension d'étendue).
+ */
+export async function getPlatformHealth(
+  actor: AdminActor,
+): Promise<PlatformHealth> {
+  assertGlobalAdmin(actor);
+
+  const started = Date.now();
+  const latencyMs = () => Date.now() - started;
+
+  const [
+    ping,
+    companies,
+    users,
+    activeSessions,
+    auditEntries,
+    files,
+    memberships,
+    suspendedCompanies,
+    passwordPending,
+  ] = await Promise.all([
+    prismaBase.$queryRawUnsafe<[{ "?column?": number }]>("SELECT 1").catch(() => null),
+    prismaBase.company.count(),
+    prismaBase.user.count(),
+    prismaBase.session.count({ where: { revokedAt: null } }),
+    prismaBase.auditLog.count(),
+    prismaBase.fileAsset.count(),
+    prismaBase.userCompany.count(),
+    prismaBase.company.count({ where: { status: "SUSPENDED" } }),
+    prismaBase.user.count({ where: { mustChangePassword: true } }),
+  ]);
+
+  const database = {
+    reachable: ping !== null,
+    latencyMs: latencyMs(),
+  };
+
+  const counts = {
+    companies,
+    users,
+    activeSessions,
+    auditEntries,
+    files,
+    memberships,
+  };
+
+  const checks: PlatformHealthCheck[] = [
+    {
+      key: "db",
+      label: "Connexion base de données",
+      status: database.reachable ? "ok" : "error",
+      detail: database.reachable
+        ? `${database.latencyMs} ms`
+        : "Connexion impossible",
+    },
+    {
+      key: "sessions",
+      label: "Sessions actives",
+      status: "ok",
+      detail: `${activeSessions} session(s) active(s)`,
+    },
+    {
+      key: "password",
+      label: "Mots de passe à renouveler",
+      status: passwordPending > 0 ? "warn" : "ok",
+      detail: `${passwordPending} compte(s) doivent changer leur mot de passe`,
+    },
+    {
+      key: "suspended",
+      label: "Sociétés suspendues",
+      status: suspendedCompanies > 0 ? "warn" : "ok",
+      detail: `${suspendedCompanies} société(s) suspendue(s)`,
+    },
+    {
+      key: "audit",
+      label: "Journal d'audit",
+      status: "ok",
+      detail: `${auditEntries} entrée(s) enregistrée(s)`,
+    },
+    {
+      key: "storage",
+      label: "Fichiers stockés",
+      status: "ok",
+      detail: `${files} fichier(s) stocké(s)`,
+    },
+  ];
+
+  return { database, counts, checks, checkedAt: new Date().toISOString() };
+}
+
+/** Tables de la base comptabilisées dans l'état de sauvegarde (Phase 7.5). */
+const BACKUP_TABLES: { table: keyof typeof prismaBase | string; label: string }[] = [
+  { table: "company", label: "Sociétés" },
+  { table: "user", label: "Utilisateurs" },
+  { table: "userCompany", label: "Affectations société" },
+  { table: "role", label: "Rôles" },
+  { table: "roleAssignment", label: "Assignations de rôles" },
+  { table: "session", label: "Sessions" },
+  { table: "setting", label: "Paramètres" },
+  { table: "auditLog", label: "Journal d'audit" },
+  { table: "activityEvent", label: "Événements d'activité" },
+  { table: "fileAsset", label: "Fichiers" },
+  { table: "client", label: "Clients" },
+  { table: "customer", label: "Prospects" },
+  { table: "supplier", label: "Fournisseurs" },
+  { table: "product", label: "Articles" },
+  { table: "warehouse", label: "Entrepôts" },
+  { table: "quotation", label: "Devis" },
+  { table: "salesOrder", label: "Commandes" },
+  { table: "deliveryNote", label: "Bons de livraison" },
+  { table: "invoice", label: "Factures" },
+  { table: "creditNote", label: "Avoirs" },
+  { table: "purchaseRequest", label: "Demandes d'achat" },
+  { table: "purchaseOrder", label: "Commandes fournisseur" },
+  { table: "goodsReceipt", label: "Réceptions" },
+  { table: "supplierInvoice", label: "Factures fournisseur" },
+  { table: "documentRelation", label: "Liens entre documents" },
+];
+
+/**
+ * État de la base pour le module Sauvegardes (Phase 7.5). Les compteurs sont
+ * réels ; la création/restauration de sauvegardes est affichée comme non
+ * disponible (périmètre hors de la Phase 7.5).
+ */
+export async function getDatabaseBackupStats(
+  actor: AdminActor,
+): Promise<DatabaseTableStat[]> {
+  assertGlobalAdmin(actor);
+
+  return Promise.all(
+    BACKUP_TABLES.map(async ({ table, label }) => {
+      const delegate = prismaBase[table as keyof typeof prismaBase] as unknown as {
+        count: (args?: object) => Promise<number>;
+      };
+      const rows = await delegate.count();
+      return { table: String(table), label, rows };
+    }),
+  );
 }

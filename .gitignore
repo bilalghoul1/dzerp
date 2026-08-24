@@ -49,3 +49,63 @@ next-env.d.ts
 
 # uploaded files
 /uploads
+
+# ============================================================
+# SECRETS & CREDENTIALS  (P0 — never commit)
+# ============================================================
+# Credentials / account / identity dumps
+*.txt
+
+# Exported secrets / test payloads / API responses with tokens
+*.json
+#  -> allow package.json / tsconfig / config json via negation:
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.*.json
+!next.config.*.json
+!next.config.*.js
+!components.json
+!src/**/*.json
+!prisma/*.json
+!public/**/*.json
+!scripts/**/*.json
+
+# Logs that may contain tokens / cookies / session ids
+*.log
+dev-server.log
+debug-*.log
+
+# Browser/HTTP captures & HTML dumps (may leak session data)
+*.html
+h_*.html
+home_*.html
+ha.html
+hb.html
+h_anon.html
+h_auth.html
+h_fr.html
+h_ar.html
+home_anon.html
+home_auth.html
+
+# Local settings / secrets overrides
+.secret
+.secrets
+*.local
+
+# Private keys / certs
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*~

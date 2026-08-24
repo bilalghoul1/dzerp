@@ -118,7 +118,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       data: { lastLoginAt: new Date() },
     });
 
-    return NextResponse.json({ data: { username: user.username } });
+    return NextResponse.json({
+      data: {
+        username: user.username,
+        // Force le changement de mot de passe à la première connexion
+        // (Super Admin initial, Propriétaire créé avec un mot de passe temporaire).
+        mustChangePassword: user.mustChangePassword,
+      },
+    });
   } catch (error) {
     console.error("login error:", error);
     return NextResponse.json(

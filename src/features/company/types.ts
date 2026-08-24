@@ -8,6 +8,8 @@ export type CompanyRef = {
   name: string;
   isDefault: boolean;
   currency: string;
+  /** Succursale par défaut de la société (siège). */
+  defaultBranchId: string | null;
 };
 
 /** Représentation sérialisable d'une succursale. */
@@ -41,6 +43,8 @@ export type MembershipRef = {
   companyId: string;
   active: boolean;
   isDefault: boolean;
+  /** Succursale par défaut de l'adhésion (celle affectée au membre). */
+  defaultBranchId: string | null;
 };
 
 /**

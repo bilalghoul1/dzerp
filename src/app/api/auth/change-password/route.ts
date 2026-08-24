@@ -54,7 +54,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     const passwordHash = await hashPassword(parsed.data.newPassword);
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash },
+      data: {
+        passwordHash,
+        // Un changement explicite satisfait l'obligation de premier changement.
+        mustChangePassword: false,
+      },
     });
 
     // Révocation des autres sessions (l'appareil courant reste connecté).

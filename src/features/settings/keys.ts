@@ -41,6 +41,7 @@ export const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
   "notifications.email",
   "print.defaultFormat",
   "documents.qr.enabled",
+  "onboarding.dismissed",
   "tax.rates",
   "currency.list",
   "units.list",

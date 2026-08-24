@@ -49,6 +49,24 @@ export async function transitionStatus(
       meta: { docType, from: currentStatus, to: targetStatus },
     }),
   ]);
+
+  // Publication automatique en comptabilité à la finalisation d'une facture
+  // (reconnaissance de produit/charge). Best-effort : un échec de publication
+  // ne doit jamais bloquer le changement de statut du document.
+  if (
+    (docType === "INVOICE" || docType === "SUPPLIER_INVOICE") &&
+    targetStatus === "APPROVED"
+  ) {
+    try {
+      const { postDocumentToJournal } = await import("@/features/finance/service");
+      await postDocumentToJournal(docType, docId, ctx.companyId, ctx.userId);
+    } catch (err) {
+      console.error(
+        `postDocumentToJournal échoué pour ${docType} ${docId} :`,
+        err,
+      );
+    }
+  }
 }
 
 export async function approveDocument(

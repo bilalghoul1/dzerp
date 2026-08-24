@@ -47,6 +47,8 @@ import type {
   ProductCatalogOptions,
   ProductRow,
 } from "@/features/products/config";
+import { EmptyState } from "@/components/feedback/empty-state";
+import { ProductsIllustration } from "@/components/illustrations";
 
 type ProductType = "PRODUCT" | "SERVICE" | "RAW_MATERIAL" | "SEMI_FINISHED" | "FINISHED_PRODUCT";
 type CostingMethod = "AVERAGE" | "FIFO" | "LIFO" | "STANDARD" | "MANUFACTURING";
@@ -369,8 +371,12 @@ export function ProductsManager({
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                  {t("products.empty")}
+                <TableCell colSpan={7} className="py-8">
+                  <EmptyState
+                    illustration={<ProductsIllustration className="size-24" />}
+                    title={t("products.empty")}
+                    description={t("products.emptyHint")}
+                  />
                 </TableCell>
               </TableRow>
             ) : (

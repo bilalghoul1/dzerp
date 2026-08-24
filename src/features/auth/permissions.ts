@@ -114,15 +114,45 @@ export const PERMISSIONS = {
     name: "Créer une facture proforma",
     nameAr: "إنشاء فاتورة مبدئية",
   },
+  "ventes.bcclient.view": {
+    module: "ventes",
+    name: "Consulter les bons de commande client reçus",
+    nameAr: "عرض طلبيات العملاء الواردة",
+  },
+  "ventes.bcclient.create": {
+    module: "ventes",
+    name: "Créer un bon de commande client reçu",
+    nameAr: "إنشاء طلبية عميل واردة",
+  },
+  "finance.payment.view": {
+    module: "finance",
+    name: "Consulter les encaissements/décaissements",
+    nameAr: "عرض التحصيلات/الدفعات",
+  },
+  "finance.payment.create": {
+    module: "finance",
+    name: "Enregistrer un paiement",
+    nameAr: "تسجيل دفعة",
+  },
+  "accounting.view": {
+    module: "accounting",
+    name: "Consulter la comptabilité",
+    nameAr: "عرض المحاسبة",
+  },
+  "accounting.journal.create": {
+    module: "accounting",
+    name: "Saisir une écriture",
+    nameAr: "إدخال قيد محاسبي",
+  },
   "ventes.commande.view": {
     module: "ventes",
     name: "Consulter les commandes",
-    nameAr: "عرض طلبات الشراء",
+    nameAr: "عرض أوامر البيع",
   },
   "ventes.commande.create": {
     module: "ventes",
     name: "Créer une commande",
-    nameAr: "إنشاء طلب شراء",
+    nameAr: "إنشاء أمر بيع",
   },
   "ventes.livraison.view": {
     module: "ventes",
@@ -294,6 +324,71 @@ export const PERMISSIONS = {
     name: "Consulter la production",
     nameAr: "عرض الإنتاج",
   },
+  "production.create": {
+    module: "production",
+    name: "Créer une production",
+    nameAr: "إنشاء إنتاج",
+  },
+  "production.update": {
+    module: "production",
+    name: "Modifier une production",
+    nameAr: "تعديل إنتاج",
+  },
+  "production.plan": {
+    module: "production",
+    name: "Planifier un ordre de fabrication",
+    nameAr: "تخطيط أمر الإنتاج",
+  },
+  "production.start": {
+    module: "production",
+    name: "Démarrer un ordre de fabrication",
+    nameAr: "بدء أمر الإنتاج",
+  },
+  "production.complete": {
+    module: "production",
+    name: "Terminer un ordre de fabrication",
+    nameAr: "إتمام أمر الإنتاج",
+  },
+  "production.cancel": {
+    module: "production",
+    name: "Annuler un ordre de fabrication",
+    nameAr: "إلغاء أمر الإنتاج",
+  },
+  "production.bom.view": {
+    module: "production",
+    name: "Consulter les nomenclatures",
+    nameAr: "عرض البيانات",
+  },
+  "production.bom.create": {
+    module: "production",
+    name: "Créer une nomenclature",
+    nameAr: "إنشاء بيان",
+  },
+  "production.bom.update": {
+    module: "production",
+    name: "Modifier une nomenclature",
+    nameAr: "تعديل بيان",
+  },
+  "production.machine.view": {
+    module: "production",
+    name: "Consulter les machines",
+    nameAr: "عرض الآلات",
+  },
+  "production.machine.create": {
+    module: "production",
+    name: "Créer une machine",
+    nameAr: "إنشاء آلة",
+  },
+  "production.workcenter.view": {
+    module: "production",
+    name: "Consulter les centres de charge",
+    nameAr: "عرض مراكز العمل",
+  },
+  "production.workcenter.create": {
+    module: "production",
+    name: "Créer un centre de charge",
+    nameAr: "إنشاء مركز عمل",
+  },
   "production.manage": {
     module: "production",
     name: "Gérer la production",
@@ -308,6 +403,106 @@ export const PERMISSIONS = {
     module: "comptabilite",
     name: "Gérer la comptabilité",
     nameAr: "إدارة المحاسبة",
+  },
+  "rh.department.view": {
+    module: "rh",
+    name: "Consulter les départements",
+    nameAr: "عرض الأقسام",
+  },
+  "rh.department.create": {
+    module: "rh",
+    name: "Créer un département",
+    nameAr: "إنشاء قسم",
+  },
+  "rh.department.update": {
+    module: "rh",
+    name: "Modifier un département",
+    nameAr: "تعديل قسم",
+  },
+  "rh.department.archive": {
+    module: "rh",
+    name: "Archiver un département",
+    nameAr: "أرشفة قسم",
+  },
+  "rh.jobtitle.view": {
+    module: "rh",
+    name: "Consulter les intitulés de poste",
+    nameAr: "عرض المسميات الوظيفية",
+  },
+  "rh.jobtitle.create": {
+    module: "rh",
+    name: "Créer un intitulé de poste",
+    nameAr: "إنشاء مسمى وظيفي",
+  },
+  "rh.jobtitle.update": {
+    module: "rh",
+    name: "Modifier un intitulé de poste",
+    nameAr: "تعديل مسمى وظيفي",
+  },
+  "rh.jobtitle.archive": {
+    module: "rh",
+    name: "Archiver un intitulé de poste",
+    nameAr: "أرشفة مسمى وظيفي",
+  },
+  "rh.position.view": {
+    module: "rh",
+    name: "Consulter les postes",
+    nameAr: "عرض المناصب",
+  },
+  "rh.position.create": {
+    module: "rh",
+    name: "Créer un poste",
+    nameAr: "إنشاء منصب",
+  },
+  "rh.position.update": {
+    module: "rh",
+    name: "Modifier un poste",
+    nameAr: "تعديل منصب",
+  },
+  "rh.position.archive": {
+    module: "rh",
+    name: "Archiver un poste",
+    nameAr: "أرشفة منصب",
+  },
+  "rh.employee.view": {
+    module: "rh",
+    name: "Consulter les employés",
+    nameAr: "عرض الموظفين",
+  },
+  "rh.employee.create": {
+    module: "rh",
+    name: "Créer un employé",
+    nameAr: "إنشاء موظف",
+  },
+  "rh.employee.update": {
+    module: "rh",
+    name: "Modifier un employé",
+    nameAr: "تعديل موظف",
+  },
+  "rh.employee.archive": {
+    module: "rh",
+    name: "Archiver un employé",
+    nameAr: "أرشفة موظف",
+  },
+  "rh.contract.view": {
+    module: "rh",
+    name: "Consulter les contrats",
+    nameAr: "عرض العقود",
+  },
+  "rh.contract.create": {
+    module: "rh",
+    name: "Créer un contrat",
+    nameAr: "إنشاء عقد",
+  },
+  "rh.contract.update": {
+    module: "rh",
+    name: "Modifier un contrat",
+    nameAr: "تعديل عقد",
+  },
+  "rh.contract.archive": {
+    module: "rh",
+    name: "Archiver un contrat",
+    nameAr: "أرشفة عقد",
   },
   "rh.view": {
     module: "rh",

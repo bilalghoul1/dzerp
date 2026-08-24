@@ -395,6 +395,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [submenu, setSubmenu] = React.useState<"language" | "appearance" | null>(null);
   const [dialog, setDialog] = React.useState<DialogState>(null);
+  const [busy, setBusy] = React.useState(false);
 
   const initials = (user.fullName ?? user.username)
     .split(/\s+/)
@@ -408,13 +409,19 @@ export function UserMenu({ user }: { user: SessionUser }) {
   };
 
   const handleLogout = async () => {
+    setBusy(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      toast.success(t("auth.logoutSuccess"));
+      router.push("/login");
+      router.refresh();
     } catch {
       // ignorer — la session expire côté serveur de toute façon
+      router.push("/login");
+      router.refresh();
+    } finally {
+      setBusy(false);
     }
-    router.push("/login");
-    router.refresh();
   };
 
   return (
@@ -499,6 +506,12 @@ export function UserMenu({ user }: { user: SessionUser }) {
               <ul className="mt-1 space-y-0.5">
                 <MenuRow icon="person" label={t("userMenu.profile")} onClick={() => setDialog("profile")} />
                 <MenuRow
+                  icon="account_circle"
+                  label={t("account.title")}
+                  href="/compte"
+                  onClick={closeAll}
+                />
+                <MenuRow
                   icon="settings"
                   label={t("userMenu.preferences")}
                   href="/parametres/preferences"
@@ -526,7 +539,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
                 <MenuRow icon="lock" label={t("userMenu.changePassword")} onClick={() => setDialog("password")} />
                 <MenuRow icon="devices" label={t("userMenu.activeSessions")} onClick={() => setDialog("sessions")} />
                 <li className="my-1 border-t" aria-hidden="true" />
-                <MenuRow icon="logout" label={t("auth.logout")} onClick={handleLogout} />
+                <MenuRow icon={busy ? "progress_activity" : "logout"} label={busy ? t("auth.loggingOut") : t("auth.logout")} onClick={handleLogout} />
               </ul>
             )}
           </div>

@@ -21,8 +21,8 @@ export type SeriesDefault = {
 
 export const DEFAULT_SERIES: SeriesDefault[] = [
   { key: "QUOTATION", docType: "QUOTATION", label: "Devis", labelAr: "عرض سعر", prefix: "DEV", padLength: 5, withYear: true },
-  { key: "SALES_ORDER", docType: "SALES_ORDER", label: "Commande", labelAr: "طلب شراء", prefix: "BC", padLength: 5, withYear: true },
-  { key: "DELIVERY_NOTE", docType: "DELIVERY_NOTE", label: "Bon de livraison", labelAr: "ورقة تسليم", prefix: "BL", padLength: 5, withYear: true },
+  { key: "SALES_ORDER", docType: "SALES_ORDER", label: "Commande", labelAr: "أمر بيع", prefix: "BC", padLength: 5, withYear: true },
+  { key: "DELIVERY_NOTE", docType: "DELIVERY_NOTE", label: "Bon de livraison", labelAr: "وصل التسليم", prefix: "BL", padLength: 5, withYear: true },
   { key: "INVOICE", docType: "INVOICE", label: "Facture", labelAr: "فاتورة", prefix: "FA", padLength: 5, withYear: true },
   { key: "CREDIT_NOTE", docType: "CREDIT_NOTE", label: "Avoir", labelAr: "سند دائن", prefix: "AV", padLength: 5, withYear: true },
   { key: "PURCHASE_REQUEST", docType: "PURCHASE_REQUEST", label: "Demande d'achat", labelAr: "طلب شراء", prefix: "DA", padLength: 5, withYear: true },

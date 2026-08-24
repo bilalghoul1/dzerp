@@ -37,12 +37,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         { status: 400 },
       );
     }
-    const company = await createCompany(
+    const result = await createCompany(
       guard.actor,
       parsed.data,
       requestMeta(request),
     );
-    return okResponse(company, { status: 201 });
+    return okResponse(result, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }

@@ -72,7 +72,21 @@ async function main() {
   await prisma.manufacturer.deleteMany();
   await prisma.unit.deleteMany();
   await prisma.vatCategory.deleteMany();
+  // Lignes de paiement et paiements AVANT Branch/Company (FK RESTRICT
+  // Payment_branchId_fkey, PaymentAllocation_*_fkey) — sinon le seed échoue
+  // après avoir supprimé les utilisateurs → 401 au login.
+  await prisma.paymentAllocation.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.branch.deleteMany();
+  // Suppression ordonnée des données comptables AVANT Company : les FK RESTRICT
+  // (JournalLine.accountId, JournalEntry.companyId/fiscalPeriodId, Account.companyId)
+  // interdisent la suppression de Company tant que ces tables contiennent des
+  // lignes. Sans cela, le seed échoue APRÈS avoir supprimé les utilisateurs
+  // (user.deleteMany plus haut) → perte des comptes → 401 au login.
+  await prisma.journalLine.deleteMany();
+  await prisma.journalEntry.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.fiscalPeriod.deleteMany();
   await prisma.company.deleteMany();
 
   console.log("→ Société par défaut (Phase 5.3)…");
@@ -183,39 +197,9 @@ async function main() {
   }
 
   console.log("→ Rôles…");
-  const adminRole = await prisma.role.upsert({
-    where: { key: "ADMIN" },
-    update: { name: "Administrateur", nameAr: "مدير النظام" },
-    create: {
-      key: "ADMIN",
-      name: "Administrateur",
-      nameAr: "مدير النظام",
-      description: "Accès complet à l'application.",
-      isSystem: true,
-    },
-  });
-
-  const managerRole = await prisma.role.upsert({
-    where: { key: "MANAGER" },
-    update: { name: "Gestionnaire", nameAr: "مدير" },
-    create: {
-      key: "MANAGER",
-      name: "Gestionnaire",
-      nameAr: "مدير",
-      description: "Gestion des opérations courantes.",
-    },
-  });
-
-  const readerRole = await prisma.role.upsert({
-    where: { key: "READER" },
-    update: { name: "Consultation", nameAr: "مطّلع" },
-    create: {
-      key: "READER",
-      name: "Consultation",
-      nameAr: "مطّلع",
-      description: "Accès en lecture seule.",
-    },
-  });
+  // RBAC simplifié (deux rôles uniquement) : SUPER_ADMIN (global) + COMPANY_ADMIN
+  // (société unique). Les anciens rôles ADMIN / MANAGER / READER / OWNER ont été
+  // migrés vers COMPANY_ADMIN (voir scripts/migrate-rbac-two-roles.ts).
 
   // Phase 5.5 : administrateur d'une seule société (rôle par affectation).
   // Gère sa société assignée (profil, succursales, numérotation, utilisateurs),
@@ -233,12 +217,34 @@ async function main() {
     },
   });
 
-  await prisma.rolePermission.createMany({
-    data: Object.keys(permissionIds).map((key) => ({
-      roleId: adminRole.id,
-      permissionId: permissionIds[key],
-    })),
+  // Rôle global de plateforme : SUPER_ADMIN via UserRole (aucune société requise).
+  const superAdminRole = await prisma.role.upsert({
+    where: { key: "SUPER_ADMIN" },
+    update: { name: "Super Administrateur", nameAr: "المدير العام" },
+    create: {
+      key: "SUPER_ADMIN",
+      name: "Super Administrateur",
+      nameAr: "المدير العام",
+      description:
+        "Rôle GLOBAL de plateforme (UserRole), hors toute société. Gère les sociétés de bout en bout.",
+      isSystem: true,
+    },
   });
+
+  // Super Admin : accès global complet sur la gestion des sociétés/personnes.
+  const superAdminGranted = await prisma.rolePermission.findFirst({
+    where: { roleId: superAdminRole.id },
+  });
+  if (!superAdminGranted) {
+    await prisma.rolePermission.createMany({
+      data: Object.keys(permissionIds)
+        .filter((key) => key.startsWith("admin."))
+        .map((key) => ({
+          roleId: superAdminRole.id,
+          permissionId: permissionIds[key],
+        })),
+    });
+  }
 
   const companyAdminPerms = [
     "dashboard.view",
@@ -247,11 +253,24 @@ async function main() {
     "product.view", "product.create", "product.update",
     "warehouse.view", "warehouse.create", "warehouse.update",
     "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
+    "finance.payment.view", "finance.payment.create",
+    "accounting.view", "accounting.journal.create",
     "parametres.view", "parametres.manage",
     "admin.company.view", "admin.company.update",
     "admin.company.membership.manage",
     "admin.audit.view",
     "search.global", "files.upload", "files.download",
+    // Production (MRP)
+    "production.view", "production.create", "production.update", "production.plan",
+    "production.start", "production.complete", "production.cancel",
+    "production.bom.view", "production.bom.create", "production.bom.update",
+    "production.machine.view", "production.machine.create",
+    "production.workcenter.view", "production.workcenter.create",
+    // RH — Organisation (Phase 10.1)
+    "rh.view",
+    "rh.department.view", "rh.department.create", "rh.department.update", "rh.department.archive",
+    "rh.jobtitle.view", "rh.jobtitle.create", "rh.jobtitle.update", "rh.jobtitle.archive",
+    "rh.position.view", "rh.position.create", "rh.position.update", "rh.position.archive",
   ];
   await prisma.rolePermission.createMany({
     data: companyAdminPerms
@@ -259,69 +278,22 @@ async function main() {
       .map((key) => ({ roleId: companyAdminRole.id, permissionId: permissionIds[key] })),
   });
 
-  const managerPerms = [
-    "dashboard.view", "crm.customer.view", "crm.customer.create", "crm.customer.update",
-    "crm.supplier.view", "crm.supplier.create",
-    "ventes.devis.view", "ventes.devis.create", "ventes.devis.update",
-    "ventes.facture.view", "ventes.facture.create",
-    "ventes.proforma.view", "ventes.proforma.create",
-    "ventes.commande.view", "ventes.commande.create",
-    "ventes.livraison.view", "ventes.livraison.create",
-    "ventes.avoir.view", "ventes.avoir.create",
-    "achats.bon.view", "achats.bon.create",
-    "achats.besoin.view", "achats.besoin.create",
-    "achats.reception.view", "achats.reception.create",
-    "achats.facture.view", "achats.facture.create",
-    "product.view", "product.create", "product.update",
-    "warehouse.view", "warehouse.create", "warehouse.update",
-    "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
-    "production.view",
-    "compta.view",
-    "rh.view",
-    "rapports.view",
-    "search.global", "files.upload", "files.download",
-  ];
-  await prisma.rolePermission.createMany({
-    data: managerPerms
-      .filter((key) => permissionIds[key])
-      .map((key) => ({ roleId: managerRole.id, permissionId: permissionIds[key] })),
-  });
-
-  const readerPerms = [
-    "dashboard.view", "crm.customer.view", "crm.supplier.view",
-    "ventes.devis.view", "ventes.facture.view",
-    "ventes.proforma.view", "ventes.commande.view",
-    "ventes.livraison.view", "ventes.avoir.view",
-    "achats.bon.view", "achats.besoin.view",
-    "achats.reception.view", "achats.facture.view",
-    "product.view", "warehouse.view", "inventory.view",
-    "production.view", "compta.view", "rh.view", "rapports.view", "search.global",
-    "files.download",
-  ];
-  await prisma.rolePermission.createMany({
-    data: readerPerms
-      .filter((key) => permissionIds[key])
-      .map((key) => ({ roleId: readerRole.id, permissionId: permissionIds[key] })),
-  });
+  // COMPANY_ADMIN reçoit sa permission set dédié ci-dessus (companyAdminPerms).
 
   console.log("→ Utilisateurs…");
-  const adminPasswordHash = await hashPassword("admin123");
+  // Plus AUCUN compte « admin » : l'administrateur de plateforme est
+  // exclusivement `superadmin` (rôle global SUPER_ADMIN, créé par
+  // bootstrap-super-admin.ts). Le seed ne crée que des comptes de démonstration
+  // SANS rôle global et sans droit d'administration de plateforme.
+  const demoPasswordHash = await hashPassword("DzERP-Demo-2026");
 
   const users = [
-    {
-      username: "admin",
-      email: "admin@dzerp.dz",
-      fullName: "Administrateur Système",
-      title: "Administrateur",
-      roleKey: "ADMIN",
-      branchCode: "HQ",
-    },
     {
       username: "directeur.oran",
       email: "directeur.oran@dzerp.dz",
       fullName: "Directeur Ouest",
       title: "Directeur de direction",
-      roleKey: "MANAGER",
+      roleKey: "COMPANY_ADMIN",
       branchCode: "OR",
     },
     {
@@ -329,7 +301,7 @@ async function main() {
       email: "lecteur@dzerp.dz",
       fullName: "Comptable",
       title: "Consultation",
-      roleKey: "READER",
+      roleKey: "COMPANY_ADMIN",
       branchCode: "HQ",
     },
   ];
@@ -341,7 +313,7 @@ async function main() {
       create: {
         username: user.username,
         email: user.email,
-        passwordHash: adminPasswordHash,
+        passwordHash: demoPasswordHash,
         fullName: user.fullName,
         title: user.title,
         branchId: branchRecords[user.branchCode],
@@ -378,6 +350,181 @@ async function main() {
       },
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Bootstrap DEV : société de démonstration « DzERP » + son propriétaire dédié.
+  // Idempotent (upsert par code / par paire user+company). Données fictives,
+  // DÉVELOPPEMENT UNIQUEMENT. N'altère aucune règle d'isolation société / RBAC :
+  // `dzerp.owner` devient membre ACTIVE de DzERP (rôle OWNER via RoleAssignment,
+  // comme `createCompany`) et sa session pointe vers DzERP → CompanyContext
+  // résolu normalement. Aucun lien avec un quelconque compte `admin`.
+  // ---------------------------------------------------------------------------
+  console.log("→ Société de démonstration « DzERP » (DEV)…");
+
+  const dzCompany = await prisma.company.upsert({
+    where: { code: "DZERP" },
+    update: {
+      name: "DzERP",
+      legalName: "DzERP - Entreprise de Démonstration",
+      commercialName: "DzERP",
+      legalForm: "SARL",
+      activity: "Édition de logiciels (démonstration)",
+      taxId: "000000000000000", // NIF fictif
+      nis: "000000000000000",
+      rc: "00/00-0000000B00",
+      ai: "00000000000",
+      wilaya: "05", // Batna
+      commune: "05-01",
+      address: "Batna, Algérie",
+      phone: "0550000000",
+      email: "contact@dzerp.local",
+      website: "https://dzerp.local",
+      currency: "DZD",
+      language: "fr",
+      isActive: true,
+      status: "ACTIVE",
+    },
+    create: {
+      code: "DZERP",
+      name: "DzERP",
+      legalName: "DzERP - Entreprise de Démonstration",
+      commercialName: "DzERP",
+      legalForm: "SARL",
+      activity: "Édition de logiciels (démonstration)",
+      taxId: "000000000000000",
+      nis: "000000000000000",
+      rc: "00/00-0000000B00",
+      ai: "00000000000",
+      wilaya: "05",
+      commune: "05-01",
+      address: "Batna, Algérie",
+      phone: "0550000000",
+      email: "contact@dzerp.local",
+      website: "https://dzerp.local",
+      currency: "DZD",
+      language: "fr",
+      isActive: true,
+      status: "ACTIVE",
+    },
+  });
+
+  // Succursale principale « Main Branch » (siège de la société de démonstration).
+  const dzMainBranch = await prisma.branch.upsert({
+    where: { companyId_code: { companyId: dzCompany.id, code: "HQ" } },
+    update: {
+      name: "Main Branch",
+      nameAr: "الفرع الرئيسي",
+      type: "HEADQUARTER",
+      city: "Batna",
+      address: "Batna, Algérie",
+      phone: "0550000000",
+      email: "contact@dzerp.local",
+      isActive: true,
+    },
+    create: {
+      code: "HQ",
+      name: "Main Branch",
+      nameAr: "الفرع الرئيسي",
+      type: "HEADQUARTER",
+      city: "Batna",
+      address: "Batna, Algérie",
+      phone: "0550000000",
+      email: "contact@dzerp.local",
+      isActive: true,
+      companyId: dzCompany.id,
+    },
+  });
+  if (dzCompany.defaultBranchId !== dzMainBranch.id) {
+    await prisma.company.update({
+      where: { id: dzCompany.id },
+      data: { defaultBranchId: dzMainBranch.id },
+    });
+  }
+
+  // Propriétaire DÉDIÉ de la société de démonstration (jamais `admin`).
+  const dzOwner = await prisma.user.upsert({
+    where: { username: "dzerp.owner" },
+    update: {
+      fullName: "Propriétaire Démo",
+      email: "dzerp.owner@dzerp.local",
+      passwordHash: demoPasswordHash,
+    },
+    create: {
+      username: "dzerp.owner",
+      email: "dzerp.owner@dzerp.local",
+      fullName: "Propriétaire Démo",
+      passwordHash: demoPasswordHash,
+    },
+  });
+  const dzMembership = await prisma.userCompany.upsert({
+    where: {
+      userId_companyId: { userId: dzOwner.id, companyId: dzCompany.id },
+    },
+    update: { active: true, isDefault: true, defaultBranchId: dzMainBranch.id },
+    create: {
+      userId: dzOwner.id,
+      companyId: dzCompany.id,
+      active: true,
+      isDefault: true,
+      defaultBranchId: dzMainBranch.id,
+    },
+  });
+
+  // Une seule adhésion par défaut par utilisateur : DzERP devient l'adhésion
+  // par défaut de `dzerp.owner`.
+  await prisma.userCompany.updateMany({
+    where: { userId: dzOwner.id, companyId: { not: dzCompany.id } },
+    data: { isDefault: false },
+  });
+
+  // Rôle compagnie le plus élevé : COMPANY_ADMIN (rôle existant du seed,
+  // attribué par RoleAssignment — même mécanique que `createCompany`).
+  const dzOwnerRole = await prisma.role.findUniqueOrThrow({
+    where: { key: "COMPANY_ADMIN" },
+  });
+  await prisma.roleAssignment.upsert({
+    where: {
+      userCompanyId_roleId: {
+        userCompanyId: dzMembership.id,
+        roleId: dzOwnerRole.id,
+      },
+    },
+    update: { active: true, assignedBy: dzOwner.id },
+    create: {
+      userCompanyId: dzMembership.id,
+      roleId: dzOwnerRole.id,
+      active: true,
+      assignedBy: dzOwner.id,
+    },
+  });
+
+  // Sessions de `dzerp.owner` : contexte actif → DzERP (succursale Main Branch).
+  // Permet à `resolveLoginContext` de restaurer DzERP à la prochaine connexion.
+  await prisma.session.updateMany({
+    where: { userId: dzOwner.id },
+    data: {
+      activeCompanyId: dzCompany.id,
+      activeBranchId: dzMainBranch.id,
+    },
+  });
+  const dzHasActiveSession = await prisma.session.findFirst({
+    where: { userId: dzOwner.id, revokedAt: null },
+  });
+  if (!dzHasActiveSession) {
+    await prisma.session.create({
+      data: {
+        userId: dzOwner.id,
+        token: `seed-dzerp-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        activeCompanyId: dzCompany.id,
+        activeBranchId: dzMainBranch.id,
+      },
+    });
+  }
+
+  console.log(
+    `✓ Démo DEV : société « DzERP » créée + « dzerp.owner » rattaché (role OWNER, session → DzERP).`,
+  );
 
   console.log("→ Paramètres…");
   const settings = [
@@ -450,17 +597,20 @@ async function main() {
   console.log("→ Séries documentaires…");
   const series = [
     { key: "QUOTATION", docType: "QUOTATION" as const, label: "Devis", labelAr: "عرض سعر", prefix: "DEV" },
-    { key: "SALES_ORDER", docType: "SALES_ORDER" as const, label: "Commande", labelAr: "طلب شراء", prefix: "BC" },
-    { key: "DELIVERY_NOTE", docType: "DELIVERY_NOTE" as const, label: "Bon de livraison", labelAr: "ورقة تسليم", prefix: "BL" },
+    { key: "SALES_ORDER", docType: "SALES_ORDER" as const, label: "Commande", labelAr: "أمر بيع", prefix: "BC" },
+    { key: "DELIVERY_NOTE", docType: "DELIVERY_NOTE" as const, label: "Bon de livraison", labelAr: "وصل التسليم", prefix: "BL" },
     { key: "INVOICE", docType: "INVOICE" as const, label: "Facture", labelAr: "فاتورة", prefix: "FA" },
     { key: "CREDIT_NOTE", docType: "CREDIT_NOTE" as const, label: "Avoir", labelAr: "سند دائن", prefix: "AV" },
     { key: "PURCHASE_REQUEST", docType: "PURCHASE_REQUEST" as const, label: "Demande d'achat", labelAr: "طلب شراء", prefix: "DA" },
     { key: "PURCHASE_ORDER", docType: "PURCHASE_ORDER" as const, label: "Bon de commande", labelAr: "أمر شراء", prefix: "BCM" },
     { key: "GOODS_RECEIPT", docType: "GOODS_RECEIPT" as const, label: "Bon de réception", labelAr: "ورقة استلام", prefix: "BR" },
     { key: "SUPPLIER_INVOICE", docType: "SUPPLIER_INVOICE" as const, label: "Facture fournisseur", labelAr: "فاتورة مورد", prefix: "FF" },
+    { key: "CUSTOMER_ORDER", docType: "CUSTOMER_ORDER" as const, label: "Bon de commande client reçu", labelAr: "طلبية العميل الواردة", prefix: "BCREC" },
+    { key: "PROFORMA", docType: "PROFORMA" as const, label: "Facture Proforma", labelAr: "فاتورة مبدئية", prefix: "PF" },
     { key: "CUSTOMER", docType: "CUSTOMER" as const, label: "Client", labelAr: "عميل", prefix: "CUS", padLength: 6, withYear: false },
     { key: "SUPPLIER", docType: "SUPPLIER" as const, label: "Fournisseur", labelAr: "مورد", prefix: "SUP", padLength: 6, withYear: false },
     { key: "PRODUCT", docType: "PRODUCT" as const, label: "Produit", labelAr: "منتج", prefix: "PRD", padLength: 6, withYear: false },
+    { key: "PAYMENT", docType: "PAYMENT" as const, label: "Encaissement", labelAr: "تحصيل", prefix: "ENC", padLength: 5, withYear: true },
     { key: "WAREHOUSE", docType: "WAREHOUSE" as const, label: "Entrepôt", labelAr: "مستودع", prefix: "WH", padLength: 6, withYear: false },
     { key: "INVENTORY_MOVEMENT", docType: "INVENTORY_MOVEMENT" as const, label: "Mouvement de stock", labelAr: "حركة مخزون", prefix: "MOV", padLength: 6, withYear: false },
   ];
@@ -1016,7 +1166,10 @@ async function main() {
   };
 
   console.log("Seed terminé :", counts);
-  console.log("Connexion : admin / admin123");
+  console.log(
+    "Connexions démo (DÉMO / DEV UNIQUEMENT — jamais en production) : directeur.oran / DzERP-Demo-2026, lecteur / DzERP-Demo-2026, dzerp.owner / DzERP-Demo-2026.",
+  );
+  console.log("Super Admin global : à créer via `npm run db:bootstrap:super` (mot de passe non prédictible).");
 }
 
 main()

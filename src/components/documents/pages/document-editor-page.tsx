@@ -18,9 +18,12 @@ export const dynamic = "force-dynamic";
 export async function DocumentEditorPage({
   type,
   docId,
+  initialCustomerId,
 }: {
   type: CommercialDocType;
   docId?: string | null;
+  /** Client à pré-remplir depuis `?customerId=` (CRM, conversion). */
+  initialCustomerId?: string | null;
 }) {
   await requirePermission(docId ? "documents.read" : "documents.create");
   const config = getDocConfig(type);
@@ -37,6 +40,16 @@ export async function DocumentEditorPage({
     config.partyField === "customerId"
       ? await listCustomers()
       : await listSuppliers();
+
+  // Le client cible (`?customerId=`) n'est pré-rempli que s'il existe réellement
+  // dans la société active — jamais un id arbitraire provenant de l'URL.
+  const customerId =
+    config.partyField === "customerId" &&
+    !docId &&
+    initialCustomerId &&
+    parties.some((party) => party.id === initialCustomerId)
+      ? initialCustomerId
+      : null;
 
   const [taxRates, currencies, units] = await Promise.all([
     getTaxRates(),
@@ -79,7 +92,13 @@ export async function DocumentEditorPage({
         breadcrumbs={[
           { label: t(sectionKey) },
           { label: t(`docTypes.${type}`) },
-          { label: normalizedDetail?.number ?? (docId ? t("documentsUI.editTitle", { label: t(`docTypes.${type}`) }) : t("documentsUI.newDocument")) },
+          {
+            label:
+              normalizedDetail?.number ??
+              t("documentsUI.createTitle", {
+                label: t(`docTypes.${type}`),
+              }),
+          },
         ]}
         title={
           normalizedDetail?.number ??
@@ -97,6 +116,7 @@ export async function DocumentEditorPage({
         docId={docId}
         initialDetail={normalizedDetail}
         lookups={lookups}
+        initialCustomerId={customerId}
       />
     </div>
   );

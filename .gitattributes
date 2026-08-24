@@ -1,0 +1,14 @@
+# Normalize line endings for cross-platform consistency
+# Force LF in the repository; Git will not rewrite working-copy files.
+* text=auto eol=lf
+
+# Prisma / config / source must stay LF
+*.prisma text eol=lf
+*.toml text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+
+# Windows reserved-name artifact (build noise) — never track
+nul

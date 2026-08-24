@@ -5,10 +5,14 @@ import { SESSION_COOKIE, verifySessionCookie } from "@/features/auth/session";
 import { COMPANY_COOKIE } from "@/lib/constants";
 import {
   listCompaniesForUser,
+  listGlobalPermissions,
   resolveMembership,
   selectActiveCompanyId,
 } from "@/features/company/store";
 import type { PermissionKey } from "@/features/auth/permissions";
+
+/** Clé du rôle global de la plateforme (géré via `UserRole`, hors société). */
+export const SUPER_ADMIN_ROLE_KEY = "SUPER_ADMIN";
 
 import type { SessionContext, SessionUser } from "@/features/auth/types";
 
@@ -54,14 +58,22 @@ export async function getCurrentUser(): Promise<SessionContext | null> {
       branchId: true,
       status: true,
       lastLoginAt: true,
+      mustChangePassword: true,
       branch: { select: { id: true, code: true, name: true, nameAr: true } },
       roles: {
-        select: { role: { select: { name: true, nameAr: true } } },
+        select: { role: { select: { key: true, name: true, nameAr: true } } },
       },
     },
   });
 
   if (!user || user.status !== "ACTIVE") return null;
+
+  // Privilège PLATEFORME : le rôle global SUPER_ADMIN est indépendant de
+  // toute société. Un Super Admin sans société n'a donc PAS besoin d'adhésion
+  // pour porter ses permissions d'administration.
+  const isSuperAdmin = user.roles.some(
+    (r) => r.role.key === SUPER_ADMIN_ROLE_KEY,
+  );
 
   // Société active : cookie requête → session → société par défaut.
   const companies = await listCompaniesForUser(user.id);
@@ -74,9 +86,18 @@ export async function getCurrentUser(): Promise<SessionContext | null> {
     ? await resolveMembership(user.id, activeCompanyId)
     : null;
 
+  // Permissions = contexte société +, pour un Super Admin, permissions globales
+  // de la plateforme (admin.company.* etc.) même sans adhésion.
+  let permissions = resolution?.permissions ?? [];
+  if (isSuperAdmin) {
+    const global = await listGlobalPermissions(user.id);
+    permissions = Array.from(new Set([...global, ...permissions]));
+  }
+
   return {
     user,
-    permissions: resolution?.permissions ?? [],
+    permissions,
+    isSuperAdmin,
   };
 }
 
@@ -106,4 +127,20 @@ export function hasPermission(
   key: PermissionKey,
 ): boolean {
   return permissions.includes(key);
+}
+
+/**
+ * Requiert l'utilisateur authentifié PORTEUR du rôle global SUPER_ADMIN
+ * (niveau plateforme). N'a PAS besoin d'une société active — c'est la porte
+ * d'entrée des pages d'administration globale. Non-Super Admin → 404.
+ */
+export async function requireSuperAdmin(): Promise<SessionContext> {
+  const session = await getCurrentUser();
+  if (!session) {
+    redirect("/login");
+  }
+  if (!session.isSuperAdmin) {
+    notFound();
+  }
+  return session;
 }

@@ -65,6 +65,20 @@ const ALL_COLUMNS: DocumentListColumnId[] = [
 
 const PAGE_SIZES = [10, 20, 50];
 
+const NEW_DOC_LABEL_KEY: Record<CommercialDocType, string> = {
+  QUOTATION: "documentsUI.newQuotation",
+  SALES_ORDER: "documentsUI.newSalesOrder",
+  DELIVERY_NOTE: "documentsUI.newDeliveryNote",
+  INVOICE: "documentsUI.newInvoice",
+  CREDIT_NOTE: "documentsUI.newCreditNote",
+  PURCHASE_REQUEST: "documentsUI.newPurchaseRequest",
+  PURCHASE_ORDER: "documentsUI.newPurchaseOrder",
+  GOODS_RECEIPT: "documentsUI.newGoodsReceipt",
+  SUPPLIER_INVOICE: "documentsUI.newSupplierInvoice",
+  CUSTOMER_ORDER: "documentsUI.newCustomerOrder",
+  PROFORMA: "documentsUI.newProforma",
+};
+
 type SortKey = "date" | "number" | "party" | "status" | "total";
 
 const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
@@ -117,6 +131,7 @@ export function DocumentList({
   const router = useRouter();
   const ui = getUiConfig(type);
   const config = getDocConfig(type);
+  const newDocumentLabel = t(NEW_DOC_LABEL_KEY[type]);
 
   const canCreate = company.permissions.includes("documents.create");
   const canDelete = company.permissions.includes("documents.delete");
@@ -466,7 +481,7 @@ export function DocumentList({
               <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                 add
               </span>
-              {t("documentsUI.newDocument")}
+              {newDocumentLabel}
             </Button>
           ) : null}
 
@@ -641,14 +656,14 @@ export function DocumentList({
                         canCreate ? (
                           <Button
                             onClick={() => {
-                              if (basePath) window.location.href = `${basePath}/new`;
+                              if (basePath) window.location.href = `${basePath}/nouveau`;
                             }}
                             className="mt-2"
                           >
                             <span className="material-symbols-outlined me-1 text-[18px]" aria-hidden="true">
                               add
                             </span>
-                            {t("documentsUI.newDocument")}
+                            {newDocumentLabel}
                           </Button>
                         ) : undefined
                       }

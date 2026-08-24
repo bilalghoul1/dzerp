@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useCompany } from "@/features/company/company-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DocumentStatusBadge } from "@/components/documents/document-status-badge";
@@ -27,6 +28,7 @@ export function DocumentCreatedBanner({ type }: { type: CommercialDocType }) {
 
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [convertOpen, setConvertOpen] = React.useState(false);
+  const company = useCompany();
 
   if (!detail) return null;
 
@@ -41,6 +43,26 @@ export function DocumentCreatedBanner({ type }: { type: CommercialDocType }) {
     DELIVERY_NOTE: "INVOICE",
   };
   const nextStepType = NEXT_STEP[type];
+
+  // Le passage à l'étape suivante requiert le droit de création du document
+  // cible ; le client est pré-rempli via `?customerId=` quand il est connu.
+  const NEXT_STEP_PERMISSION: Partial<Record<CommercialDocType, string>> = {
+    SALES_ORDER: "ventes.commande.create",
+    DELIVERY_NOTE: "ventes.livraison.create",
+    INVOICE: "ventes.facture.create",
+  };
+  const canNextStep =
+    nextStepType !== undefined &&
+    (NEXT_STEP_PERMISSION[nextStepType]
+      ? company.permissions.includes(
+          NEXT_STEP_PERMISSION[nextStepType] as never,
+        )
+      : true);
+  const nextStepHref =
+    nextStepType &&
+    `/documents/${nextStepType.toLowerCase()}/nouveau${
+      detail.partyId ? `?customerId=${detail.partyId}` : ""
+    }`;
 
   const handleSend = () => {
     const subject = encodeURIComponent(`${t("documentsUI.createdNumber")} : ${detail.number}`);
@@ -132,9 +154,9 @@ export function DocumentCreatedBanner({ type }: { type: CommercialDocType }) {
       {/* Guided: where am I + what is the next step in the commercial flow. */}
       <div className="flex flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         <WorkflowSteps />
-        {nextStepType ? (
+        {canNextStep && nextStepHref ? (
           <Button asChild size="sm" className="shrink-0">
-            <a href={`/documents/${nextStepType.toLowerCase()}/nouveau`}>
+            <a href={nextStepHref}>
               <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
                 arrow_forward
               </span>

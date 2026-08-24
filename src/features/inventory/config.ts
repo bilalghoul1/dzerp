@@ -8,6 +8,7 @@ import type {
   InventoryMovementType,
   Product,
   Warehouse,
+  Prisma,
 } from "@/generated/prisma/client";
 
 // ---------------------------------------------------------------------------
@@ -456,4 +457,73 @@ export async function createTransfer(
   });
 
   return { movement, stock: await getStockOnHand() };
+}
+
+// ---------------------------------------------------------------------------
+// MRP — mouvements de production (consommation de matières / sortie produit).
+// Réutilise le moteur d'inventaire existant (entreprise scopée, assertion de
+// stock, assertsStockAvailable). Les types PRODUCTION / CONSUMPTION existent
+// déjà dans InventoryMovementType.
+// ---------------------------------------------------------------------------
+
+export type ProductionMovementType = "PRODUCTION" | "CONSUMPTION";
+
+export type ProductionMovementInput = {
+  type: ProductionMovementType;
+  productId: string;
+  warehouseId: string;
+  quantity: number; // toujours > 0 ; le signe est déduit du type
+  unitCost?: number | null;
+  occurredAt?: Date;
+  referenceDocId?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Enregistre un mouvement de stock lié à un ordre de fabrication.
+ * - CONSUMPTION : quantité négative (sortie de matière), vérifie le stock dispo.
+ * - PRODUCTION  : quantité positive (entrée de produit fini).
+ * Le mouvement est rattaché à l'ordre via referenceDocType/referenceDocId.
+ *
+ * Si `tx` est fourni (transaction interactive en cours), le mouvement est
+ * exécuté DANS cette transaction (pas de transaction imbriquée, sinon timeout).
+ */
+export async function createProductionMovement(
+  input: ProductionMovementInput,
+  createdById: string,
+  tx?: Prisma.TransactionClient,
+): Promise<InventoryMovementRow> {
+  const db = tx ?? (prisma as unknown as Prisma.TransactionClient);
+  const { product, warehouse } = await assertProductAndWarehouse(
+    input.productId,
+    input.warehouseId,
+  );
+
+  const quantity = input.type === "CONSUMPTION" ? -Math.abs(input.quantity) : Math.abs(input.quantity);
+
+  const { number } = await nextDocumentNumber("INVENTORY_MOVEMENT");
+
+  if (quantity < 0) {
+    await assertStockAvailable(input.productId, input.warehouseId, quantity, db);
+  }
+
+  const created = await db.inventoryMovement.create({
+    data: {
+      number,
+      type: input.type,
+      productId: product.id,
+      warehouseId: warehouse.id,
+      quantity,
+      unitCost: input.unitCost ?? null,
+      occurredAt: input.occurredAt ?? new Date(),
+      referenceDocType: "PRODUCTION_ORDER",
+      referenceDocId: input.referenceDocId ?? null,
+      notes: input.notes ?? null,
+      companyId: requireCompanyContext().company.id,
+      createdById,
+    },
+    include: MOVEMENT_INCLUDE,
+  });
+
+  return normalizeMovement(created);
 }

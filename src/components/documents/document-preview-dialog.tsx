@@ -14,6 +14,7 @@ import {
 import { Spinner } from "@/components/feedback/spinner";
 import type { CommercialDocType } from "@/features/documents/engine/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 
 type FitMode = "fit-page" | "fit-width" | "custom";
 
@@ -124,19 +125,21 @@ export function DocumentPreviewDialog({
       setLoading(true);
       setError(null);
       try {
-        const pdfjs = await import("pdfjs-dist");
-        const { default: workerUrl } = await import(
-          "pdfjs-dist/build/pdf.worker.min.mjs?url"
-        );
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+        GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url,
+        ).toString();
         if (cancelled) return;
 
-        const response = await fetch(previewUrl, { cache: "no-store" });
+        const response = await fetch(previewUrl, {
+          cache: "no-store",
+          credentials: "include",
+        });
         if (!response.ok) throw new Error(t("documentsUI.printFailed"));
         const data = await response.arrayBuffer();
         if (cancelled) return;
 
-        const document = await pdfjs.getDocument({ data }).promise;
+        const document = await getDocument({ data }).promise;
         if (cancelled) {
           void document.destroy();
           return;

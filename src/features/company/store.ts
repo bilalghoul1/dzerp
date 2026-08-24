@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { recordAudit } from "@/features/audit/service";
 import { getResolveCache } from "@/features/company/context";
 import { ALL_PERMISSION_KEYS, type PermissionKey } from "@/features/auth/permissions";
 import type {
@@ -51,6 +50,7 @@ export async function listCompaniesForUser(
       name: m.company.name,
       isDefault: m.isDefault,
       currency: m.company.currency,
+      defaultBranchId: m.company.defaultBranchId,
     }));
   });
 }
@@ -83,6 +83,7 @@ export async function getCompanyById(id: string): Promise<CompanyRef | null> {
       name: company.name,
       isDefault: company.isDefault,
       currency: company.currency,
+      defaultBranchId: company.defaultBranchId,
     };
   });
 }
@@ -104,6 +105,17 @@ export function selectActiveCompanyId(
     return sessionCompanyId;
   }
   return companies.find((c) => c.isDefault)?.id ?? companies[0]?.id ?? null;
+}
+
+/**
+ * Rôles globaux (UserRole) de l'utilisateur. C'est ici que vit le privilège
+ * PLATEFORME (SUPER_ADMIN) : un rôle global est indépendant de toute société.
+ * Exporté pour la session (`getCurrentUser`) et les gardes d'administration.
+ */
+export function listGlobalPermissions(
+  userId: string,
+): Promise<PermissionKey[]> {
+  return getLegacyGlobalPermissions(userId);
 }
 
 /** Rôles globaux (UserRole) de l'utilisateur — couche de compatibilité. */
@@ -133,51 +145,28 @@ async function getLegacyGlobalPermissions(
   });
 }
 
-/** Journalise un repli vers UserRole (diagnostic + audit). */
-async function logPermissionFallback(
-  userId: string,
-  companyId: string,
-  permissionCount: number,
-): Promise<void> {
-  console.warn(
-    `[authorization] LEGACY FALLBACK (UserRole) → ${permissionCount} permissions pour user ${userId} dans company ${companyId}`,
-  );
-  try {
-    await recordAudit({
-      action: "FALLBACK",
-      entity: "Authorization",
-      entityId: userId,
-      actorId: userId,
-      changes: {
-        reason: "LEGACY_USER_ROLE_FALLBACK",
-        companyId,
-        source: "UserRole",
-        permissionCount,
-      },
-    });
-  } catch (error) {
-    console.error("[authorization] audit fallback failed:", error);
-  }
-}
-
-export type MembershipResolution = {
-  membership: MembershipRef;
-  company: CompanyRef;
-  roleAssignments: RoleAssignmentRef[];
-  permissions: PermissionKey[];
-  source: "RoleAssignment" | "UserRole";
-};
-
 /**
  * Résout l'autorisation d'un utilisateur dans une société :
  * UserCompany (active + société active) → RoleAssignment (actifs, non expirés)
  * → Role → Permission.
  *
  * - Aucune adhésion / adhésion inactive / société inactive → `null` (rejet).
- * - Adhésion sans aucun RoleAssignment → repli UserRole (journalisé).
+ * - Adhésion active SANS aucun RoleAssignment → `source: "None"`, aucune
+ *   permission : échec sûr (fail-closed). AUCUN repli sur les rôles globaux
+ *   (UserRole) : un utilisateur de société sans rôle n'obtient jamais les
+ *   permissions d'un rôle global de plateforme.
  * - Adhésion avec RoleAssignment (même inactifs) mais aucun actif → aucune
  *   permission, PAS de repli (une attribution désactivée = accès refusé).
  */
+
+export type MembershipResolution = {
+  membership: MembershipRef;
+  company: CompanyRef;
+  roleAssignments: RoleAssignmentRef[];
+  permissions: PermissionKey[];
+  source: "RoleAssignment" | "None";
+};
+
 export async function resolveMembership(
   userId: string,
   companyId: string,
@@ -210,6 +199,7 @@ export async function resolveMembership(
       companyId,
       active: uc.active,
       isDefault: uc.isDefault,
+      defaultBranchId: uc.defaultBranchId,
     };
     const company: CompanyRef = {
       id: uc.company.id,
@@ -217,6 +207,7 @@ export async function resolveMembership(
       name: uc.company.name,
       isDefault: uc.isDefault,
       currency: uc.company.currency,
+      defaultBranchId: uc.company.defaultBranchId,
     };
     const roleAssignments: RoleAssignmentRef[] = uc.roleAssignments.map((a) => ({
       id: a.id,
@@ -230,16 +221,16 @@ export async function resolveMembership(
       expiresAt: a.expiresAt,
     }));
 
-    // Compatibilité : aucune attribution de rôle → rôles globaux (UserRole).
+    // Fail-closed : une adhésion active sans attribution de rôle ne reçoit
+    // AUCUNE permission (source "None"). Pas de repli UserRole : un membre de
+    // société sans rôle reste confiné, jamais promu par un rôle global.
     if (uc.roleAssignments.length === 0) {
-      const legacyKeys = await getLegacyGlobalPermissions(userId);
-      await logPermissionFallback(userId, companyId, legacyKeys.length);
       return {
         membership,
         company,
         roleAssignments: [],
-        permissions: legacyKeys,
-        source: "UserRole",
+        permissions: [],
+        source: "None",
       };
     }
 

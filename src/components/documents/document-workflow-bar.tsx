@@ -11,6 +11,7 @@ import { DocumentConvertDialog } from "@/components/documents/document-convert-d
 import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
 import { getTransitions } from "@/features/documents/framework/api";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
+import type { CommercialDocType } from "@/features/documents/engine/types";
 import type { StatusTransition } from "@/features/documents/engine/types";
 import type { DocumentStatus } from "@/generated/prisma/enums";
 
@@ -37,6 +38,8 @@ export function DocumentWorkflowBar() {
 
   const [transitions, setTransitions] = React.useState<StatusTransition[]>([]);
   const [convertOpen, setConvertOpen] = React.useState(false);
+  const [initialTarget, setInitialTarget] = React.useState<CommercialDocType | null>(null);
+  const [convertSession, setConvertSession] = React.useState(0);
   const [previewOpen, setPreviewOpen] = React.useState(false);
 
   const loadTransitions = React.useCallback(async () => {
@@ -61,6 +64,22 @@ export function DocumentWorkflowBar() {
     canEdit &&
     editor.dirty &&
     !editor.busy;
+
+  const canDeliver =
+    editor.type === "SALES_ORDER" &&
+    (editor.detail?.lines.some((line) => (line.remainingQty ?? 0) > 0) ?? false);
+
+  const openConvert = () => {
+    setInitialTarget(null);
+    setConvertSession((s) => s + 1);
+    setConvertOpen(true);
+  };
+
+  const openDelivery = () => {
+    setInitialTarget("DELIVERY_NOTE");
+    setConvertSession((s) => s + 1);
+    setConvertOpen(true);
+  };
 
   const handleTransition = async (transition: StatusTransition) => {
     const statusLabel = t(`status.${transition.to}`);
@@ -149,11 +168,25 @@ export function DocumentWorkflowBar() {
       <div className="flex flex-wrap items-center gap-2">
         {editor.permissions.convert && editor.docId && (
           <>
+            {canDeliver && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openDelivery}
+                disabled={editor.busy}
+              >
+                <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
+                  local_shipping
+                </span>
+                {t("documentsUI.deliverAction")}
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setConvertOpen(true)}
+              onClick={openConvert}
               disabled={editor.busy}
             >
               <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
@@ -162,10 +195,12 @@ export function DocumentWorkflowBar() {
               {t("documentsUI.convert")}
             </Button>
             <DocumentConvertDialog
+              key={convertSession}
               open={convertOpen}
               onOpenChange={setConvertOpen}
               sourceType={editor.type}
               sourceId={editor.docId}
+              initialTarget={initialTarget}
               onConverted={handleConverted}
             />
           </>

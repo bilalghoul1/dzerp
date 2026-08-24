@@ -23,6 +23,8 @@ const SALES_CONVERSIONS: Record<CommercialDocType, CommercialDocType[]> = {
   DELIVERY_NOTE: ["INVOICE"],
   INVOICE: ["CREDIT_NOTE"],
   CREDIT_NOTE: [],
+  CUSTOMER_ORDER: ["PROFORMA"],
+  PROFORMA: [],
   PURCHASE_REQUEST: [],
   PURCHASE_ORDER: [],
   GOODS_RECEIPT: [],
@@ -39,6 +41,8 @@ const PURCHASING_CONVERSIONS: Record<CommercialDocType, CommercialDocType[]> = {
   PURCHASE_ORDER: ["GOODS_RECEIPT", "SUPPLIER_INVOICE"],
   GOODS_RECEIPT: ["SUPPLIER_INVOICE"],
   SUPPLIER_INVOICE: [],
+  CUSTOMER_ORDER: [],
+  PROFORMA: [],
 };
 
 const DEFAULT_TOOLBAR: DocumentActionId[] = [
@@ -111,6 +115,20 @@ const UI_CONFIGS: Record<CommercialDocType, BaseUiConfig> = {
     allowedConversions: SALES_CONVERSIONS.CREDIT_NOTE,
     showValidUntil: false,
   },
+  CUSTOMER_ORDER: {
+    ...BASE_SALES,
+    icon: "inbox",
+    partyLabelKey: "fieldCustomer",
+    allowedConversions: SALES_CONVERSIONS.CUSTOMER_ORDER,
+    showValidUntil: false,
+  },
+  PROFORMA: {
+    ...BASE_SALES,
+    icon: "receipt_long",
+    partyLabelKey: "fieldCustomer",
+    allowedConversions: SALES_CONVERSIONS.PROFORMA,
+    showValidUntil: true,
+  },
   PURCHASE_REQUEST: {
     ...BASE_PURCHASING,
     icon: "request_quote",
@@ -147,6 +165,8 @@ const LEGACY_DOC_TYPES: CommercialDocType[] = [
   "DELIVERY_NOTE",
   "INVOICE",
   "CREDIT_NOTE",
+  "CUSTOMER_ORDER",
+  "PROFORMA",
   "PURCHASE_REQUEST",
   "PURCHASE_ORDER",
   "GOODS_RECEIPT",

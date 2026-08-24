@@ -65,24 +65,31 @@ export function DocumentHeader() {
 
           <div className="space-y-2">
             <Label htmlFor="doc-branch">{t("documentsUI.fieldBranch")} *</Label>
-            <Select
-              value={editor.header.branchId}
-              onValueChange={(value) =>
-                editor.setHeaderField("branchId", value)
-              }
-              disabled={!isEditable || editor.busy}
-            >
-              <SelectTrigger id="doc-branch">
-                <SelectValue placeholder={t("common.selectPlaceholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {company.branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {company.branches.length === 0 ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {t("documentsUI.noBranchWarning") ??
+                  "Cette société ne possède aucune succursale. Créez une succursale dans les paramètres de la société avant d'enregistrer un document."}
+              </div>
+            ) : (
+              <Select
+                value={editor.header.branchId}
+                onValueChange={(value) =>
+                  editor.setHeaderField("branchId", value)
+                }
+                disabled={!isEditable || editor.busy}
+              >
+                <SelectTrigger id="doc-branch">
+                  <SelectValue placeholder={t("common.selectPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {company.branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-2">

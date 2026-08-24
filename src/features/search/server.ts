@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { PermissionKey } from "@/features/auth/permissions";
 
 export type SearchHitType =
   | "client"
@@ -19,12 +20,24 @@ export type SearchHit = {
   icon: string;
 };
 
-const quickActions: { title: string; titleAr: string; href: string; icon: string }[] = [
-  { title: "New quotation", titleAr: "عرض سعر جديد", href: "/documents/quotation/nouveau", icon: "note_add" },
-  { title: "New customer", titleAr: "عميل جديد", href: "/crm/customers", icon: "person_add" },
-  { title: "New purchase order", titleAr: "أمر شراء جديد", href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart" },
-  { title: "Reports", titleAr: "التقارير", href: "/rapports", icon: "bar_chart" },
-  { title: "Settings", titleAr: "الإعدادات", href: "/parametres", icon: "settings" },
+/**
+ * Actions rapides proposées par la recherche : chacune est verrouillée par une
+ * permission de création/lecture — un utilisateur sans le droit ne voit pas
+ * l'action (le lien `/nouveau` serait sinon accessible sans droit).
+ */
+const quickActions: {
+  title: string;
+  titleAr: string;
+  href: string;
+  icon: string;
+  permission: PermissionKey;
+}[] = [
+  { title: "New quotation", titleAr: "عرض سعر جديد", href: "/documents/quotation/nouveau", icon: "note_add", permission: "ventes.devis.create" },
+  { title: "New sales order", titleAr: "أمر بيع جديد", href: "/documents/sales_order/nouveau", icon: "shopping_cart", permission: "ventes.commande.create" },
+  { title: "New customer", titleAr: "عميل جديد", href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
+  { title: "New purchase order", titleAr: "أمر شراء جديد", href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart", permission: "achats.bon.create" },
+  { title: "Reports", titleAr: "التقارير", href: "/rapports", icon: "bar_chart", permission: "rapports.view" },
+  { title: "Settings", titleAr: "الإعدادات", href: "/parametres", icon: "settings", permission: "parametres.view" },
 ];
 
 type DocParty = "customer" | "supplier";
@@ -65,6 +78,8 @@ const DOC_TABLES: {
   { key: "DELIVERY_NOTE", label: "Delivery note", icon: "local_shipping", hrefPrefix: "/documents/delivery_note/", party: "customer", findMany: (a) => prisma.deliveryNote.findMany(a as never) },
   { key: "INVOICE", label: "Invoice", icon: "receipt", hrefPrefix: "/documents/invoice/", party: "customer", findMany: (a) => prisma.invoice.findMany(a as never) },
   { key: "CREDIT_NOTE", label: "Credit note", icon: "assignment_return", hrefPrefix: "/documents/credit_note/", party: "customer", findMany: (a) => prisma.creditNote.findMany(a as never) },
+  { key: "CUSTOMER_ORDER", label: "Customer order", icon: "inbox", hrefPrefix: "/documents/customer_order/", party: "customer", findMany: (a) => prisma.customerOrder.findMany(a as never) },
+  { key: "PROFORMA", label: "Proforma", icon: "receipt_long", hrefPrefix: "/documents/proforma/", party: "customer", findMany: (a) => prisma.proforma.findMany(a as never) },
   { key: "PURCHASE_REQUEST", label: "Purchase request", icon: "request_quote", hrefPrefix: "/documents/purchase_request/", party: "supplier", findMany: (a) => prisma.purchaseRequest.findMany(a as never) },
   { key: "PURCHASE_ORDER", label: "Purchase order", icon: "shopping_bag", hrefPrefix: "/documents/purchase_order/", party: "supplier", findMany: (a) => prisma.purchaseOrder.findMany(a as never) },
   { key: "GOODS_RECEIPT", label: "Goods receipt", icon: "inventory_2", hrefPrefix: "/documents/goods_receipt/", party: "supplier", findMany: (a) => prisma.goodsReceipt.findMany(a as never) },
@@ -146,6 +161,7 @@ export async function globalSearch(
   query: string,
   limit = 5,
   companyId?: string | null,
+  permissions: readonly PermissionKey[] = [],
 ): Promise<SearchHit[]> {
   const q = query.trim();
   if (!q) return [];
@@ -257,15 +273,17 @@ export async function globalSearch(
 
   if (hits.length < limit) {
     hits.push(
-      ...quickActions.map((a) => ({
-        type: "action" as const,
-        id: a.href,
-        title: a.title,
-        titleAr: a.titleAr,
-        subtitle: null,
-        href: a.href,
-        icon: a.icon,
-      })),
+      ...quickActions
+        .filter((a) => permissions.includes(a.permission))
+        .map((a) => ({
+          type: "action" as const,
+          id: a.href,
+          title: a.title,
+          titleAr: a.titleAr,
+          subtitle: null,
+          href: a.href,
+          icon: a.icon,
+        })),
     );
   }
 

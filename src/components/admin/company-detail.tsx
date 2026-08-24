@@ -1,10 +1,30 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -15,6 +35,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/feedback/empty-state";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type {
   CompanyAdminDetail,
   CompanyMemberView,
@@ -87,6 +113,13 @@ type DetailProps = {
   statistics: CompanyStatistics;
   audit: CompanyAuditEntry[];
   activity: CompanyActivityEntry[];
+  canUpdate?: boolean;
+  canArchive?: boolean;
+  canDelete?: boolean;
+  /** Gestion des identifiants utilisateurs — réservée au SUPER_ADMIN (plateforme). */
+  canManageUsers?: boolean;
+  /** Porteur du rôle global SUPER_ADMIN — seul habilité à la suppression définitive. */
+  isSuperAdmin?: boolean;
 };
 
 export function CompanyDetail({
@@ -97,8 +130,232 @@ export function CompanyDetail({
   statistics,
   audit,
   activity,
+  canUpdate = false,
+  canArchive = false,
+  canDelete = false,
+  canManageUsers = false,
+  isSuperAdmin = false,
 }: DetailProps) {
   const { t } = useI18n();
+  const router = useRouter();
+  const [resetting, setResetting] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [confirmName, setConfirmName] = React.useState("");
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [editingUser, setEditingUser] = React.useState<CompanyMemberView | null>(null);
+  const [passwordUser, setPasswordUser] = React.useState<CompanyMemberView | null>(null);
+  const [identity, setIdentity] = React.useState({
+    fullName: "",
+    username: "",
+    email: "",
+    status: "ACTIVE" as "ACTIVE" | "INACTIVE" | "SUSPENDED",
+  });
+  const [newPassword, setNewPassword] = React.useState("");
+  const [identityBusy, setIdentityBusy] = React.useState(false);
+  const [passwordBusy, setPasswordBusy] = React.useState(false);
+
+  const setStatus = async (
+    status: "ACTIVE" | "SUSPENDED" | "ARCHIVED",
+  ) => {
+    const config =
+      status === "SUSPENDED"
+        ? {
+            confirm: t("admin.confirmSuspend"),
+            success: t("admin.suspendedSuccess"),
+          }
+        : company.status === "ARCHIVED"
+          ? {
+              confirm: t("admin.confirmRestore"),
+              success: t("admin.restoredSuccess"),
+            }
+          : {
+              confirm: t("admin.confirmActivate"),
+              success: t("admin.activatedSuccess"),
+            };
+    if (!window.confirm(config.confirm)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${company.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      toast.success(config.success);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removePermanently = async () => {
+    if (confirmName.trim() !== company.name) {
+      toast.error(t("admin.deletePermanentMismatch"));
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${company.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: company.name }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = json?.error?.message ?? "Error";
+        throw new Error(
+          json?.error?.code === "CANNOT_DELETE_DEFAULT"
+            ? t("admin.deletePermanentDefault")
+            : message,
+        );
+      }
+      toast.success(t("admin.deletePermanentSuccess"));
+      setDeleteOpen(false);
+      router.push("/admin/companies");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const resetOwnerPassword = async (newPassword: string) => {
+    setResetting(true);
+    try {
+      const res = await fetch(
+        `/api/admin/companies/${company.id}/owner/reset`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword }),
+        },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      return json?.data?.owner as
+        | { username: string; mustChangePassword: boolean }
+        | undefined;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+      return undefined;
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const onResetOwner = async () => {
+    const newPassword = window.prompt(t("admin.ownerPasswordReset"));
+    if (!newPassword || newPassword.length < 8) {
+      toast.error(t("admin.ownerPasswordTooShort"));
+      return;
+    }
+    if (!window.confirm(t("admin.confirmOwnerReset"))) return;
+    const owner = await resetOwnerPassword(newPassword);
+    if (owner) {
+      toast.success(t("admin.ownerPasswordReset"));
+      window.alert(t("admin.ownerNoPassword"));
+    }
+  };
+
+  const openEdit = (member: CompanyMemberView) => {
+    setIdentity({
+      fullName: member.fullName ?? "",
+      username: member.username,
+      email: member.email ?? "",
+      status:
+        member.status === "INACTIVE" || member.status === "SUSPENDED"
+          ? member.status
+          : "ACTIVE",
+    });
+    setEditingUser(member);
+  };
+
+  const saveIdentity = async () => {
+    if (!editingUser) return;
+    if (identity.username.trim().length < 3) {
+      toast.error(t("admin.userUsernameTooShort"));
+      return;
+    }
+    setIdentityBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/companies/${company.id}/users/${editingUser.userCompanyId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: identity.fullName.trim() ? identity.fullName : null,
+            username: identity.username,
+            email: identity.email.trim() ? identity.email.trim() : null,
+            status: identity.status,
+          }),
+        },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      toast.success(t("admin.memberUpdateSuccess"));
+      setEditingUser(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setIdentityBusy(false);
+    }
+  };
+
+  const savePassword = async () => {
+    if (!passwordUser) return;
+    if (newPassword.length < 8) {
+      toast.error(t("admin.ownerPasswordTooShort"));
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/companies/${company.id}/users/${passwordUser.userCompanyId}/password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword }),
+        },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      toast.success(t("admin.memberPasswordResetSuccess"));
+      toast.info(t("admin.memberPasswordResetInfo"));
+      setPasswordUser(null);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const revokeSessions = async (member: CompanyMemberView) => {
+    if (!window.confirm(t("admin.revokeSessionsConfirm"))) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/companies/${company.id}/users/${member.userCompanyId}/sessions`,
+        { method: "POST" },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? "Error");
+      const count = json?.data?.revokedSessions ?? 0;
+      toast.success(t("admin.sessionsRevokedCount", { count }));
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -115,14 +372,110 @@ export function CompanyDetail({
             {t(`admin.status_${company.status}` as "admin.status_ACTIVE")}
           </Badge>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/admin/companies">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-              arrow_back
-            </span>
-            {t("common.back")}
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {canUpdate && company.status !== "ARCHIVED" ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin/companies/${company.id}/modifier`}>
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  aria-hidden="true"
+                >
+                  edit
+                </span>
+                {t("admin.edit")}
+              </Link>
+            </Button>
+          ) : null}
+          {canArchive || (canDelete && !company.isActive) ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={busy}>
+                  <span
+                    className="material-symbols-outlined text-[18px]"
+                    aria-hidden="true"
+                  >
+                    more_vert
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canArchive ? (
+                  <DropdownMenuItem
+                    disabled={busy}
+                    onClick={() => {
+                      if (company.status === "ARCHIVED") {
+                        void setStatus("ACTIVE");
+                      } else {
+                        void setStatus("ARCHIVED");
+                      }
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      aria-hidden="true"
+                    >
+                      {company.status === "ARCHIVED" ? "unarchive" : "archive"}
+                    </span>
+                    {company.status === "ARCHIVED"
+                      ? t("admin.restore")
+                      : t("admin.archive")}
+                  </DropdownMenuItem>
+                ) : null}
+                {canArchive && company.status !== "ARCHIVED" ? (
+                  <DropdownMenuItem
+                    disabled={busy}
+                    onClick={() =>
+                      void setStatus(
+                        company.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                      )
+                    }
+                  >
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      aria-hidden="true"
+                    >
+                      {company.status === "SUSPENDED"
+                        ? "restart_alt"
+                        : "pause_circle"}
+                    </span>
+                    {company.status === "SUSPENDED"
+                      ? t("admin.reactivate")
+                      : t("admin.suspend")}
+                  </DropdownMenuItem>
+                ) : null}
+                {canDelete && !company.isActive ? (
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmName("");
+                      setDeleteOpen(true);
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      aria-hidden="true"
+                    >
+                      delete
+                    </span>
+                    {t("admin.delete")}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/companies">
+              <span
+                className="material-symbols-outlined text-[18px]"
+                aria-hidden="true"
+              >
+                arrow_back
+              </span>
+              {t("common.back")}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {company.status === "ARCHIVED" ? (
@@ -148,6 +501,54 @@ export function CompanyDetail({
         </TabsList>
 
         <TabsContent value="general">
+          {company.owner ? (
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {t("admin.ownerTitle")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <InfoRow label={t("auth.username")} value={`@${company.owner.username}`} />
+                  <InfoRow label={t("profile.fullName")} value={company.owner.fullName ?? "—"} />
+                  <InfoRow
+                    label={t("profile.email")}
+                    value={company.owner.email ?? "—"}
+                  />
+                  <InfoRow
+                    label={t("admin.ownerMustChange")}
+                    value={
+                      company.owner.mustChangePassword
+                        ? t("common.yes")
+                        : t("common.no")
+                    }
+                  />
+                  <InfoRow
+                    label={t("admin.joinedAt")}
+                    value={formatDate(company.owner.joinedAt)}
+                  />
+                </dl>
+                <div className="mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={resetting || company.status === "ARCHIVED"}
+                    onClick={onResetOwner}
+                  >
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      aria-hidden="true"
+                    >
+                      key
+                    </span>
+                    {t("admin.resetOwnerPassword")}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t("admin.tabGeneral")}</CardTitle>
@@ -459,6 +860,8 @@ export function CompanyDetail({
                       <TableHead>{t("admin.assignRole")}</TableHead>
                       <TableHead>{t("admin.defaultBranchForUser")}</TableHead>
                       <TableHead>{t("admin.joinedAt")}</TableHead>
+                      <TableHead>{t("admin.lastLogin")}</TableHead>
+                      {canManageUsers ? <TableHead>{t("common.actions")}</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -475,6 +878,7 @@ export function CompanyDetail({
                         </TableCell>
                         <TableCell>
                           <p className="font-medium">{m.fullName || m.username}</p>
+                          <p className="text-xs text-muted-foreground">@{m.username}</p>
                           {m.email ? (
                             <p className="text-xs text-muted-foreground">{m.email}</p>
                           ) : null}
@@ -491,6 +895,67 @@ export function CompanyDetail({
                             : "—"}
                         </TableCell>
                         <TableCell>{formatDate(m.joinedAt)}</TableCell>
+                        <TableCell>
+                          {m.lastLoginAt ? formatDate(m.lastLoginAt) : t("admin.never")}
+                        </TableCell>
+                        {canManageUsers ? (
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" disabled={busy}>
+                                  <span
+                                    className="material-symbols-outlined text-[18px]"
+                                    aria-hidden="true"
+                                  >
+                                    more_vert
+                                  </span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  disabled={busy}
+                                  onClick={() => openEdit(m)}
+                                >
+                                  <span
+                                    className="material-symbols-outlined text-[18px]"
+                                    aria-hidden="true"
+                                  >
+                                    edit
+                                  </span>
+                                  {t("admin.userEdit")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setNewPassword("");
+                                    setPasswordUser(m);
+                                  }}
+                                >
+                                  <span
+                                    className="material-symbols-outlined text-[18px]"
+                                    aria-hidden="true"
+                                  >
+                                    key
+                                  </span>
+                                  {t("admin.resetMemberPassword")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  disabled={busy}
+                                  onClick={() => void revokeSessions(m)}
+                                >
+                                  <span
+                                    className="material-symbols-outlined text-[18px]"
+                                    aria-hidden="true"
+                                  >
+                                    logout
+                                  </span>
+                                  {t("admin.revokeSessions")}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -589,6 +1054,241 @@ export function CompanyDetail({
           </div>
         </TabsContent>
       </Tabs>
+
+      {canArchive || (canDelete && isSuperAdmin) ? (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                warning
+              </span>
+              {t("admin.dangerZone")}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {t("admin.dangerZoneDescription")}
+            </p>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            {canArchive ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || company.isDefault}
+                onClick={() => {
+                  if (company.status === "ARCHIVED") {
+                    void setStatus("ACTIVE");
+                  } else {
+                    void setStatus("ARCHIVED");
+                  }
+                }}
+              >
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  aria-hidden="true"
+                >
+                  {company.status === "ARCHIVED" ? "unarchive" : "archive"}
+                </span>
+                {company.status === "ARCHIVED"
+                  ? t("admin.restore")
+                  : t("admin.archive")}
+              </Button>
+            ) : null}
+            {canArchive && company.status !== "ARCHIVED" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  void setStatus(
+                    company.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                  )
+                }
+              >
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  aria-hidden="true"
+                >
+                  {company.status === "SUSPENDED" ? "restart_alt" : "pause_circle"}
+                </span>
+                {company.status === "SUSPENDED"
+                  ? t("admin.reactivate")
+                  : t("admin.suspend")}
+              </Button>
+            ) : null}
+            {canDelete && isSuperAdmin ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={busy || deleteBusy}
+                onClick={() => {
+                  setConfirmName("");
+                  setDeleteOpen(true);
+                }}
+              >
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  aria-hidden="true"
+                >
+                  delete_forever
+                </span>
+                {t("admin.deletePermanently")}
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !deleteBusy) setDeleteOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">
+              {t("admin.deletePermanently")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("admin.confirmDeletePermanent")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-delete-name" required>
+              {t("admin.deletePermanentLabel", { name: company.name })}
+            </Label>
+            <Input
+              id="confirm-delete-name"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder={company.name}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteBusy || confirmName.trim() !== company.name}
+              onClick={() => void removePermanently()}
+            >
+              {deleteBusy ? t("common.saving") : t("admin.deletePermanentConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editingUser !== null} onOpenChange={(open) => { if (!open) setEditingUser(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("admin.userEdit")}</DialogTitle>
+            <DialogDescription>
+              {t("admin.userEditDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="member-fullName">{t("profile.fullName")}</Label>
+              <Input
+                id="member-fullName"
+                value={identity.fullName}
+                onChange={(e) => setIdentity((s) => ({ ...s, fullName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-username" required>
+                {t("auth.username")}
+              </Label>
+              <Input
+                id="member-username"
+                value={identity.username}
+                onChange={(e) => setIdentity((s) => ({ ...s, username: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-email">{t("profile.email")}</Label>
+              <Input
+                id="member-email"
+                type="email"
+                value={identity.email}
+                onChange={(e) => setIdentity((s) => ({ ...s, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("admin.userStatus")}</Label>
+              <Select
+                value={identity.status}
+                onValueChange={(value) =>
+                  setIdentity((s) => ({
+                    ...s,
+                    status: value as "ACTIVE" | "INACTIVE" | "SUSPENDED",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">{t("admin.userStatusActive")}</SelectItem>
+                  <SelectItem value="INACTIVE">{t("admin.userStatusInactive")}</SelectItem>
+                  <SelectItem value="SUSPENDED">{t("admin.userStatusSuspended")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingUser(null)}
+              disabled={identityBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void saveIdentity()} disabled={identityBusy}>
+              {identityBusy ? t("common.saving") : t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={passwordUser !== null} onOpenChange={(open) => { if (!open) setPasswordUser(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("admin.resetMemberPassword")}</DialogTitle>
+            <DialogDescription>
+              {t("admin.memberPasswordResetInfo")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="member-newPassword" required>
+              {t("admin.userPasswordNewLabel")}
+            </Label>
+            <Input
+              id="member-newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPasswordUser(null)}
+              disabled={passwordBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void savePassword()} disabled={passwordBusy}>
+              {passwordBusy ? t("common.saving") : t("common.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

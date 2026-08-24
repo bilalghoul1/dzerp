@@ -16,7 +16,12 @@ export async function GET(request: Request): Promise<NextResponse> {
         return NextResponse.json({ data: hits });
       }
       const query = searchParams.get("q") ?? "";
-      const hits = await globalSearch(query, 5, guard.context.company.id);
+      const hits = await globalSearch(
+        query,
+        5,
+        guard.context.company.id,
+        guard.context.permissions,
+      );
       return NextResponse.json({ data: hits });
     } catch (error) {
       console.error("search error:", error);

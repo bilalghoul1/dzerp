@@ -71,9 +71,11 @@ export async function PATCH(
 ): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
-  const guard = await apiGuardWithContext(
-    action === "approve" ? "documents.approve" : "documents.update",
-  );
+
+  // Authentification + contexte société, SANS choix de permission guidé par le
+  // client : la permission réelle dépend de l'opération effective (transition
+  // de statut vs approbation), déterminée ci-dessous côté serveur.
+  const guard = await apiGuardWithContext();
   if (guard.response) return guard.response;
 
   return runScoped(guard.context, async () => {
@@ -90,6 +92,19 @@ export async function PATCH(
         throw new ApiError(404, "Document introuvable", "NOT_FOUND");
       }
 
+      const config = getDocConfig(docType);
+      const delegate = (prisma as Record<string, unknown>)[config.prismaModel] as {
+        findUnique: (args: { where: { id: string }; select: { id: boolean; status: boolean; companyId: boolean } }) => Promise<{ id: string; status: string; companyId: string } | null>;
+      };
+      const doc = await delegate.findUnique({
+        where: { id },
+        select: { id: true, status: true, companyId: true },
+      });
+
+      if (!doc || doc.companyId !== guard.context.company.id) {
+        throw new ApiError(404, "Document introuvable", "NOT_FOUND");
+      }
+
       const meta = requestMeta(request);
       const ctx = {
         companyId: guard.context.company.id,
@@ -98,12 +113,27 @@ export async function PATCH(
         userAgent: meta.userAgent,
       };
 
-      if (action === "approve") {
+      const body = action === "approve" ? {} : await request.json().catch(() => ({}));
+      const targetStatus = body.targetStatus as string | undefined;
+
+      // Une approbation est définie par la transition RÉELLE vers APPROVED
+      // (seule transition valide depuis PENDING_APPROVAL) — `?action=` est
+      // contrôlé par le client et ne détermine donc jamais la permission.
+      const isApproval = action === "approve" || targetStatus === "APPROVED";
+      const permission: "documents.approve" | "documents.update" = isApproval
+        ? "documents.approve"
+        : "documents.update";
+
+      if (!guard.session.permissions.includes(permission)) {
+        return NextResponse.json(
+          { error: { message: "Accès refusé.", code: "FORBIDDEN" } },
+          { status: 403 },
+        );
+      }
+
+      if (isApproval) {
         await approveDoc(docType, id, ctx);
       } else {
-        const body = await request.json().catch(() => ({}));
-        const targetStatus = body.targetStatus as string | undefined;
-
         if (!targetStatus) {
           throw new ApiError(400, "targetStatus est requis", "VALIDATION");
         }

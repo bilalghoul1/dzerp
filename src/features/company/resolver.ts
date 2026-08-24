@@ -20,6 +20,7 @@ import type {
   CompanyContext,
   CompanyRef,
 } from "@/features/company/types";
+import type { MembershipResolution } from "@/features/company/store";
 
 /** Sociétés accessibles à l'utilisateur (adhésions actives, sociétés actives). */
 export async function listAssignedCompanies(userId: string): Promise<CompanyRef[]> {
@@ -29,6 +30,33 @@ export async function listAssignedCompanies(userId: string): Promise<CompanyRef[
 /** Succursales d'une société (Phase 5.3 : toutes les succursales actives). */
 export async function listAssignedBranches(companyId: string): Promise<BranchRef[]> {
   return listBranchesForCompany(companyId);
+}
+
+/**
+ * Sélectionne la société d'accès la plus pertinente en PRÉFÉRANT une adhésion
+ * qui porte effectivement un rôle (`source: "RoleAssignment"`). Une adhésion
+ * active sans rôle (`source: "None"`) n'est retenue qu'en dernier recours : le
+ * layout affiche alors l'état « accès à réinitialiser » au lieu de données.
+ * Aucune valeur stockée (cookie/session) n'est jamais utilisée sans validation.
+ */
+async function pickAccessibleCompany(
+  userId: string,
+  companies: CompanyRef[],
+  preferredId: string | null,
+): Promise<{ company: CompanyRef; resolution: MembershipResolution } | null> {
+  const preferred = companies.find((c) => c.id === preferredId);
+  const ordered = preferred
+    ? [preferred, ...companies.filter((c) => c.id !== preferredId)]
+    : companies;
+  let fallback: { company: CompanyRef; resolution: MembershipResolution } | null =
+    null;
+  for (const company of ordered) {
+    const resolution = await resolveMembership(userId, company.id);
+    if (!resolution) continue;
+    fallback = { company, resolution };
+    if (resolution.source === "RoleAssignment") return fallback;
+  }
+  return fallback;
 }
 
 function isCompanyAssigned(
@@ -141,11 +169,13 @@ async function resolveActiveCompany(
 
 /**
  * Résout la succursale active dans la société active : cookie requête → session →
- * nulle (toutes succursales). La succursale doit appartenir à la société active.
+ * succursale par défaut (adhésion du membre, puis société, puis siège/première).
+ * La succursale doit appartenir à la société active.
  */
 async function resolveActiveBranch(
   companyBranches: BranchRef[],
   sessionActiveBranchId: string | null | undefined,
+  fallbackBranchId: string | null | undefined,
 ): Promise<BranchRef | null> {
   const store = await cookies();
 
@@ -158,7 +188,11 @@ async function resolveActiveBranch(
     return companyBranches.find((b) => b.id === sessionActiveBranchId)!;
   }
 
-  return null;
+  if (isBranchInCompany(companyBranches, fallbackBranchId)) {
+    return companyBranches.find((b) => b.id === fallbackBranchId)!;
+  }
+
+  return defaultBranch(companyBranches);
 }
 
 /**
@@ -176,23 +210,25 @@ export async function resolveCompanyContext(
     getSessionActiveContext(),
   ]);
 
-  const company = await resolveActiveCompany(
+  const activeCompany = await resolveActiveCompany(
     companies,
     sessionActive?.activeCompanyId,
   );
-  if (!company) {
+  const picked = await pickAccessibleCompany(
+    session.user.id,
+    companies,
+    activeCompany?.id ?? null,
+  );
+  if (!picked) {
     throw new ApiError(403, "Aucune société accessible.", "FORBIDDEN");
   }
-
-  const resolution = await resolveMembership(session.user.id, company.id);
-  if (!resolution) {
-    throw new ApiError(403, "Aucune société accessible.", "FORBIDDEN");
-  }
+  const { company, resolution } = picked;
 
   const branches = await listAssignedBranches(company.id);
   const branch = await resolveActiveBranch(
     branches,
     sessionActive?.activeBranchId,
+    resolution.membership.defaultBranchId ?? company.defaultBranchId,
   );
 
   return {
@@ -256,20 +292,28 @@ export async function resolveLoginContext(
     getLastSessionContext(userId),
   ]);
 
-  const company = isCompanyAssigned(companies, previous?.activeCompanyId)
+  const previousCompany = isCompanyAssigned(companies, previous?.activeCompanyId)
     ? companies.find((c) => c.id === previous!.activeCompanyId)!
-    : companies.find((c) => c.isDefault) ?? companies[0];
+    : null;
+  const preferredId =
+    previousCompany?.id ?? companies.find((c) => c.isDefault)?.id ?? null;
+  const picked = await pickAccessibleCompany(userId, companies, preferredId);
 
-  if (!company) {
+  if (!picked) {
     return { activeCompanyId: null, activeBranchId: null };
   }
+  const company = picked.company;
 
   const branches = await listAssignedBranches(company.id);
 
+  const branch = isBranchInCompany(branches, previous?.activeBranchId)
+    ? branches.find((b) => b.id === previous!.activeBranchId)!
+    : isBranchInCompany(branches, company.defaultBranchId)
+      ? branches.find((b) => b.id === company.defaultBranchId)!
+      : defaultBranch(branches);
+
   return {
     activeCompanyId: company.id,
-    activeBranchId: isBranchInCompany(branches, previous?.activeBranchId)
-      ? previous!.activeBranchId
-      : null,
+    activeBranchId: branch?.id ?? null,
   };
 }

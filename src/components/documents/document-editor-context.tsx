@@ -52,6 +52,11 @@ export interface EditorHeaderState {
   notes: string;
   issuedAt: string;
   validUntil: string;
+  customerOrderNumber: string;
+  customerOrderDate: string;
+  receivedDate: string;
+  requestedDeliveryDate: string;
+  conditions: string;
 }
 
 function blankHeader(branchId: string, currency: string): EditorHeaderState {
@@ -65,6 +70,11 @@ function blankHeader(branchId: string, currency: string): EditorHeaderState {
     notes: "",
     issuedAt: "",
     validUntil: "",
+    customerOrderNumber: "",
+    customerOrderDate: "",
+    receivedDate: "",
+    requestedDeliveryDate: "",
+    conditions: "",
   };
 }
 
@@ -79,6 +89,11 @@ function detailToHeader(detail: DocumentDetailModel): EditorHeaderState {
     notes: detail.notes ?? "",
     issuedAt: detail.issuedAt,
     validUntil: detail.validUntil ?? "",
+    customerOrderNumber: detail.customerOrderNumber ?? "",
+    customerOrderDate: detail.customerOrderDate ?? "",
+    receivedDate: detail.receivedDate ?? "",
+    requestedDeliveryDate: detail.requestedDeliveryDate ?? "",
+    conditions: detail.conditions ?? "",
   };
 }
 
@@ -101,6 +116,7 @@ function blankLine(): DocumentLineModel {
     amountHt: 0,
     amountTva: 0,
     amountTtc: 0,
+    customerSpecs: null,
   };
 }
 
@@ -114,6 +130,7 @@ function toInputLines(lines: DocumentLineModel[]) {
     unitPrice: line.unitPrice,
     discountPct: line.discountPct,
     taxPct: line.taxPct,
+    customerSpecs: line.customerSpecs ?? null,
   }));
 }
 
@@ -164,12 +181,15 @@ export function DocumentEditorProvider({
   docId,
   initialDetail,
   lookups,
+  initialCustomerId,
   children,
 }: {
   type: CommercialDocType;
   docId?: string | null;
   initialDetail?: DocumentDetailModel | null;
   lookups: EditorLookups;
+  /** Client pré-sélectionné (`?customerId=`) — ignoré en mode édition. */
+  initialCustomerId?: string | null;
   children: React.ReactNode;
 }) {
   const { t } = useI18n();
@@ -185,11 +205,19 @@ export function DocumentEditorProvider({
   const [detail, setDetail] = React.useState<DocumentDetailModel | null>(
     initialDetail ?? null,
   );
-  const [header, setHeader] = React.useState<EditorHeaderState>(() =>
-    initialDetail
-      ? detailToHeader(initialDetail)
-      : blankHeader(defaultBranchId, defaultCurrency),
-  );
+  const [header, setHeader] = React.useState<EditorHeaderState>(() => {
+    if (initialDetail) return detailToHeader(initialDetail);
+    const blank = blankHeader(defaultBranchId, defaultCurrency);
+    // Pré-remplissage du client : uniquement si l'id provient des lookups de la
+    // société active (validé côté serveur aussi dans document-editor-page).
+    if (
+      initialCustomerId &&
+      lookups.parties.some((party) => party.id === initialCustomerId)
+    ) {
+      return { ...blank, partyId: initialCustomerId };
+    }
+    return blank;
+  });
   const [lines, setLines] = React.useState<DocumentLineModel[]>(() =>
     initialDetail ? detailToLines(initialDetail) : [blankLine()],
   );
@@ -284,7 +312,7 @@ export function DocumentEditorProvider({
 
   const buildPayload = React.useCallback(() => {
     const partyField = config.partyField;
-    return {
+    const payload: Record<string, unknown> = {
       branchId: header.branchId || undefined,
       ...(partyField === "customerId"
         ? { customerId: header.partyId || undefined }
@@ -296,7 +324,19 @@ export function DocumentEditorProvider({
       notes: header.notes || null,
       lines: toInputLines(lines),
     };
-  }, [config.partyField, header, lines]);
+    if (type === "CUSTOMER_ORDER") {
+      payload.customerOrderNumber = header.customerOrderNumber || null;
+      payload.customerOrderDate = header.customerOrderDate || null;
+      payload.receivedDate = header.receivedDate || null;
+      payload.requestedDeliveryDate = header.requestedDeliveryDate || null;
+      payload.conditions = header.conditions || null;
+    }
+    if (type === "PROFORMA" || type === "QUOTATION") {
+      payload.validUntil = header.validUntil || null;
+      payload.conditions = header.conditions || null;
+    }
+    return payload;
+  }, [config.partyField, header, lines, type]);
 
   const refresh = React.useCallback(async () => {
     if (!docId) return;

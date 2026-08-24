@@ -49,7 +49,7 @@ Migration `20260804090000_phase55_company_management` (appliquée, « Database s
 `prisma/seed.ts` (destructif : vide toutes les tables, rôle clé `ADMIN`) contient bien les 6 permissions `admin.company.*` (upsert des `RolePermission`), mais sur la base de travail, **le seed n'a pas été relancé** (il détruirait les données de test). Un script **non destructif et reproductible** a été créé et exécuté :
 
 - `scripts/add-admin-company-permissions.ts` : upsert des 6 permissions + grant à `ADMIN` ; si `COMPANY_ADMIN` existe, grant `view/update/membership.manage` (non présent ici → skip affiché).
-- `scripts/inspect-admin.ts` : vérifie l'affectation admin (rôle `ADMIN` actif dans `MAIN` et `TESTCO`, relation `userCompanies`).
+- `scripts/inspect-user.ts` : inspecteur générique d'un utilisateur (`<username>` en argument) — remplace l'ancien `inspect-admin.ts` hardcodé sur `admin`, compte supprimé depuis.
 
 ---
 
@@ -163,7 +163,7 @@ Le rendu RSC **n'exécute pas dans le contexte ALS posé par le layout** (docume
 - `npm run build` — **OK**, 11 routes `/api/admin/companies/**` + pages `/admin/companies`, `/admin/companies/nouveau`, `/admin/companies/[companyId]` générées.
 - `npx prisma migrate status` — **database schema is up to date** (13 migrations, dont `20260804090000_phase55_company_management`).
 - `npx prisma validate` — **0 erreur**.
-- **Runtime réel (dev server, session `admin`/`admin123`, curl.exe)** :
+- **Runtime réel (dev server, session du compte legacy `admin`/`admin123` — compte supprimé depuis, historiquement)** :
   - Login `POST /api/auth/login` → 200.
   - `GET /api/admin/companies` → 200 (après grant de permissions + `prisma generate` + redémarrage du serveur ; initialement 403 sans permissions, 500 avec client généré obsolète).
   - `POST /api/admin/companies` → 201 (**TESTCO**, branches SIEGE + AG2, séries DEV/FA, 1 membre).
@@ -182,7 +182,7 @@ Le rendu RSC **n'exécute pas dans le contexte ALS posé par le layout** (docume
 ## 9. Artefacts de test
 
 - `scripts/add-admin-company-permissions.ts` — **conservé** (reproductibilité du grant sur bases existantes ; le seed est destructif).
-- `scripts/inspect-admin.ts` — inspection admin (peut être retiré, gardé pour le contexte).
+- `scripts/inspect-user.ts` — inspecteur utilisateur générique (l'ancien `inspect-admin.ts`, hardcodé sur `admin`, a été converti puis retiré).
 - Test artifact `TESTCO` (id `1b1dfd8e-47de-4d06-9a92-1024c91d9fc2`, actuellement **ARCHIVÉ** par les tests de statut) : à restaurer/retirer avant livraison selon préférence.
 - Log dev : `%TEMP%\opencode\dzerp-dev.log`.
 
@@ -191,6 +191,5 @@ Le rendu RSC **n'exécute pas dans le contexte ALS posé par le layout** (docume
 ## 10. Reste / recommandations
 
 - Nettoyer l'artefact `TESTCO` (restaurer ou supprimer) avant la livraison.
-- Décider du sort de `scripts/inspect-admin.ts`.
-- Surveiller l'audit `FALLBACK` (`UserRole`) avant suppression définitive.
+- Suivre l'audit `FALLBACK` (`UserRole`) avant suppression définitive.
 - Phase suivante : workflows Ventes / Achats (documents, séries, approbations).

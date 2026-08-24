@@ -78,6 +78,13 @@ export interface DocumentLineModel {
   amountHt: number;
   amountTva: number;
   amountTtc: number;
+  /**
+   * Quantité restant à livrer (SALES_ORDER uniquement, suivi des livraisons
+   * partielles). `null` pour les autres types de documents.
+   */
+  remainingQty?: number | null;
+  /** Spécifications client (CUSTOMER_ORDER uniquement). `null` sinon. */
+  customerSpecs?: string | null;
 }
 
 /** Document détaillé normalisé pour l'éditeur. */
@@ -107,6 +114,11 @@ export interface DocumentDetailModel {
   createdByName: string | null;
   updatedByName: string | null;
   lines: DocumentLineModel[];
+  customerOrderNumber?: string | null;
+  customerOrderDate?: string | null;
+  receivedDate?: string | null;
+  requestedDeliveryDate?: string | null;
+  conditions?: string | null;
 }
 
 export interface AttachmentItem {

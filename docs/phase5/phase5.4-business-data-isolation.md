@@ -89,7 +89,7 @@ Client **brut** (`PrismaClient` + `@prisma/adapter-pg`), l'extension est contour
 - Ordre corrigé : nettoyage `RolePermission` avant `Company`, `Company` avant `Branch`, `Branch` avant `Company` (FK).
 - Upserts : `Branch` (`companyId_code`), `DocumentSeries` (`companyId_key`), `Customer`/`Supplier` (`companyId_code`), `ProductCategory` (parentId incluse), `Brand`/`Manufacturer` (`companyId_code`), `Product` (`companyId_sku`), `Warehouse` (`companyId_code`), mouvements + transferts (`companyId`).
 - Compteurs `DocumentSeries` avancés par société (`CUSTOMER`→6, `SUPPLIER`→4, `PRODUCT`→6, `WAREHOUSE`→3, `INVENTORY_MOVEMENT` → ouverture +1).
-- Démo : 3 utilisateurs, 3 rôles, 71 permissions, 4 succursales, 5 clients, 3 fournisseurs, 5 produits, 6 catégories, 4 marques, 2 fabricants, 3 unités, 3 catégories TVA, 2 entrepôts, 7 mouvements de stock, 58 wilayas, 87 communes. Connexion : `admin / admin123`.
+- Démo : 3 utilisateurs, 3 rôles, 71 permissions, 4 succursales, 5 clients, 3 fournisseurs, 5 produits, 6 catégories, 4 marques, 2 fabricants, 3 unités, 3 catégories TVA, 2 entrepôts, 7 mouvements de stock, 58 wilayas, 87 communes. Connexion : `directeur.oran / DzERP-Demo-2026` (le compte legacy `admin / admin123` a été supprimé).
 
 ---
 

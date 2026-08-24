@@ -22,20 +22,24 @@ type SearchHit = {
   icon: string;
 };
 
-const QUICK_ACTIONS: SearchHit[] = [
-  { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/documents/quotation/nouveau", icon: "note_add" },
-  { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add" },
-  { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart" },
+const QUICK_ACTIONS: (SearchHit & { permission?: PermissionKey })[] = [
+  { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/documents/quotation/nouveau", icon: "note_add", permission: "ventes.devis.create" },
+  { type: "action", id: "proforma", title: "facture proforma", titleAr: null, subtitle: null, href: "/documents/proforma/nouveau", icon: "receipt_long", permission: "ventes.proforma.create" },
+  { type: "action", id: "salesOrder", title: "sales order", titleAr: null, subtitle: null, href: "/documents/sales_order/nouveau", icon: "shopping_cart", permission: "ventes.commande.create" },
+  { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
+  { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart", permission: "achats.bon.create" },
 ];
 
 export function CommandPalette({
   open,
   onOpenChange,
   permissions,
+  isSuperAdmin = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   permissions?: readonly PermissionKey[];
+  isSuperAdmin?: boolean;
 }) {
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -46,7 +50,9 @@ export function CommandPalette({
 
   const pages = React.useMemo(() => {
     const items = [...mainNav, ...footerNav];
-    const visible = permissions ? filterNav(items, permissions) : items;
+    let visible = permissions ? filterNav(items, permissions) : items;
+    // Les pages d'administration PLATEFORME ne sont proposées qu'au SUPER_ADMIN.
+    if (!isSuperAdmin) visible = visible.filter((item) => !item.href.startsWith("/admin"));
     return visible.map((item) => ({
       type: "page",
       id: item.href,
@@ -56,7 +62,14 @@ export function CommandPalette({
       href: item.href,
       icon: item.icon,
     }));
-  }, [permissions, t]);
+  }, [permissions, isSuperAdmin, t]);
+
+  const visibleActions = React.useMemo(() => {
+    if (!permissions) return QUICK_ACTIONS;
+    return QUICK_ACTIONS.filter(
+      (action) => !action.permission || permissions.includes(action.permission),
+    );
+  }, [permissions]);
 
   const grouped = React.useMemo(() => {
     const groups = new Map<string, SearchHit[]>();
@@ -92,16 +105,17 @@ export function CommandPalette({
       for (const page of pages) push(t("search.pages"), page);
       const actionTitles = new Map([
         ["devis", t("quickCreate.quotation")],
+        ["salesOrder", t("quickCreate.salesOrder")],
         ["client", t("quickCreate.customer")],
         ["commande", t("quickCreate.purchaseOrder")],
       ]);
-      for (const action of QUICK_ACTIONS) {
+      for (const action of visibleActions) {
         push(t("search.actions"), { ...action, title: actionTitles.get(action.id) ?? action.title });
       }
       for (const doc of recent) push(t("search.recentDocuments"), doc);
     }
     return Array.from(groups.entries());
-  }, [query, hits, recent, pages, t]);
+  }, [query, hits, recent, pages, visibleActions, t]);
 
   React.useEffect(() => {
     if (!open) return;

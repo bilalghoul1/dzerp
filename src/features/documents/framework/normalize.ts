@@ -100,6 +100,11 @@ export function normalizeLine(raw: AnyRecord, index: number): DocumentLineModel 
     amountHt: toNumber(raw.amountHt),
     amountTva: toNumber(raw.amountTva),
     amountTtc: toNumber(raw.amountTtc),
+    remainingQty:
+      raw.remainingQty === null || raw.remainingQty === undefined
+        ? null
+        : toNumber(raw.remainingQty),
+    customerSpecs: toOptionalString(raw.customerSpecs),
   };
 }
 
@@ -139,6 +144,11 @@ export function normalizeDocumentDetail(
     createdByName: getUserName(raw, "createdBy"),
     updatedByName: getUserName(raw, "updatedBy"),
     lines: rawLines.map(normalizeLine),
+    customerOrderNumber: toOptionalString(raw.customerOrderNumber),
+    customerOrderDate: toOptionalString(raw.customerOrderDate),
+    receivedDate: toOptionalString(raw.receivedDate),
+    requestedDeliveryDate: toOptionalString(raw.requestedDeliveryDate),
+    conditions: toOptionalString(raw.conditions),
   };
 }
 

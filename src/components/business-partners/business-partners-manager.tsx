@@ -30,6 +30,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { EmptyState } from "@/components/feedback/empty-state";
+import {
+  CustomersIllustration,
+  SuppliersIllustration,
+} from "@/components/illustrations";
 import {
   Table,
   TableBody,
@@ -281,21 +286,30 @@ export function BusinessPartnersManager({
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center">
-                  <p className="text-sm font-medium">{t("parties.empty")}</p>
-                  <Button
-                    onClick={openCreate}
-                    disabled={busy}
-                    className="mt-3"
-                  >
+              <EmptyState
+                illustration={
+                  kind === "customer" ? (
+                    <CustomersIllustration className="size-24" />
+                  ) : (
+                    <SuppliersIllustration className="size-24" />
+                  )
+                }
+                icon={kind === "customer" ? "group" : "handshake"}
+                title={t("parties.empty")}
+                description={t(
+                  kind === "customer"
+                    ? "parties.emptyCustomerHint"
+                    : "parties.emptySupplierHint",
+                )}
+                action={
+                  <Button onClick={openCreate} disabled={busy}>
                     <span className="material-symbols-outlined text-[18px] me-1" aria-hidden="true">
                       add
                     </span>
                     {t("parties.add")}
                   </Button>
-                </TableCell>
-              </TableRow>
+                }
+              />
             ) : (
               items.map((row) => (
                 <TableRow key={row.id}>

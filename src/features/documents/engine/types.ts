@@ -9,7 +9,9 @@ export type CommercialDocType =
   | "PURCHASE_REQUEST"
   | "PURCHASE_ORDER"
   | "GOODS_RECEIPT"
-  | "SUPPLIER_INVOICE";
+  | "SUPPLIER_INVOICE"
+  | "CUSTOMER_ORDER"
+  | "PROFORMA";
 
 export interface InputLine {
   id?: string;
@@ -22,6 +24,7 @@ export interface InputLine {
   unitPrice?: number;
   discountPct?: number;
   taxPct?: number;
+  customerSpecs?: string | null;
 }
 
 export interface ComputedLine {
@@ -49,6 +52,14 @@ export interface InputDocument {
   exchangeRate?: number;
   meta?: Record<string, unknown> | null;
   lines: InputLine[];
+  // Champs spécifiques à CUSTOMER_ORDER (ignorés pour les autres types).
+  customerOrderNumber?: string | null;
+  customerOrderDate?: string | null;
+  receivedDate?: string | null;
+  requestedDeliveryDate?: string | null;
+  conditions?: string | null;
+  // Champs spécifiques à PROFORMA / QUOTATION (validUntil).
+  validUntil?: string | null;
 }
 
 export interface UpdateDocument {
@@ -62,6 +73,12 @@ export interface UpdateDocument {
   exchangeRate?: number;
   meta?: Record<string, unknown> | null;
   lines?: InputLine[];
+  customerOrderNumber?: string | null;
+  customerOrderDate?: string | null;
+  receivedDate?: string | null;
+  requestedDeliveryDate?: string | null;
+  conditions?: string | null;
+  validUntil?: string | null;
 }
 
 export interface StatusTransition {
@@ -83,6 +100,7 @@ export interface DocumentTypeConfig {
   partyField: "customerId" | "supplierId";
   hasPayment: boolean;
   hasDelivery: boolean;
+  hasValidUntil?: boolean;
 }
 
 export interface ConversionInput {
@@ -95,6 +113,11 @@ export interface ConversionInput {
   description?: string;
   ip?: string | null;
   userAgent?: string | null;
+  /**
+   * Livraisons partielles (source SALES_ORDER → DELIVERY_NOTE) : quantités
+   * livrées par ligne source. Absent = livraison totale du restant.
+   */
+  deliveries?: Array<{ lineId: string; quantity: number }>;
 }
 
 export interface DocumentContext {

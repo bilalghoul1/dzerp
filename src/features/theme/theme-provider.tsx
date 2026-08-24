@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
 } from "react";
 import { usePersistedState } from "@/hooks/use-persisted-state";
@@ -26,6 +27,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     STORAGE_KEYS.theme,
     DEFAULT_THEME,
   );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    document.cookie = `${STORAGE_KEYS.theme}=${theme}; path=/; max-age=31536000; samesite=lax`;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", theme === "dark" ? "#1a202c" : "#f7fafc");
+  }, [theme]);
 
   const setTheme = useCallback(
     (next: Theme) => {

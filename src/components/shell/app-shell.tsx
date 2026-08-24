@@ -15,21 +15,35 @@ import { CompanySwitcher } from "@/components/shell/company-switcher";
 import { NotificationCenter } from "@/components/shell/notification-center";
 import { CompanyProvider } from "@/features/company/company-provider";
 import type { CompanyContext } from "@/features/company/types";
+import type { PermissionKey } from "@/features/auth/permissions";
+import type { SessionUser } from "@/features/auth/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function AppShell({
   context,
+  user,
+  permissions,
   children,
+  isSuperAdmin = false,
 }: {
-  context: CompanyContext;
+  /**
+   * Contexte société. `null` = profil « plateforme » : SUPER_ADMIN global sans
+   * société active — l'en-tête affiche un badge plateforme (pas de sélecteur de
+   * société/succursale) et l'app n'est pas enveloppée dans un CompanyProvider.
+   */
+  context: CompanyContext | null;
+  user: SessionUser;
+  permissions: PermissionKey[];
   children: React.ReactNode;
+  /** Porteur du rôle global SUPER_ADMIN : pilote la visibilité des liens admin. */
+  isSuperAdmin?: boolean;
 }) {
   const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
-  const { user, permissions } = context;
+  const isPlatform = context === null;
 
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -42,11 +56,15 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  return (
-    <CompanyProvider context={context}>
-      <div className="min-h-screen bg-background">
+  const shell = (
+    <div className="min-h-screen bg-background">
         <aside className="fixed inset-y-0 start-0 z-30 hidden w-60 flex-col border-e bg-card lg:flex">
-          <SidebarNav permissions={permissions} />
+          <SidebarNav
+            permissions={permissions}
+            isPlatform={isPlatform}
+            isSuperAdmin={isSuperAdmin}
+            showQuickCreate={false}
+          />
         </aside>
 
         {sidebarOpen ? (
@@ -57,7 +75,12 @@ export function AppShell({
               aria-hidden="true"
             />
             <aside className="fixed inset-y-0 start-0 z-50 flex w-64 flex-col border-e bg-card shadow-xl lg:hidden">
-              <SidebarNav permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
+              <SidebarNav
+                permissions={permissions}
+                isPlatform={isPlatform}
+                isSuperAdmin={isSuperAdmin}
+                onNavigate={() => setSidebarOpen(false)}
+              />
             </aside>
           </>
         ) : null}
@@ -76,10 +99,33 @@ export function AppShell({
               </span>
             </Button>
 
-            <CompanySwitcher
-              company={context.company}
-              companies={context.companies}
-            />
+            {isPlatform ? (
+              <div className="hidden items-center gap-2 md:flex">
+                <span
+                  className="material-symbols-outlined text-[20px] text-primary"
+                  aria-hidden="true"
+                >
+                  public
+                </span>
+                <span className="max-w-40 truncate text-sm font-semibold tracking-tight">
+                  {t("header.platform")}
+                </span>
+              </div>
+            ) : (
+              <CompanySwitcher
+                company={context!.company}
+                companies={context!.companies}
+              />
+            )}
+
+            {!isPlatform ? (
+              <div className="hidden md:block">
+                <BranchSelector
+                  branches={context!.branches}
+                  activeBranch={context!.branch}
+                />
+              </div>
+            ) : null}
 
             <button
               type="button"
@@ -108,15 +154,12 @@ export function AppShell({
                   search
                 </span>
               </Button>
-              <div className="hidden md:block">
-                <BranchSelector branches={context.branches} activeBranch={context.branch} />
+              <div className="ms-1 hidden sm:block">
+                <QuickCreate permissions={permissions} isPlatform={isPlatform} />
               </div>
               <NotificationCenter />
               <ThemeToggle />
               <LocaleToggle />
-              <div className="ms-1 hidden sm:block">
-                <QuickCreate permissions={permissions} />
-              </div>
               <UserMenu user={user} />
             </div>
           </header>
@@ -129,8 +172,13 @@ export function AppShell({
           open={paletteOpen}
           onOpenChange={setPaletteOpen}
           permissions={permissions}
+          isSuperAdmin={isSuperAdmin}
         />
-      </div>
-    </CompanyProvider>
+    </div>
+  );
+
+  // Profil « plateforme » (SUPER_ADMIN sans société) : pas de CompanyProvider.
+  return isPlatform ? shell : (
+    <CompanyProvider context={context!}>{shell}</CompanyProvider>
   );
 }

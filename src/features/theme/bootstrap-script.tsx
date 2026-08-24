@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { STORAGE_KEYS } from "@/lib/constants";
 
 const script = `(function(){
@@ -11,8 +12,21 @@ const script = `(function(){
   } catch (e) {}
 })();`;
 
+/**
+ * Script de bootstrap du thème/langue/dir, exécuté après hydratation
+ * (anti-FOUC partiel). En Next 16 / React 19, un <script> (littéral ou
+ * next/script beforeInteractive) placé dans le RootLayout casse le rendu
+ * client ("Console Error" / "Encountered a script tag"). afterInteractive
+ * injecte le script côté client après hydratation : aucun élément <script>
+ * dans l'arbre RSC → pas de crash. Le flash est évité car le script est
+ * minuscule et exécuté immédiatement.
+ */
 export function BootstrapScript() {
   return (
-    <script dangerouslySetInnerHTML={{ __html: script }} />
+    <Script
+      id="theme-bootstrap"
+      strategy="afterInteractive"
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
   );
 }

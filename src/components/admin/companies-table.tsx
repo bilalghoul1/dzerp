@@ -52,29 +52,40 @@ function statusBadgeVariant(status: CompanyAdminRow["status"]):
   }
 }
 
+type StatusFilter = "ALL" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVE", "SUSPENDED", "ARCHIVED"];
+
 export function CompaniesTable({
   companies,
   canManage,
+  canUpdate,
   canDelete,
 }: {
   companies: CompanyAdminRow[];
   canManage: boolean;
+  canUpdate: boolean;
   canDelete: boolean;
 }) {
   const { t } = useI18n();
   const router = useRouter();
   const [query, setQuery] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("ALL");
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return companies;
-    return companies.filter((c) =>
+    let rows = companies;
+    if (statusFilter !== "ALL") {
+      rows = rows.filter((c) => c.status === statusFilter);
+    }
+    if (!q) return rows;
+    return rows.filter((c) =>
       [c.code, c.name, c.nameAr, c.commercialName, c.legalName, c.type, c.taxId, c.rc, c.nis, c.ai]
         .some((value) => value?.toLowerCase().includes(q)),
     );
-  }, [companies, query]);
+  }, [companies, query, statusFilter]);
 
   const columns = React.useMemo<ColumnDef<CompanyAdminRow>[]>(
     () => [
@@ -140,6 +151,23 @@ export function CompaniesTable({
         cell: ({ row }) => row.original.ai ?? "—",
       },
       {
+        accessorKey: "ownerName",
+        header: t("admin.ownerColumn"),
+        cell: ({ row }) =>
+          row.original.ownerName || row.original.ownerUsername ? (
+            <span>
+              {row.original.ownerName || "—"}
+              {row.original.ownerUsername ? (
+                <span className="block text-xs text-muted-foreground">
+                  @{row.original.ownerUsername}
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            "—"
+          ),
+      },
+      {
         accessorKey: "createdAt",
         header: t("admin.colCreated"),
         cell: ({ row }) => row.original.createdAt.slice(0, 10),
@@ -161,13 +189,25 @@ export function CompaniesTable({
                   {t("admin.open")}
                 </Link>
               </Button>
+              {canUpdate && company.status !== "ARCHIVED" ? (
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link href={`/admin/companies/${company.id}/modifier`}>
+                    {t("admin.edit")}
+                  </Link>
+                </Button>
+              ) : null}
               {canManage ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    void setStatus(company);
+                    void setStatus(company, company.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED");
                   }}
                 >
                   {company.status === "ARCHIVED"
@@ -175,17 +215,34 @@ export function CompaniesTable({
                     : t("admin.archive")}
                 </Button>
               ) : null}
-              {canDelete && !company.isActive ? (
+              {canManage && company.status !== "ARCHIVED" ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
-                    void remove(company);
+                    void setStatus(
+                      company,
+                      company.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                    );
                   }}
                 >
-                  {t("admin.delete")}
+                  {company.status === "SUSPENDED"
+                    ? t("admin.reactivate")
+                    : t("admin.suspend")}
+                </Button>
+              ) : null}
+              {canDelete && !company.isActive ? (
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link href={`/admin/companies/${company.id}`}>
+                    {t("admin.delete")}
+                  </Link>
                 </Button>
               ) : null}
             </div>
@@ -194,7 +251,7 @@ export function CompaniesTable({
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, canManage, canDelete],
+    [t, canManage, canUpdate, canDelete],
   );
 
   const table = useReactTable({
@@ -214,45 +271,35 @@ export function CompaniesTable({
     router.refresh();
   };
 
-  const setStatus = async (company: CompanyAdminRow) => {
-    const archived = company.status === "ARCHIVED";
-    const message = archived
-      ? t("admin.confirmRestore")
-      : t("admin.confirmArchive");
-    if (!window.confirm(message)) return;
+  const setStatus = async (
+    company: CompanyAdminRow,
+    target: "ACTIVE" | "SUSPENDED" | "ARCHIVED",
+  ) => {
+    const config =
+      target === "SUSPENDED"
+        ? {
+            confirm: t("admin.confirmSuspend"),
+            success: t("admin.suspendedSuccess"),
+          }
+        : company.status === "ARCHIVED"
+          ? {
+              confirm: t("admin.confirmRestore"),
+              success: t("admin.restoredSuccess"),
+            }
+          : {
+              confirm: t("admin.confirmActivate"),
+              success: t("admin.activatedSuccess"),
+            };
+    if (!window.confirm(config.confirm)) return;
     try {
       const res = await fetch(`/api/admin/companies/${company.id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: archived ? "ACTIVE" : "ARCHIVED" }),
+        body: JSON.stringify({ status: target }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error?.message ?? "Error");
-      toast.success(
-        archived ? t("admin.restoredSuccess") : t("admin.archivedSuccess"),
-      );
-      refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error");
-    }
-  };
-
-  const remove = async (company: CompanyAdminRow) => {
-    if (!window.confirm(t("admin.confirmDelete"))) return;
-    try {
-      const res = await fetch(`/api/admin/companies/${company.id}`, {
-        method: "DELETE",
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        const message = json?.error?.message ?? "Error";
-        throw new Error(
-          json?.error?.code === "COMPANY_HAS_DATA"
-            ? t("admin.deleteBlocked")
-            : message,
-        );
-      }
-      toast.success(t("admin.deletedSuccess"));
+      toast.success(config.success);
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error");
@@ -270,6 +317,7 @@ export function CompaniesTable({
       t("admin.colRc"),
       t("admin.colNis"),
       t("admin.colAi"),
+      t("admin.ownerColumn"),
       t("admin.colCreated"),
     ];
     const esc = (value: string | null | undefined) =>
@@ -285,6 +333,7 @@ export function CompaniesTable({
         c.rc,
         c.nis,
         c.ai,
+        c.ownerName || c.ownerUsername || "",
         c.createdAt.slice(0, 10),
       ]
         .map(esc)
@@ -359,6 +408,29 @@ export function CompaniesTable({
             </Link>
           </Button>
         </div>
+      </div>
+
+      <div className="mb-4 flex w-fit items-center gap-1 rounded-md border p-1">
+        {STATUS_FILTERS.map((filter) => {
+          const label =
+            filter === "ALL"
+              ? t("admin.filterAll")
+              : filter === "ACTIVE"
+                ? t("admin.filterActive")
+                : filter === "SUSPENDED"
+                  ? t("admin.filterSuspended")
+                  : t("admin.filterArchived");
+          return (
+            <Button
+              key={filter}
+              size="sm"
+              variant={statusFilter === filter ? "default" : "ghost"}
+              onClick={() => setStatusFilter(filter)}
+            >
+              {label}
+            </Button>
+          );
+        })}
       </div>
 
       <div className="rounded-md border">

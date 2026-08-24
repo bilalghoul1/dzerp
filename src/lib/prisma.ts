@@ -23,15 +23,27 @@ const extendedClient = baseClient
   .$extends(softDeleteExtension);
 
 type PrismaClientExtended = typeof extendedClient;
+type PrismaClientBase = typeof baseClient;
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClientExtended;
+  prismaBase?: PrismaClientBase;
 };
 
 export const prisma = globalForPrisma.prisma ?? extendedClient;
 
+/**
+ * Client Prisma brut (sans les extensions `companyScope` / `softDelete`).
+ * Accès global administrateur : les requêtes ne sont pas filtrées par le
+ * contexte société (l'extension `companyScope` ne voit pas le contexte ALS
+ * du caller, `runUnscoped` est donc inopérant pour les modèles stricts).
+ * À n'utiliser que dans l'administration globale.
+ */
+export const prismaBase = globalForPrisma.prismaBase ?? baseClient;
+
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaBase = prismaBase;
 }
 
 // L'extension softDelete ne peut pas accéder au client directement (pas de

@@ -222,6 +222,19 @@ export function DocumentLineEditor() {
                 </TableHead>
                 <TableHead className="w-[88px] whitespace-nowrap">{t("documentsUI.lineUnit")}</TableHead>
                 <TableHead className="w-[104px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
+                {editor.type === "SALES_ORDER" && (
+                  <>
+                    <TableHead className="w-[88px] whitespace-nowrap text-end">
+                      {t("documentsUI.qtyDelivered")}
+                    </TableHead>
+                    <TableHead className="w-[88px] whitespace-nowrap text-end">
+                      {t("documentsUI.qtyRemaining")}
+                    </TableHead>
+                    <TableHead className="w-[88px] whitespace-nowrap text-end">
+                      {t("documentsUI.qtyToDeliver")}
+                    </TableHead>
+                  </>
+                )}
                 <TableHead className="w-[120px] whitespace-nowrap">{t("documentsUI.linePrice")}</TableHead>
                 <TableHead className="w-[100px] whitespace-nowrap">
                   {t("documentsUI.lineDiscount")}
@@ -343,6 +356,27 @@ export function DocumentLineEditor() {
                         aria-label={t("documentsUI.lineQty")}
                       />
                     </TableCell>
+                    {editor.type === "SALES_ORDER" && (
+                      <>
+                        <TableCell className="py-1 align-top text-end">
+                          <span className="inline-block pt-2 text-xs tabular-nums">
+                            {line.remainingQty == null
+                              ? "—"
+                              : fmt(line.quantity - line.remainingQty)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1 align-top text-end">
+                          <span className="inline-block pt-2 text-xs tabular-nums">
+                            {line.remainingQty == null ? "—" : fmt(line.remainingQty)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1 align-top text-end">
+                          <span className="inline-block pt-2 text-xs tabular-nums">
+                            {line.remainingQty == null ? "—" : fmt(line.remainingQty)}
+                          </span>
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell className="py-1 align-top">
                       <Input
                         type="number"
@@ -479,7 +513,9 @@ export function DocumentLineEditor() {
               {editor.lines.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isEditable ? 10 : 9}
+                    colSpan={
+                      (isEditable ? 10 : 9) + (editor.type === "SALES_ORDER" ? 3 : 0)
+                    }
                     className="py-6 text-center text-xs text-muted-foreground"
                   >
                     {t("documentsUI.noLines")}

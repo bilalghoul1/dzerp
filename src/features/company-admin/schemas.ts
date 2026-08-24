@@ -29,6 +29,22 @@ const memberSchema = z.object({
   defaultBranchCode: z.string().trim().max(20).optional().nullable(),
 });
 
+/** Compte Propriétaire neuf créé lors de l'ajout d'une société. */
+const ownerSchema = z.object({
+  fullName: z.string().trim().min(1, "Nom complet requis").max(160),
+  username: z
+    .string()
+    .trim()
+    .min(3, "Identifiant (3 caractères minimum)")
+    .max(60)
+    .regex(/^\S+$/, "L'identifiant ne doit pas contenir d'espaces."),
+  email: z.string().trim().email("Email invalide").max(160).optional().nullable(),
+  password: z
+    .string()
+    .min(8, "Le mot de passe temporaire doit contenir au moins 8 caractères.")
+    .max(256),
+});
+
 const companyFieldsSchema = z.object({
   name: z.string().trim().min(1).max(160),
   nameAr: z.string().trim().max(160).optional().nullable(),
@@ -85,12 +101,42 @@ export const companyCreateSchema = companyFieldsSchema.extend({
   series: z.array(seriesSchema).optional(),
   branches: z.array(branchSchema).optional(),
   members: z.array(memberSchema).optional(),
+  owner: ownerSchema.optional().nullable(),
 });
 
 export const companyUpdateSchema = companyFieldsSchema.partial();
 
 export const companyStatusSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "ARCHIVED"]),
+});
+
+export const resetOwnerPasswordSchema = z.object({
+  newPassword: z
+    .string()
+    .min(8, "Le nouveau mot de passe doit contenir au moins 8 caractères.")
+    .max(256),
+});
+
+/** Réinitialisation d'un mot de passe utilisateur (SUPER_ADMIN uniquement). */
+export const resetUserPasswordSchema = z.object({
+  newPassword: z
+    .string()
+    .min(8, "Le nouveau mot de passe doit contenir au moins 8 caractères.")
+    .max(256),
+});
+
+/** Modification des identifiants d'un membre de société (SUPER_ADMIN uniquement). */
+export const updateUserIdentitySchema = z.object({
+  fullName: z.string().trim().max(160).optional().nullable(),
+  username: z
+    .string()
+    .trim()
+    .min(3, "L'identifiant doit contenir au moins 3 caractères.")
+    .max(60)
+    .regex(/^\S+$/, "L'identifiant ne doit pas contenir d'espaces.")
+    .optional(),
+  email: z.string().trim().email("Email invalide").max(160).optional().nullable(),
+  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).optional(),
 });
 
 export const addMemberSchema = z.object({
@@ -103,6 +149,11 @@ export const updateMemberSchema = z.object({
   roleId: z.string().min(1).optional().nullable(),
   active: z.boolean().optional(),
   defaultBranchCode: z.string().trim().max(20).optional().nullable(),
+});
+
+/** Suppression définitive d'un utilisateur (SUPER_ADMIN uniquement). */
+export const deleteUserConfirmationSchema = z.object({
+  confirmation: z.string().trim().min(1),
 });
 
 export const draftSchema = z.object({

@@ -9,6 +9,8 @@ import { getDocConfig } from "./config";
 import { computeAllLines } from "./calculation";
 import { validateDocumentInput, validateLines, validateDocumentReferences } from "./validation";
 import { transitionStatus, approveDocument } from "./workflow";
+import { computeDzTaxes } from "./dz-tax";
+import type { ComputedTotals } from "./types";
 
 const LINE_INCLUDE = {
   id: true,
@@ -34,6 +36,29 @@ const HEADER_INCLUDE_SUPPLIER = {
   supplier: { select: { id: true, name: true } },
 };
 
+/** Champs spécifiques par type de document, ignorés pour les autres. */
+function docTypeSpecificCreateFields(
+  data: InputDocument,
+  docType: CommercialDocType,
+): Record<string, unknown> {
+  if (docType === "CUSTOMER_ORDER") {
+    return {
+      customerOrderNumber: data.customerOrderNumber ?? null,
+      customerOrderDate: data.customerOrderDate ?? null,
+      receivedDate: data.receivedDate ?? null,
+      requestedDeliveryDate: data.requestedDeliveryDate ?? null,
+      conditions: data.conditions ?? null,
+    };
+  }
+  if (docType === "PROFORMA") {
+    return {
+      validUntil: data.validUntil ?? null,
+      conditions: data.conditions ?? null,
+    };
+  }
+  return {};
+}
+
 function getDelegate(model: string, client: unknown = prisma) {
   return (client as Record<string, unknown>)[model] as {
     findUnique: (args: unknown) => Promise<unknown>;
@@ -46,6 +71,13 @@ function getDelegate(model: string, client: unknown = prisma) {
   };
 }
 
+/** Sélection des lignes : `remainingQty` n'existe que sur SalesOrderLine. */
+function getLineSelect(docType: CommercialDocType) {
+  return docType === "SALES_ORDER"
+    ? { ...LINE_INCLUDE, remainingQty: true }
+    : LINE_INCLUDE;
+}
+
 function getHeaderInclude(docType: CommercialDocType) {
   const config = getDocConfig(docType);
   const partyInclude =
@@ -55,7 +87,7 @@ function getHeaderInclude(docType: CommercialDocType) {
     ...partyInclude,
     branch: { select: { id: true, name: true } },
     issuedBy: { select: { id: true, fullName: true } },
-    lines: { select: LINE_INCLUDE, orderBy: { lineNumber: "asc" as const } },
+    lines: { select: getLineSelect(docType), orderBy: { lineNumber: "asc" as const } },
   };
 }
 
@@ -105,8 +137,12 @@ export async function createDocument(
       totalHt: computed.totalHt,
       totalTva: computed.totalTva,
       totalTtc: computed.totalTtc,
+      ...(docType === "INVOICE"
+        ? dzInvoiceTaxFields(computed, data.meta)
+        : {}),
       createdById: ctx.userId,
       updatedById: ctx.userId,
+      ...docTypeSpecificCreateFields(data, docType),
       lines: {
         create: data.lines.map((line, idx) => ({
           lineNumber: idx + 1,
@@ -121,6 +157,12 @@ export async function createDocument(
           amountHt: computed.lines[idx]?.amountHt ?? 0,
           amountTva: computed.lines[idx]?.amountTva ?? 0,
           amountTtc: computed.lines[idx]?.amountTtc ?? 0,
+          ...(docType === "SALES_ORDER"
+            ? { remainingQty: line.quantity ?? 1 }
+            : {}),
+          ...(docType === "CUSTOMER_ORDER" || docType === "PROFORMA"
+            ? { customerSpecs: line.customerSpecs ?? null }
+            : {}),
         })),
       },
     },
@@ -184,7 +226,7 @@ export async function updateDocument(
       branchId: data.branchId,
       customerId: data.customerId,
       supplierId: data.supplierId,
-      lines: [],
+      lines: data.lines ?? [],
     } as InputDocument,
     docType,
     ctx.companyId,
@@ -205,6 +247,18 @@ export async function updateDocument(
   }
   if (config.partyField === "supplierId" && data.supplierId !== undefined) {
     updateData.supplierId = data.supplierId;
+  }
+
+  if (docType === "CUSTOMER_ORDER") {
+    if (data.customerOrderNumber !== undefined) updateData.customerOrderNumber = data.customerOrderNumber;
+    if (data.customerOrderDate !== undefined) updateData.customerOrderDate = data.customerOrderDate;
+    if (data.receivedDate !== undefined) updateData.receivedDate = data.receivedDate;
+    if (data.requestedDeliveryDate !== undefined) updateData.requestedDeliveryDate = data.requestedDeliveryDate;
+    if (data.conditions !== undefined) updateData.conditions = data.conditions;
+  }
+  if (docType === "PROFORMA") {
+    if (data.validUntil !== undefined) updateData.validUntil = data.validUntil;
+    if (data.conditions !== undefined) updateData.conditions = data.conditions;
   }
 
   if (data.lines) {
@@ -228,7 +282,13 @@ export async function updateDocument(
         amountHt: computed.lines[idx]?.amountHt ?? 0,
         amountTva: computed.lines[idx]?.amountTva ?? 0,
         amountTtc: computed.lines[idx]?.amountTtc ?? 0,
-      })),
+        ...(docType === "SALES_ORDER"
+          ? { remainingQty: line.quantity ?? 1 }
+          : {}),
+        ...(docType === "CUSTOMER_ORDER" || docType === "PROFORMA"
+          ? { customerSpecs: line.customerSpecs ?? null }
+          : {}),
+        })),
     };
   }
 
@@ -427,4 +487,36 @@ export async function approveDoc(
   }
 
   await approveDocument(config.prismaModel, docId, existing.status, docType, ctx);
+}
+
+/**
+ * Champs TAP + Timbre fiscal pour une facture (INVOICE uniquement).
+ * Lit `meta.tapRate` (ex: 0.02 / 0.01) et `meta.hasCashPayment` (boolean).
+ * Si absents, tout est à 0 (conforme : pas de TAP ni timbre par défaut).
+ */
+function dzInvoiceTaxFields(
+  computed: ComputedTotals,
+  meta: Record<string, unknown> | null | undefined,
+): {
+  tapRate: number;
+  tapAmount: number;
+  stampAmount: number;
+  totalDue: number;
+} {
+  const m = (meta ?? {}) as {
+    tapRate?: number;
+    hasCashPayment?: boolean;
+  };
+  const result = computeDzTaxes({
+    totalHt: computed.totalHt,
+    totalTtc: computed.totalTtc,
+    tapRate: m.tapRate,
+    hasCashPayment: m.hasCashPayment,
+  });
+  return {
+    tapRate: result.tapRate,
+    tapAmount: result.tapAmount,
+    stampAmount: result.stampAmount,
+    totalDue: result.totalDue,
+  };
 }

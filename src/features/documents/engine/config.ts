@@ -11,6 +11,7 @@ const SALES_TRANSITIONS: StatusTransition[] = [
   { from: "APPROVED", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
   { from: "CONFIRMED", to: "PARTIALLY_PROCESSED", label: "Partiellement traité", labelAr: "معالجة جزئية" },
   { from: "CONFIRMED", to: "PROCESSED", label: "Traité", labelAr: "معالجة" },
+  { from: "PARTIALLY_PROCESSED", to: "PROCESSED", label: "Traité", labelAr: "معالجة" },
   { from: "PROCESSED", to: "CLOSED", label: "Clôturer", labelAr: "إغلاق" },
 ];
 
@@ -23,13 +24,33 @@ const PURCHASING_TRANSITIONS: StatusTransition[] = [
   { from: "APPROVED", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
   { from: "CONFIRMED", to: "PARTIALLY_PROCESSED", label: "Partiellement reçu", labelAr: "استلام جزئي" },
   { from: "CONFIRMED", to: "PROCESSED", label: "Reçu", labelAr: "مستلم" },
+  { from: "PARTIALLY_PROCESSED", to: "PROCESSED", label: "Reçu", labelAr: "مستلم" },
   { from: "PROCESSED", to: "CLOSED", label: "Clôturer", labelAr: "إغلاق" },
+];
+
+const INBOUND_TRANSITIONS: StatusTransition[] = [
+  { from: "RECEIVED", to: "UNDER_REVIEW", label: "Étudier", labelAr: "دراسة" },
+  { from: "RECEIVED", to: "PROFORMA_CREATED", label: "Proforma créée", labelAr: "تم إنشاء proforma" },
+  { from: "RECEIVED", to: "REJECTED", label: "Rejeter", labelAr: "رفض" },
+  { from: "RECEIVED", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
+  { from: "UNDER_REVIEW", to: "PROFORMA_CREATED", label: "Proforma créée", labelAr: "تم إنشاء proforma" },
+  { from: "UNDER_REVIEW", to: "REJECTED", label: "Rejeter", labelAr: "رفض" },
+  { from: "UNDER_REVIEW", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
+  { from: "PROFORMA_CREATED", to: "PROFORMA_SENT", label: "Envoyer la proforma", labelAr: "إرسال proforma" },
+  { from: "PROFORMA_CREATED", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
+  { from: "PROFORMA_SENT", to: "ACCEPTED", label: "Accepter", labelAr: "قبول" },
+  { from: "PROFORMA_SENT", to: "REJECTED", label: "Rejeter", labelAr: "رفض" },
+  { from: "PROFORMA_SENT", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
+  { from: "ACCEPTED", to: "COMPLETED", label: "Clôturer", labelAr: "إغلاق" },
+  { from: "ACCEPTED", to: "CANCELLED", label: "Annuler", labelAr: "إلغاء" },
 ];
 
 const ALL_STATUSES: DocumentStatus[] = [
   "DRAFT", "PENDING", "PENDING_APPROVAL", "VALIDATED", "APPROVED",
   "REJECTED", "CONFIRMED", "PARTIALLY_PROCESSED", "PROCESSED",
   "CANCELLED", "ARCHIVED", "CLOSED",
+  "RECEIVED", "UNDER_REVIEW", "PROFORMA_CREATED", "PROFORMA_SENT",
+  "ACCEPTED", "COMPLETED",
 ];
 
 const DOCUMENT_CONFIGS: Record<CommercialDocType, DocumentTypeConfig> = {
@@ -63,7 +84,7 @@ const DOCUMENT_CONFIGS: Record<CommercialDocType, DocumentTypeConfig> = {
     type: "DELIVERY_NOTE",
     prismaModel: "deliveryNote",
     label: "Bon de livraison",
-    labelAr: "سند تسليم",
+    labelAr: "وصل التسليم",
     numberPrefix: "BL",
     permissionPrefix: "ventes.livraison",
     allowedStatuses: ALL_STATUSES,
@@ -97,6 +118,33 @@ const DOCUMENT_CONFIGS: Record<CommercialDocType, DocumentTypeConfig> = {
     partyField: "customerId",
     hasPayment: false,
     hasDelivery: false,
+  },
+  CUSTOMER_ORDER: {
+    type: "CUSTOMER_ORDER",
+    prismaModel: "customerOrder",
+    label: "Bon de commande client reçu",
+    labelAr: "طلبية العميل الواردة",
+    numberPrefix: "BCREC",
+    permissionPrefix: "ventes.bcclient",
+    allowedStatuses: ALL_STATUSES,
+    transitions: INBOUND_TRANSITIONS,
+    partyField: "customerId",
+    hasPayment: false,
+    hasDelivery: false,
+  },
+  PROFORMA: {
+    type: "PROFORMA",
+    prismaModel: "proforma",
+    label: "Facture Proforma",
+    labelAr: "فاتورة مبدئية",
+    numberPrefix: "PF",
+    permissionPrefix: "ventes.proforma",
+    allowedStatuses: ALL_STATUSES,
+    transitions: SALES_TRANSITIONS,
+    partyField: "customerId",
+    hasPayment: false,
+    hasDelivery: false,
+    hasValidUntil: true,
   },
   PURCHASE_REQUEST: {
     type: "PURCHASE_REQUEST",
@@ -189,6 +237,8 @@ export const ALLOWED_CONVERSIONS: Record<
   PURCHASE_ORDER: ["GOODS_RECEIPT", "SUPPLIER_INVOICE"],
   GOODS_RECEIPT: ["SUPPLIER_INVOICE"],
   SUPPLIER_INVOICE: [],
+  CUSTOMER_ORDER: ["PROFORMA"],
+  PROFORMA: [],
 };
 
 export function assertAllowedConversion(

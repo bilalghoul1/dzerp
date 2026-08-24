@@ -187,15 +187,16 @@ async function main() {
   check("source = RoleAssignment", resolution?.source === "RoleAssignment");
   check("1 attribution exposée", resolution?.roleAssignments.length === 1);
 
-  console.log("\n→ Scénario 3 : repli UserRole (journalisé)");
+  console.log("\n→ Scénario 3 : adhésion active SANS rôle → échec sûr (plus aucun repli UserRole)");
   const fallback = await resolveMembership(userNoAssignments.id, company.id);
-  check("repli résolu", fallback !== null && fallback.source === "UserRole");
-  check("permissions globales appliquées", fallback!.permissions.includes(PERM_GLOBAL));
+  check("adhésion résolue (membre actif)", fallback !== null);
+  check("source = None (fail-closed)", fallback?.source === "None");
+  check("0 permission (jamais de permissions globales)", fallback!.permissions.length === 0);
   const fallbackAudit = await prisma.auditLog.findFirst({
     where: { action: "FALLBACK", entity: "Authorization", entityId: userNoAssignments.id },
     orderBy: { createdAt: "desc" },
   });
-  check("audit FALLBACK enregistré", fallbackAudit !== null);
+  check("AUCUN audit FALLBACK enregistré", fallbackAudit === null);
 
   console.log("\n→ Scénario 4 : aucune attribution active → refus, pas de repli");
   await prisma.roleAssignment.create({

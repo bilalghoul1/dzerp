@@ -14,11 +14,14 @@ export function DocumentEditorShell({
   docId,
   initialDetail,
   lookups,
+  initialCustomerId,
 }: {
   type: CommercialDocType;
   docId?: string | null;
   initialDetail?: DocumentDetailModel | null;
   lookups: EditorLookups;
+  /** Client pré-sélectionné (`?customerId=`) — ignoré en mode édition. */
+  initialCustomerId?: string | null;
 }) {
   return (
     <DocumentEditorProvider
@@ -26,6 +29,7 @@ export function DocumentEditorShell({
       docId={docId}
       initialDetail={initialDetail}
       lookups={lookups}
+      initialCustomerId={initialCustomerId}
     >
       <div className="space-y-4 print:hidden">
         <DocumentWorkflowBar />

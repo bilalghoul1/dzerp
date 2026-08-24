@@ -226,6 +226,7 @@ export async function convertDocument(input: {
   targetDocType: CommercialDocType;
   conversionRate?: number;
   description?: string;
+  deliveries?: Array<{ lineId: string; quantity: number }>;
 }): Promise<{ relationId: string; sourceNumber: string }> {
   return request<{ relationId: string; sourceNumber: string }>(
     "/api/documents/convert",

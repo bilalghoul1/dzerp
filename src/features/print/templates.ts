@@ -20,6 +20,8 @@ export type PrintLabels = Dictionary["print"] & {
   statusLabel: string;
   paymentStatusLabel: string;
   priorityLabel: string;
+  customerOrderNumber: string;
+  customerOrderDate: string;
 };
 
 interface TemplateCtx {
@@ -104,7 +106,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const pageTop = engine.y;
   const brandColor = brand(ctx);
 
-  // ---- Colonne société (gauche) ----
+  let logoBottom = engine.y;
   let textX = engine.contentLeft;
   if (doc.branding.logo) {
     const img = await engine.embedImage(doc.branding.logo, doc.branding.logoMimeType);
@@ -114,12 +116,16 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
         maxHeight: P.logoMaxH,
       });
       textX += box.width + 10;
+      logoBottom = engine.y + box.height;
     }
   }
 
+  // Largeur de la colonne société : bornée pour ne jamais empiéter sur la
+  // colonne méta (droite).
+  const metaX = right - engine.contentWidth * P.metaWidth;
   const companyWidth = Math.max(
-    120,
-    right - textX - engine.contentWidth * P.metaWidth - P.gap,
+    80,
+    Math.min(metaX - textX - P.gap, 260),
   );
 
   const companyLines: Array<{ text: string; style?: "bold"; color?: Color } | null> = [
@@ -181,13 +187,18 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   for (const line of companyLines) {
     if (!line) continue;
-    engine.drawText(line.text, {
-      x: textX, y: engine.y, size: P.bodySize, style: line.style ?? "regular",
-      color: line.color ?? COLORS.black, maxWidth: companyWidth,
-    });
-    engine.y += (line.style === "bold" ? P.nameSize + 2 : P.bodySize) * 1.3;
+    const size = line.style === "bold" ? P.nameSize : P.bodySize;
+    const wrapped = engine.wrap(line.text, line.style ?? "regular", size, companyWidth);
+    const lineH = size * 1.35;
+    for (const w of wrapped) {
+      engine.drawText(w, {
+        x: textX, y: engine.y, size, style: line.style ?? "regular",
+        color: line.color ?? COLORS.black, maxWidth: companyWidth,
+      });
+      engine.y += lineH;
+    }
   }
-  const companyBottom = engine.y;
+  const companyBottom = Math.max(engine.y, logoBottom);
 
   // ---- Titre (droite) ----
   let ty = pageTop;
@@ -228,6 +239,12 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     [labels.paymentMethod, ctx.config.hasPayment ? doc.document.paymentMethod : null],
     [labels.branch, doc.branch.name ? joinParts([doc.branch.name, doc.branch.code]) : null],
     [labels.issuedBy, doc.document.issuedBy],
+    ...(doc.document.docType === "CUSTOMER_ORDER"
+      ? ([
+          [labels.customerOrderNumber, (doc.document.meta?.["customerOrderNumber"] as string) ?? null] as [string, string | null],
+          [labels.customerOrderDate, doc.document.meta?.["customerOrderDate"] ? formatDate(String(doc.document.meta["customerOrderDate"]), ctx.locale) : null] as [string, string | null],
+        ])
+      : []),
   ];
   for (const [label, value] of metaRows) {
     if (!value) continue;
@@ -245,10 +262,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       x: engine.contentLeft, y: partyY, size: P.sectionSize, style: "bold", color: brandColor,
     });
     partyY += P.sectionSize * 1.4;
-    engine.drawText(party.name, {
-      x: engine.contentLeft, y: partyY, size: P.bodySize + 1, style: "bold", maxWidth: colW,
-    });
-    partyY += (P.bodySize + 1) * 1.4;
+
     const partyIdLine = joinParts([
       party.rc ? `${labels.rc} : ${party.rc}` : null,
       party.taxId ? `${labels.taxId} : ${party.taxId}` : null,
@@ -256,31 +270,33 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       party.ai ? `${labels.ai} : ${party.ai}` : null,
       party.vatNumber ? `${labels.vatNumber} : ${party.vatNumber}` : null,
     ]);
-    if (partyIdLine) {
-      engine.drawText(partyIdLine, {
-        x: engine.contentLeft, y: partyY, size: P.bodySize, maxWidth: colW,
-      });
-      partyY += P.bodySize * 1.4;
-    }
     const partyAddr = joinParts([
       party.address, party.commune, party.wilaya, party.postalCode,
     ]);
-    if (partyAddr) {
-      engine.drawText(partyAddr, {
-        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
-      });
-      partyY += P.bodySize * 1.4;
-    }
     const partyContact = joinParts([
       party.phone ? `${labels.phone} : ${party.phone}` : null,
       party.email,
     ]);
-    if (partyContact) {
-      engine.drawText(partyContact, {
-        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
-      });
-      partyY += P.bodySize * 1.4;
-    }
+
+    const drawPartyLine = (text: string | null, opts?: { bold?: boolean; gray?: boolean }) => {
+      if (!text) return;
+      const size = opts?.bold ? P.bodySize + 1 : P.bodySize;
+      const wrapped = engine.wrap(text, opts?.bold ? "bold" : "regular", size, colW);
+      const lineH = size * 1.4;
+      for (const w of wrapped) {
+        engine.drawText(w, {
+          x: engine.contentLeft, y: partyY, size,
+          style: opts?.bold ? "bold" : "regular",
+          color: opts?.gray ? COLORS.gray : COLORS.black, maxWidth: colW,
+        });
+        partyY += lineH;
+      }
+    };
+
+    drawPartyLine(party.name, { bold: true });
+    drawPartyLine(partyIdLine);
+    drawPartyLine(partyAddr, { gray: true });
+    drawPartyLine(partyContact, { gray: true });
   }
   if (doc.branch.name) {
     partyY += P.gap;
@@ -295,10 +311,14 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       doc.branch.wilaya,
       doc.branch.manager ? `${labels.manager} : ${doc.branch.manager}` : null,
     ]);
-    engine.drawText(branchLine, {
-      x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
-    });
-    partyY += P.bodySize * 1.4;
+    const wrapped = engine.wrap(branchLine, "regular", P.bodySize, colW);
+    const bLineH = P.bodySize * 1.4;
+    for (const w of wrapped) {
+      engine.drawText(w, {
+        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
+      });
+      partyY += bLineH;
+    }
   }
 
   const headerBottom = Math.max(metaY, partyY);
@@ -564,44 +584,56 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
 
   // Signatures.
   const sigTop = engine.y;
+  const sigColW = (engine.contentWidth - P.gap) / 2;
+  const sigBoxH = 50;
+
+  // Cadre "Cachet et Signature" (toujours visible, même sans image).
+  engine.drawRect(engine.contentLeft, sigTop, sigColW, sigBoxH, {
+    border: COLORS.lineGray,
+    borderWidth: 0.7,
+  });
+  engine.drawText(labels.signature, {
+    x: engine.contentLeft + 2,
+    y: sigTop + 3,
+    size: P.bodySize, style: "bold", maxWidth: sigColW,
+  });
+
+  // Cachet (image) superposé dans le cadre si fourni.
   if (doc.branding.stamp) {
     const img = await engine.embedImage(doc.branding.stamp, doc.branding.stampMimeType);
     if (img) {
-      const box = engine.drawImage(img, engine.contentLeft, sigTop, {
-        maxWidth: colW, maxHeight: 34,
+      engine.drawImage(img, engine.contentLeft + 6, sigTop + 12, {
+        maxWidth: sigColW - 12, maxHeight: sigBoxH - 16,
       });
-      engine.y = Math.max(engine.y, sigTop + box.height + 4);
     }
   }
+  // Signature manuscrite (image) superposée si fournie.
   if (doc.branding.signature) {
     const img = await engine.embedImage(doc.branding.signature, doc.branding.signatureMimeType);
     if (img) {
-      const box = engine.drawImage(img, engine.contentLeft + 60, sigTop, {
-        maxWidth: 60, maxHeight: 30,
+      engine.drawImage(img, engine.contentLeft + 6, sigTop + 12, {
+        maxWidth: sigColW - 12, maxHeight: sigBoxH - 16,
       });
-      engine.y = Math.max(engine.y, sigTop + box.height + 4);
     }
   }
-  engine.drawText(labels.signature, {
-    x: engine.contentLeft, y: engine.y, size: P.bodySize, style: "bold", maxWidth: colW,
-  });
-  engine.y += P.bodySize * 1.4;
-  engine.drawText(doc.company.name, {
-    x: engine.contentLeft, y: engine.y, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
-  });
+  engine.y = Math.max(engine.y, sigTop + sigBoxH + P.gap);
 
   if (party) {
-    const rx = engine.contentRight - colW;
+    const rx = engine.contentRight - sigColW;
+    engine.drawRect(rx, sigTop, sigColW, sigBoxH, {
+      border: COLORS.lineGray,
+      borderWidth: 0.7,
+    });
     engine.drawText(labels.signature, {
-      x: rx, y: sigTop, size: P.bodySize, style: "bold", align: "start", maxWidth: colW,
+      x: rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
     });
     engine.drawText(party.name, {
-      x: rx, y: sigTop + P.bodySize * 1.4, size: P.bodySize, color: COLORS.gray,
-      align: "start", maxWidth: colW,
+      x: rx + 2, y: sigTop + 3 + P.bodySize * 1.4, size: P.bodySize, color: COLORS.gray,
+      align: "start", maxWidth: sigColW,
     });
   }
 
-  engine.y = Math.max(engine.y, sigTop + sigHeight);
+  engine.y = Math.max(engine.y, sigTop + sigBoxH + P.gap);
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +667,8 @@ function drawStatusStamps(ctx: TemplateCtx): void {
 // ---------------------------------------------------------------------------
 
 export function createRunningHeader(doc: PrintableDocument, labels: PrintLabels) {
-  return (engine: PdfEngine, pageIndex: number): void => {
+  return (engine: PdfEngine, _pageIndex: number): void => {
+    void _pageIndex;
     const P = layout(engine.format);
     const brandColor = toColor(doc.company.primaryColor, COLORS.black);
     engine.drawLine(engine.contentLeft, engine.y, engine.contentRight, engine.y, {

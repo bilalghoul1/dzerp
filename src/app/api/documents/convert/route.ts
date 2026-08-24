@@ -39,6 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         actorId: guard.session.user.id,
         conversionRate: body.conversionRate,
         description: body.description,
+        deliveries: Array.isArray(body.deliveries) ? body.deliveries : undefined,
         ip: meta.ip,
         userAgent: meta.userAgent,
       });

@@ -21,6 +21,12 @@ export const STATUS_ORDER: DocumentStatus[] = [
   "CANCELLED",
   "ARCHIVED",
   "CLOSED",
+  "RECEIVED",
+  "UNDER_REVIEW",
+  "PROFORMA_CREATED",
+  "PROFORMA_SENT",
+  "ACCEPTED",
+  "COMPLETED",
 ];
 
 export const STATUS_META: Record<DocumentStatus, StatusMeta> = {
@@ -36,6 +42,12 @@ export const STATUS_META: Record<DocumentStatus, StatusMeta> = {
   CANCELLED: { badgeVariant: "destructive", dotClass: "bg-destructive" },
   ARCHIVED: { badgeVariant: "secondary", dotClass: "bg-muted-foreground" },
   CLOSED: { badgeVariant: "outline", dotClass: "bg-muted-foreground" },
+  RECEIVED: { badgeVariant: "secondary", dotClass: "bg-muted-foreground" },
+  UNDER_REVIEW: { badgeVariant: "warning", dotClass: "bg-warning" },
+  PROFORMA_CREATED: { badgeVariant: "warning", dotClass: "bg-warning" },
+  PROFORMA_SENT: { badgeVariant: "secondary", dotClass: "bg-muted-foreground" },
+  ACCEPTED: { badgeVariant: "success", dotClass: "bg-success" },
+  COMPLETED: { badgeVariant: "success", dotClass: "bg-success" },
 };
 
 /**
@@ -64,4 +76,10 @@ export const STATUS_EXPLANATION: Record<
   CANCELLED: { helpKey: "statusHelp.CANCELLED", nextKey: "statusNext.CANCELLED" },
   ARCHIVED: { helpKey: "statusHelp.ARCHIVED", nextKey: "statusNext.ARCHIVED" },
   CLOSED: { helpKey: "statusHelp.CLOSED", nextKey: "statusNext.CLOSED" },
+  RECEIVED: { helpKey: "statusHelp.RECEIVED", nextKey: "statusNext.RECEIVED" },
+  UNDER_REVIEW: { helpKey: "statusHelp.UNDER_REVIEW", nextKey: "statusNext.UNDER_REVIEW" },
+  PROFORMA_CREATED: { helpKey: "statusHelp.PROFORMA_CREATED", nextKey: "statusNext.PROFORMA_CREATED" },
+  PROFORMA_SENT: { helpKey: "statusHelp.PROFORMA_SENT", nextKey: "statusNext.PROFORMA_SENT" },
+  ACCEPTED: { helpKey: "statusHelp.ACCEPTED", nextKey: "statusNext.ACCEPTED" },
+  COMPLETED: { helpKey: "statusHelp.COMPLETED", nextKey: "statusNext.COMPLETED" },
 };

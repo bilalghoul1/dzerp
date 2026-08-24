@@ -146,6 +146,16 @@ function mapLines(raw: AnyRecord): PrintLine[] {
   }));
 }
 
+function buildPrintMeta(raw: AnyRecord, docType: CommercialDocType): Record<string, unknown> | null {
+  const base = (raw.meta as Record<string, unknown> | null) ?? null;
+  if (docType !== "CUSTOMER_ORDER") return base;
+  const extra: Record<string, unknown> = {};
+  if (raw.customerOrderNumber != null) extra.customerOrderNumber = String(raw.customerOrderNumber);
+  if (raw.customerOrderDate != null) extra.customerOrderDate = String(raw.customerOrderDate);
+  if (raw.conditions != null) extra.conditions = String(raw.conditions);
+  return { ...base, ...extra };
+}
+
 export async function mapToPrintableDocument(
   docType: CommercialDocType,
   docId: string,
@@ -189,8 +199,8 @@ export async function mapToPrintableDocument(
       validUntil: toIso(raw.validUntil),
       deliveryDate: toIso(raw.deliveryDate),
       shippedAt: toIso(raw.shippedAt),
-      receivedAt: toIso(raw.receivedAt),
-      neededAt: toIso(raw.neededAt),
+      receivedAt: docType === "CUSTOMER_ORDER" ? toIso(raw.receivedDate) : toIso(raw.receivedAt),
+      neededAt: docType === "CUSTOMER_ORDER" ? toIso(raw.requestedDeliveryDate) : toIso(raw.neededAt),
       priority: toStr(raw.priority),
       reason: toStr(raw.reason),
       currency: String(raw.currency ?? company.currency ?? "DZD"),
@@ -203,7 +213,7 @@ export async function mapToPrintableDocument(
       createdBy: getUserName(raw, "createdBy"),
       notes: toStr(raw.notes),
       terms: company.paymentTerms,
-      meta: (raw.meta as Record<string, unknown> | null) ?? null,
+      meta: buildPrintMeta(raw, docType),
     },
     lines: mapLines(raw),
     totals: {

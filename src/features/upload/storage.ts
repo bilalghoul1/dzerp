@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@/lib/http";
@@ -103,6 +103,18 @@ export async function readUploadFile(
     return { buffer, mimeType: "application/octet-stream" };
   } catch {
     return null;
+  }
+}
+
+/** Supprime un fichier uploadé (clé validée par `sanitizeStorageKey`). Best-effort. */
+export async function deleteUploadFile(storageKey: string): Promise<boolean> {
+  const safeKey = sanitizeStorageKey(storageKey);
+  if (!safeKey) return false;
+  try {
+    await rm(path.join(uploadRoot, safeKey), { force: true });
+    return true;
+  } catch {
+    return false;
   }
 }
 
