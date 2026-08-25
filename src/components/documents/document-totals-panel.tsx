@@ -4,7 +4,7 @@ import { useI18n } from "@/features/i18n/i18n-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 export function DocumentTotalsPanel() {
   const { t, locale } = useI18n();
@@ -13,7 +13,6 @@ export function DocumentTotalsPanel() {
   const localeFmt = locale === "ar" ? "ar-DZ" : locale;
 
   const fmt = (value: number) => formatCurrency(value, localeFmt, currency);
-  const fmtLines = (value: number) => formatNumber(value, localeFmt);
 
   return (
     <Card>
@@ -33,10 +32,6 @@ export function DocumentTotalsPanel() {
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">{t("documentsUI.subtotal")}</span>
           <span className="tabular-nums">{fmt(editor.totals.totalHt)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">{t("documentsUI.totalDiscount")}</span>
-          <span className="tabular-nums">{fmtLines(0)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">{t("documentsUI.vat")}</span>

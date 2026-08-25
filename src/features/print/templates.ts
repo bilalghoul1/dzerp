@@ -375,17 +375,24 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
     ];
   }
 
-  const priceW = amountW();
+  const priceW = Math.max(
+    amountW(),
+    ...doc.lines.map((l) =>
+      Math.max(
+        engine.measure(formatAmount(l.unitPrice ?? 0, locale, currency), "regular", P.tableSize),
+        engine.measure(formatAmount(l.amountHt ?? 0, locale, currency), "regular", P.tableSize),
+        engine.measure(formatAmount(l.amountTtc ?? 0, locale, currency), "bold", P.tableSize),
+      ),
+    ),
+  ) + 10;
   const qtyW = Math.max(30, engine.measure(labels.quantity, "regular", P.tableSize) + 6);
   const taxW = Math.max(24, engine.measure(labels.tax, "regular", P.tableSize) + 4);
-  const fixed = 20 + qtyW + 34 + priceW + 28 + taxW + priceW + priceW;
+  const fixed = 20 + qtyW + priceW + taxW + priceW + priceW;
   return [
     { key: "n", label: "#", width: 20, align: "right" },
     { key: "desc", label: labels.description, width: Math.max(70, w - fixed), align: "start" },
     { key: "qty", label: labels.quantity, width: qtyW, align: "right" },
-    { key: "unit", label: labels.unit, width: 34, align: "center" },
     { key: "price", label: labels.price, width: priceW, align: "right" },
-    { key: "disc", label: labels.discount, width: 28, align: "right" },
     { key: "tax", label: labels.tax, width: taxW, align: "right" },
     { key: "ht", label: labels.amountHt, width: priceW, align: "right" },
     { key: "ttc", label: labels.amountTtc, width: priceW, align: "right", style: "bold" },
@@ -399,12 +406,9 @@ function lineRows(ctx: TemplateCtx): Array<Record<string, string>> {
     n: String(line.lineNumber),
     desc: line.label,
     qty: formatQuantity(line.quantity, locale),
-    unit: line.unit ?? "",
     price: formatAmount(line.unitPrice, locale, currency),
-    disc: line.discountPct ? `${formatRate(line.discountPct, locale)}%` : "",
     tax: line.taxPct ? `${formatRate(line.taxPct, locale)}%` : "",
     ht: formatAmount(line.amountHt, locale, currency),
-    tva: formatAmount(line.amountTva, locale, currency),
     ttc: formatAmount(line.amountTtc, locale, currency),
   }));
 }
@@ -431,6 +435,7 @@ function drawLines(ctx: TemplateCtx): void {
     headerTextColor: COLORS.white,
     zebraColor: COLORS.lightGray,
     maxLines: 2,
+    cellPaddingX: 2,
   });
   engine.y = result.y + P.gap;
 }

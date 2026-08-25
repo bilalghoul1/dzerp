@@ -35,7 +35,6 @@ import { formatNumber } from "@/lib/utils";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
 import type { ProductRow } from "@/features/products/config";
-import type { DocumentLineKind } from "@/generated/prisma/enums";
 
 function ProductPicker({
   products,
@@ -112,13 +111,6 @@ function ProductPicker({
     </Popover>
   );
 }
-
-const LINE_KINDS: DocumentLineKind[] = [
-  "PRODUCT",
-  "SERVICE",
-  "COMMENT",
-  "SECTION",
-];
 
 export function DocumentLineEditor() {
   const { t, locale } = useI18n();
@@ -217,10 +209,7 @@ export function DocumentLineEditor() {
                 <TableHead className="min-w-[200px]">
                   {t("documentsUI.lineDescription")}
                 </TableHead>
-                <TableHead className="w-[104px] whitespace-nowrap">
-                  {t("documentsUI.lineKind")}
-                </TableHead>
-                <TableHead className="w-[88px] whitespace-nowrap">{t("documentsUI.lineUnit")}</TableHead>
+                <TableHead className="w-[88px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
                 <TableHead className="w-[104px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
                 {editor.type === "SALES_ORDER" && (
                   <>
@@ -236,9 +225,6 @@ export function DocumentLineEditor() {
                   </>
                 )}
                 <TableHead className="w-[120px] whitespace-nowrap">{t("documentsUI.linePrice")}</TableHead>
-                <TableHead className="w-[100px] whitespace-nowrap">
-                  {t("documentsUI.lineDiscount")}
-                </TableHead>
                 <TableHead className="w-[108px] whitespace-nowrap">{t("documentsUI.lineVat")}</TableHead>
                 <TableHead className="w-[132px] whitespace-nowrap text-end">
                   {t("documentsUI.lineAmount")}
@@ -285,58 +271,6 @@ export function DocumentLineEditor() {
                           aria-label={t("documentsUI.lineDescription")}
                         />
                       </div>
-                    </TableCell>
-                    <TableCell className="py-1 align-top">
-                      {isEditable ? (
-                        <Select
-                          value={line.kind}
-                          onValueChange={(value) =>
-                            editor.updateLine(index, {
-                              kind: value as DocumentLineKind,
-                            })
-                          }
-                          disabled={editor.busy}
-                        >
-                          <SelectTrigger className="h-9 w-full">
-                              <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {LINE_KINDS.map((kind) => (
-                              <SelectItem key={kind} value={kind}>
-                                {t(`documentsUI.kind.${kind}`)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="text-xs">
-                          {t(`documentsUI.kind.${line.kind}`)}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-1 align-top">
-                      {isEditable ? (
-                        <Select
-                          value={line.unit ?? ""}
-                          onValueChange={(value) =>
-                            editor.updateLine(index, { unit: value || null })
-                          }
-                          disabled={editor.busy}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {editor.lookups.units.map((unit) => (
-                              <SelectItem key={unit.key} value={unit.key}>
-                                {unit.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="text-xs">{line.unit ?? "—"}</span>
-                      )}
                     </TableCell>
                     <TableCell className="py-1 align-top">
                       <Input
@@ -393,25 +327,6 @@ export function DocumentLineEditor() {
                         disabled={!isEditable || editor.busy}
                         inputMode="decimal"
                         aria-label={t("documentsUI.linePrice")}
-                      />
-                    </TableCell>
-                    <TableCell className="py-1 align-top">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step="any"
-                        value={line.discountPct}
-                        onChange={(e) =>
-                          editor.updateLine(index, {
-                            discountPct: Number(e.target.value) || 0,
-                          })
-                        }
-                        onKeyDown={(e) => onCellKeyDown(e, false)}
-                        className="h-9 w-full text-end px-3 min-w-[5.5rem]"
-                        disabled={!isEditable || editor.busy}
-                        inputMode="decimal"
-                        aria-label={t("documentsUI.lineDiscount")}
                       />
                     </TableCell>
                     <TableCell className="py-1 align-top">

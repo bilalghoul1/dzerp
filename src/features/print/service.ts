@@ -35,12 +35,14 @@ export interface PrintDocumentParams {
   locale?: Locale;
 }
 
-async function resolveLocale(_hint: Locale | undefined): Promise<Locale> {
-  // DzERP documents render in French only (Arabic shaping is disabled to avoid
-  // broken ligatures/connectivity in the generated PDFs). French is the
-  // validated, fully-supported print language.
-  void _hint;
-  return "fr";
+async function resolveLocale(hint: Locale | undefined): Promise<Locale> {
+  // DzERP print templates keep French as the default UI language for document
+  // chrome (DEVIS / FACTURE / Total HT / …). Data fields (company name, client
+  // name, product labels) are rendered with full Arabic shaping via
+  // FontManager.splitRuns, so Arabic text inside an otherwise-French document
+  // displays correctly. The requested `locale` is honoured (fr/ar/en); only an
+  // explicit `ar` document flips the whole layout to RTL.
+  return hint ?? "fr";
 }
 
 export async function printDocument(params: PrintDocumentParams): Promise<PrintResult> {

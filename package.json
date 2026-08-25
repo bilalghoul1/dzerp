@@ -23,6 +23,7 @@
     "verify:phase75-users-sessions": "tsx scripts/verify-phase75-users-sessions.ts",
     "verify:phase75-maintenance": "tsx scripts/verify-phase75-maintenance.ts",
     "verify:phase75": "tsx scripts/verify-phase75.ts",
+    "verify:isolation": "tsx scripts/verify-isolation.ts",
     "db:seed:scf": "tsx prisma/seed-scf.ts",
     "db:seed:irg": "tsx prisma/seed-irg.ts",
     "postinstall": "prisma generate"

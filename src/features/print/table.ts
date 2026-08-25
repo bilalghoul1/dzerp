@@ -1,6 +1,7 @@
 import type { Align, Color, PdfEngine } from "./renderer";
 import { COLORS } from "./renderer";
 import type { FontStyle } from "./fonts";
+import { hasArabicScript } from "./fonts";
 
 /**
  * Tableau réutilisable pour les templates d'impression : gestion des ruptures
@@ -146,7 +147,16 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
       const lines = cellLines[c];
       let lineY = engine.y + cellPaddingY;
       for (const line of lines) {
-        const alignResolved = col.align === "center" ? "center" : col.align === "right" ? "right" : "start";
+        // Within a French document, Arabic data (client name, product label)
+        // is shaped correctly by FontManager.splitRuns; right-aligning a
+        // purely-Arabic cell reads more naturally without flipping the whole
+        // French layout to RTL.
+        const isArabicCell = col.align === undefined && hasArabicScript(line);
+        const alignResolved: Align = col.align === "center"
+          ? "center"
+          : col.align === "right" || isArabicCell
+            ? "right"
+            : "start";
         engine.drawText(line, {
           x: alignResolved === "center" ? cursor + col.width / 2 : alignResolved === "right" ? cursor + col.width - cellPaddingX : cursor + cellPaddingX,
           y: lineY,

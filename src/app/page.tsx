@@ -967,6 +967,14 @@ function Footer({ c }: { c: Content }) {
           <Globe className="h-4 w-4" />
           <span className="text-sm">{c.footer.langs}</span>
         </div>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/faq" className="text-slate-400 transition-colors hover:text-emerald-300">
+            الأسئلة الشائعة
+          </Link>
+          <Link href="/security" className="text-slate-400 transition-colors hover:text-emerald-300">
+            الأمان والخصوصية
+          </Link>
+        </div>
       </div>
     </footer>
   );
