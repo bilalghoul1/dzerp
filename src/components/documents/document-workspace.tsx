@@ -17,14 +17,22 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
   const { t, locale } = useI18n();
   const editor = useDocumentEditor();
 
-  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
+  const [collapsed, setCollapsed] = React.useState<boolean>(true);
+
+  // Read the persisted preference only on the client, after mount, so the
+  // server-rendered markup matches the first client render (no hydration
+  // mismatch). The value is applied asynchronously to avoid cascading renders.
+  React.useEffect(() => {
+    let stored: string | null = null;
     try {
-      return window.localStorage.getItem(STORAGE_KEY) !== "false";
+      stored = window.localStorage.getItem(STORAGE_KEY);
     } catch {
-      return true;
+      /* ignore */
     }
-  });
+    if (stored !== null) {
+      queueMicrotask(() => setCollapsed(stored !== "false"));
+    }
+  }, []);
 
   // Persist preference whenever it changes.
   React.useEffect(() => {

@@ -156,6 +156,20 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
         ]) }
       : null,
     joinParts([
+      doc.company.bank ? `${labels.bank} : ${doc.company.bank}` : null,
+      doc.company.rib ? `${labels.rib} : ${doc.company.rib}` : null,
+      doc.company.bankAccount ? `${labels.bankAccount} : ${doc.company.bankAccount}` : null,
+    ])
+      ? {
+          text: joinParts([
+            doc.company.bank ? `${labels.bank} : ${doc.company.bank}` : null,
+            doc.company.rib ? `${labels.rib} : ${doc.company.rib}` : null,
+            doc.company.bankAccount ? `${labels.bankAccount} : ${doc.company.bankAccount}` : null,
+          ]),
+          color: COLORS.gray,
+        }
+      : null,
+    joinParts([
       doc.company.address,
       doc.company.commune,
       doc.company.wilaya,
@@ -363,13 +377,14 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
 
   if (engine.format === "A5") {
     const priceW = amountW();
-    const fixed = 16 + 30 + priceW + 24 + priceW + priceW;
+    const fixed = 16 + 30 + priceW + 24 + priceW + priceW + priceW;
     return [
       { key: "n", label: "#", width: 16, align: "right" },
       { key: "desc", label: labels.description, width: Math.max(50, w - fixed), align: "start" },
       { key: "qty", label: labels.quantity, width: 30, align: "right" },
       { key: "price", label: labels.price, width: priceW, align: "right" },
       { key: "tax", label: labels.tax, width: 24, align: "right" },
+      { key: "tva", label: labels.amountTva, width: priceW, align: "right" },
       { key: "ht", label: labels.amountHt, width: priceW, align: "right" },
       { key: "ttc", label: labels.amountTtc, width: priceW, align: "right", style: "bold" },
     ];
@@ -381,19 +396,21 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
       Math.max(
         engine.measure(formatAmount(l.unitPrice ?? 0, locale, currency), "regular", P.tableSize),
         engine.measure(formatAmount(l.amountHt ?? 0, locale, currency), "regular", P.tableSize),
+        engine.measure(formatAmount(l.amountTva ?? 0, locale, currency), "regular", P.tableSize),
         engine.measure(formatAmount(l.amountTtc ?? 0, locale, currency), "bold", P.tableSize),
       ),
     ),
   ) + 10;
   const qtyW = Math.max(30, engine.measure(labels.quantity, "regular", P.tableSize) + 6);
   const taxW = Math.max(24, engine.measure(labels.tax, "regular", P.tableSize) + 4);
-  const fixed = 20 + qtyW + priceW + taxW + priceW + priceW;
+  const fixed = 20 + qtyW + priceW + taxW + priceW + priceW + priceW;
   return [
     { key: "n", label: "#", width: 20, align: "right" },
     { key: "desc", label: labels.description, width: Math.max(70, w - fixed), align: "start" },
     { key: "qty", label: labels.quantity, width: qtyW, align: "right" },
     { key: "price", label: labels.price, width: priceW, align: "right" },
     { key: "tax", label: labels.tax, width: taxW, align: "right" },
+    { key: "tva", label: labels.amountTva, width: priceW, align: "right" },
     { key: "ht", label: labels.amountHt, width: priceW, align: "right" },
     { key: "ttc", label: labels.amountTtc, width: priceW, align: "right", style: "bold" },
   ];
@@ -408,6 +425,7 @@ function lineRows(ctx: TemplateCtx): Array<Record<string, string>> {
     qty: formatQuantity(line.quantity, locale),
     price: formatAmount(line.unitPrice, locale, currency),
     tax: line.taxPct ? `${formatRate(line.taxPct, locale)}%` : "",
+    tva: formatAmount(line.amountTva, locale, currency),
     ht: formatAmount(line.amountHt, locale, currency),
     ttc: formatAmount(line.amountTtc, locale, currency),
   }));
