@@ -64,6 +64,7 @@ function readFontBytes(file: string): Uint8Array {
 
 /** Nettoyage des caractères de contrôle qui cassent l'encodage PDF. */
 export function sanitizeText(text: string): string {
+  if (typeof text !== "string") return "";
   return text
     .replace(/\u0000/g, " ")
     .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")

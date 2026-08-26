@@ -17,6 +17,7 @@ import type { PrintableDocument, PrintFormat } from "./types";
 export type PrintLabels = Dictionary["print"] & {
   docType: string;
   party: string;
+  issuer: string;
   statusLabel: string;
   paymentStatusLabel: string;
   priorityLabel: string;
@@ -273,53 +274,72 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     metaY += lineH;
   }
 
-  const colW = engine.contentWidth - metaWidth - P.gap;
-  const partyX = rtl ? right - colW : engine.contentLeft;
-  let partyY = blockTop;
+  // ---- Cartes côte-à-côte : Émetteur (fournisseur) + Client ----
+  const cardGap = P.gap;
+  const cardW = (engine.contentWidth - cardGap) / 2;
   const party = doc.party;
-  if (party) {
-    engine.drawText(labels.party, {
-      x: partyX, y: partyY, size: P.sectionSize, style: "bold", color: brandColor,
-      align: rtl ? "right" : "left",
+  const cardTop = blockTop;
+  const cardTitleH = P.sectionSize * 1.6;
+  // Measure content height for both cards to align their bottom borders.
+  const emitLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = [
+    { text: doc.company.name, bold: true },
+    { text: joinParts([doc.company.legalForm, doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null]) ?? "", gray: true },
+    { text: joinParts([doc.company.rc ? `${labels.rc} ${doc.company.rc}` : null, doc.company.taxId ? `${labels.taxId} ${doc.company.taxId}` : null, doc.company.nis ? `${labels.nis} ${doc.company.nis}` : null]) ?? "", gray: true },
+    { text: joinParts([doc.company.address, doc.company.commune, doc.company.wilaya]) ?? "", gray: true },
+  ].filter((l) => !!l.text && l.text.trim().length > 0);
+  const clientLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = party
+    ? [
+        { text: party.name, bold: true },
+        { text: joinParts([party.rc ? `${labels.rc} ${party.rc}` : null, party.taxId ? `${labels.taxId} ${party.taxId}` : null, party.nis ? `${labels.nis} ${party.nis}` : null]) ?? "", gray: true },
+        { text: joinParts([party.address, party.commune, party.wilaya]) ?? "", gray: true },
+        { text: joinParts([party.phone ? `${labels.phone} ${party.phone}` : null, party.email]) ?? "", gray: true },
+      ].filter((l) => !!l.text && l.text.trim().length > 0)
+    : [];
+  const cardBodyH = Math.max(
+    emitLines.length,
+    clientLines.length,
+    2,
+  ) * P.bodySize * 1.4 + P.gap;
+  const cardH = cardTitleH + cardBodyH;
+
+  const drawCard = (
+    x: number,
+    title: string,
+    lines: Array<{ text: string; bold?: boolean; gray?: boolean }>,
+  ) => {
+    engine.drawRect(x, cardTop, cardW, cardH, {
+      border: COLORS.lineGray,
+      borderWidth: 0.7,
+      fill: COLORS.white,
     });
-    partyY += P.sectionSize * 1.4;
-
-    const partyIdLine = joinParts([
-      party.rc ? `${labels.rc} : ${party.rc}` : null,
-      party.taxId ? `${labels.taxId} : ${party.taxId}` : null,
-      party.nis ? `${labels.nis} : ${party.nis}` : null,
-      party.ai ? `${labels.ai} : ${party.ai}` : null,
-      party.vatNumber ? `${labels.vatNumber} : ${party.vatNumber}` : null,
-    ]);
-    const partyAddr = joinParts([
-      party.address, party.commune, party.wilaya, party.postalCode,
-    ]);
-    const partyContact = joinParts([
-      party.phone ? `${labels.phone} : ${party.phone}` : null,
-      party.email,
-    ]);
-
-    const drawPartyLine = (text: string | null, opts?: { bold?: boolean; gray?: boolean }) => {
-      if (!text) return;
-      const size = opts?.bold ? P.bodySize + 1 : P.bodySize;
-      const wrapped = engine.wrap(text, opts?.bold ? "bold" : "regular", size, colW);
-      const lineH = size * 1.4;
+    engine.drawRect(x, cardTop, cardW, cardTitleH, {
+      fill: brandColor,
+    });
+    engine.drawText(title, {
+      x: x + 6, y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
+      style: "bold", color: COLORS.white,
+      align: rtl ? "right" : "left", maxWidth: cardW - 12,
+    });
+    let ly = cardTop + cardTitleH + P.bodySize * 1.4;
+    for (const l of lines) {
+      if (!l.text) continue;
+      const wrapped = engine.wrap(l.text, l.bold ? "bold" : "regular", P.bodySize, cardW - 12);
       for (const w of wrapped) {
         engine.drawText(w, {
-          x: partyX, y: partyY, size,
-          style: opts?.bold ? "bold" : "regular",
-          color: opts?.gray ? COLORS.gray : COLORS.black, maxWidth: colW,
-          align: rtl ? "right" : "left",
+          x: x + 6, y: ly, size: P.bodySize,
+          style: l.bold ? "bold" : "regular",
+          color: l.gray ? COLORS.gray : COLORS.black,
+          align: rtl ? "right" : "left", maxWidth: cardW - 12,
         });
-        partyY += lineH;
+        ly += P.bodySize * 1.4;
       }
-    };
+    }
+  };
 
-    drawPartyLine(party.name, { bold: true });
-    drawPartyLine(partyIdLine);
-    drawPartyLine(partyAddr, { gray: true });
-    drawPartyLine(partyContact, { gray: true });
-  }
+  drawCard(engine.contentLeft, labels.issuer, emitLines);
+  drawCard(rtl ? engine.contentLeft : engine.contentRight - cardW, labels.party, clientLines);
+
+  let partyY = cardTop + cardH;
   if (doc.branch.name) {
     partyY += P.gap;
     engine.drawText(labels.branch, {
@@ -333,11 +353,11 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       doc.branch.wilaya,
       doc.branch.manager ? `${labels.manager} : ${doc.branch.manager}` : null,
     ]);
-    const wrapped = engine.wrap(branchLine, "regular", P.bodySize, colW);
+    const wrapped = engine.wrap(branchLine, "regular", P.bodySize, engine.contentWidth);
     const bLineH = P.bodySize * 1.4;
     for (const w of wrapped) {
       engine.drawText(w, {
-        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: colW,
+        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: engine.contentWidth,
       });
       partyY += bLineH;
     }
@@ -373,28 +393,27 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
 
   if (engine.format === "THERMAL") {
     const priceW = amountW();
-    const fixed = 14 + 24 + priceW + 42;
+    const fixed = 14 + 24 + priceW + priceW + 24;
     return [
       { key: "n", label: "#", width: 14, align: "right" },
       { key: "desc", label: labels.description, width: Math.max(40, w - fixed), align: "start" },
+      { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
       { key: "qty", label: labels.quantity, width: 24, align: "right" },
-      { key: "price", label: labels.price, width: priceW, align: "right" },
-      { key: "ttc", label: labels.amountTtc, width: 42, align: "right", style: "bold" },
+      { key: "tax", label: labels.tax, width: 24, align: "right" },
+      { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
     ];
   }
 
   if (engine.format === "A5") {
     const priceW = amountW();
-    const fixed = 16 + 30 + priceW + 24 + priceW + priceW + priceW;
+    const fixed = 16 + 30 + priceW + priceW + 24 + priceW;
     return [
       { key: "n", label: "#", width: 16, align: "right" },
       { key: "desc", label: labels.description, width: Math.max(50, w - fixed), align: "start" },
+      { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
       { key: "qty", label: labels.quantity, width: 30, align: "right" },
-      { key: "price", label: labels.price, width: priceW, align: "right" },
       { key: "tax", label: labels.tax, width: 24, align: "right" },
-      { key: "tva", label: labels.amountTva, width: priceW, align: "right" },
-      { key: "ht", label: labels.amountHt, width: priceW, align: "right" },
-      { key: "ttc", label: labels.amountTtc, width: priceW, align: "right", style: "bold" },
+      { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
     ];
   }
 
@@ -404,23 +423,20 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
       Math.max(
         engine.measure(formatAmount(l.unitPrice ?? 0, locale, currency), "regular", P.tableSize),
         engine.measure(formatAmount(l.amountHt ?? 0, locale, currency), "regular", P.tableSize),
-        engine.measure(formatAmount(l.amountTva ?? 0, locale, currency), "regular", P.tableSize),
         engine.measure(formatAmount(l.amountTtc ?? 0, locale, currency), "bold", P.tableSize),
       ),
     ),
   ) + 10;
   const qtyW = Math.max(30, engine.measure(labels.quantity, "regular", P.tableSize) + 6);
   const taxW = Math.max(24, engine.measure(labels.tax, "regular", P.tableSize) + 4);
-  const fixed = 20 + qtyW + priceW + taxW + priceW + priceW + priceW;
+  const fixed = 20 + qtyW + priceW + priceW + taxW + priceW;
   return [
     { key: "n", label: "#", width: 20, align: "right" },
     { key: "desc", label: labels.description, width: Math.max(70, w - fixed), align: "start" },
+    { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
     { key: "qty", label: labels.quantity, width: qtyW, align: "right" },
-    { key: "price", label: labels.price, width: priceW, align: "right" },
     { key: "tax", label: labels.tax, width: taxW, align: "right" },
-    { key: "tva", label: labels.amountTva, width: priceW, align: "right" },
-    { key: "ht", label: labels.amountHt, width: priceW, align: "right" },
-    { key: "ttc", label: labels.amountTtc, width: priceW, align: "right", style: "bold" },
+    { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
   ];
 }
 
@@ -430,12 +446,10 @@ function lineRows(ctx: TemplateCtx): Array<Record<string, string>> {
   return doc.lines.map((line) => ({
     n: String(line.lineNumber),
     desc: line.label,
-    qty: formatQuantity(line.quantity, locale),
     price: formatAmount(line.unitPrice, locale, currency),
+    qty: formatQuantity(line.quantity, locale),
     tax: line.taxPct ? `${formatRate(line.taxPct, locale)}%` : "",
-    tva: formatAmount(line.amountTva, locale, currency),
     ht: formatAmount(line.amountHt, locale, currency),
-    ttc: formatAmount(line.amountTtc, locale, currency),
   }));
 }
 
@@ -488,8 +502,11 @@ function drawTotals(ctx: TemplateCtx): void {
   const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color }> = [
     { label: labels.totalHt, value: formatAmount(doc.totals.totalHt, locale, currency) },
     { label: labels.totalTva, value: formatAmount(doc.totals.totalTva, locale, currency) },
-    { label: labels.totalTtc, value: formatAmount(doc.totals.totalTtc, locale, currency), bold: true, color: brand(ctx) },
   ];
+  if (doc.totals.tap != null) {
+    totalRows.push({ label: labels.tap, value: formatAmount(doc.totals.tap, locale, currency) });
+  }
+  totalRows.push({ label: labels.totalTtc, value: formatAmount(doc.totals.totalTtc, locale, currency), bold: true, color: brand(ctx) });
 
   if (ctx.config.hasPayment) {
     if ((doc.totals.paidAmount ?? 0) > 0) {
@@ -622,12 +639,12 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   const sigColW = (engine.contentWidth - P.gap) / 2;
   const sigBoxH = 50;
 
-  // Cadre "Cachet et Signature" (toujours visible, même sans image).
+  // Cadre "L'Émetteur — Cachet" (toujours visible, même sans image).
   engine.drawRect(engine.contentLeft, sigTop, sigColW, sigBoxH, {
     border: COLORS.lineGray,
     borderWidth: 0.7,
   });
-  engine.drawText(labels.signature, {
+  engine.drawText("L'Émetteur — Cachet", {
     x: engine.contentLeft + 2,
     y: sigTop + 3,
     size: P.bodySize, style: "bold", maxWidth: sigColW,
@@ -659,7 +676,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
       border: COLORS.lineGray,
       borderWidth: 0.7,
     });
-    engine.drawText(labels.signature, {
+    engine.drawText("Le Client", {
       x: rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
     });
     engine.drawText(party.name, {

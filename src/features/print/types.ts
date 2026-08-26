@@ -130,6 +130,8 @@ export interface PrintTotals {
   totalTtc: number;
   paidAmount: number | null;
   netPayable: number | null;
+  /** TAP (Taxe sur l'Activité Professionnelle) — optional, shown only when provided. */
+  tap?: number | null;
 }
 
 export interface PrintBranding {
