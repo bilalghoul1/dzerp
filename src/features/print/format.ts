@@ -8,8 +8,12 @@ import type { Locale } from "@/lib/constants";
 
 export function intlLocale(locale: Locale): string {
   switch (locale) {
+    // Algerian documents use Latin digits with an Arabic UI. Use fr-DZ for
+    // number/date formatting so amounts render as "446 251,79 DA" (space
+    // thousands separator, comma decimal) — the standard on Algerian invoices —
+    // while the labels come from the Arabic dictionary.
     case "ar":
-      return "ar-DZ";
+      return "fr-DZ";
     case "en":
       return "en-US";
     default:

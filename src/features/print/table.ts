@@ -87,24 +87,32 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
   const lineH = engine.lineHeight(rowSize);
   const totalWidth = columns.reduce((sum, c) => sum + c.width, 0);
   const right = x + totalWidth;
+  const rtl = engine.rtl;
+
+  // In RTL we keep the logical column order (n, desc, qty, …) but lay them out
+  // starting from the right edge and advancing leftward, so "#" lands on the
+  // right (start of Arabic reading) and "TTC" on the left.
+  const orderedColumns = columns;
 
   const drawHeader = () => {
     if (engine.y + headerHeight > engine.contentBottom) {
       engine.newPage();
     }
     engine.fillRect(x, engine.y, totalWidth, headerHeight, headerColor ?? COLORS.lightGray);
-    let cursor = x;
-    for (const col of columns) {
+    let cursor = rtl ? right : x;
+    for (const col of orderedColumns) {
+      const cx = rtl ? cursor - col.width : cursor;
+      const cellAlign: Align = col.align ?? (rtl ? "right" : "left");
       engine.drawText(col.label, {
-        x: col.align === "right" ? cursor + col.width : col.align === "center" ? cursor + col.width / 2 : cursor + cellPaddingX,
+        x: cellAlign === "right" ? cx + col.width - cellPaddingX : cellAlign === "center" ? cx + col.width / 2 : cx + cellPaddingX,
         y: engine.y + headerHeight / 2 - rowSize / 2,
         size: rowSize,
         style: "bold",
         color: headerTextColor,
-        align: col.align === "right" ? "right" : col.align === "center" ? "center" : "left",
+        align: cellAlign,
         maxWidth: col.width - cellPaddingX * 2,
       });
-      cursor += col.width;
+      cursor = rtl ? cursor - col.width : cursor + col.width;
     }
     engine.y += headerHeight;
   };
@@ -141,34 +149,26 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
       engine.fillRect(x, engine.y, totalWidth, rowH, zebraColor);
     }
 
-    let cursor = x;
+    let cursor = rtl ? right : x;
     for (let c = 0; c < columns.length; c++) {
-      const col = columns[c];
-      const lines = cellLines[c];
+      const col = orderedColumns[c];
+      const lines = cellLines[columns.indexOf(col)];
       let lineY = engine.y + cellPaddingY;
       for (const line of lines) {
-        // Within a French document, Arabic data (client name, product label)
-        // is shaped correctly by FontManager.splitRuns; right-aligning a
-        // purely-Arabic cell reads more naturally without flipping the whole
-        // French layout to RTL.
-        const isArabicCell = col.align === undefined && hasArabicScript(line);
-        const alignResolved: Align = col.align === "center"
-          ? "center"
-          : col.align === "right" || isArabicCell
-            ? "right"
-            : "start";
+        const cx = rtl ? cursor - col.width : cursor;
+        const cellAlign: Align = col.align ?? (rtl && hasArabicScript(line) ? "right" : rtl ? "right" : "start");
         engine.drawText(line, {
-          x: alignResolved === "center" ? cursor + col.width / 2 : alignResolved === "right" ? cursor + col.width - cellPaddingX : cursor + cellPaddingX,
+          x: cellAlign === "center" ? cx + col.width / 2 : cellAlign === "right" ? cx + col.width - cellPaddingX : cx + cellPaddingX,
           y: lineY,
           size: col.size ?? rowSize,
           style: col.style ?? "regular",
           color: col.color,
-          align: alignResolved,
+          align: cellAlign,
           maxWidth: col.width - cellPaddingX * 2,
         });
         lineY += lineH;
       }
-      cursor += col.width;
+      cursor = rtl ? cursor - col.width : cursor + col.width;
     }
     engine.y += rowH;
   }

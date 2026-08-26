@@ -4,7 +4,7 @@ import type { Locale } from "@/lib/constants";
 import { amountToWords, formatAmount, formatDate, formatQuantity, formatRate } from "./format";
 import type { PrintTypeConfig } from "./registry";
 import { getPrintConfig } from "./registry";
-import { COLORS, toColor, type Color, type PdfEngine } from "./renderer";
+import { COLORS, toColor, type Align, type Color, type PdfEngine } from "./renderer";
 import { drawTable, type TableColumn } from "./table";
 import type { PrintableDocument, PrintFormat } from "./types";
 
@@ -105,17 +105,19 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const right = engine.contentRight;
   const pageTop = engine.y;
   const brandColor = brand(ctx);
+  const rtl = engine.rtl;
 
   let logoBottom = engine.y;
-  let textX = engine.contentLeft;
+  const companyX = rtl ? right - Math.min(260, engine.contentWidth * 0.5) : engine.contentLeft;
+  let textX = companyX;
   if (doc.branding.logo) {
     const img = await engine.embedImage(doc.branding.logo, doc.branding.logoMimeType);
     if (img) {
-      const box = engine.drawImage(img, engine.contentLeft, engine.y, {
+      const box = engine.drawImage(img, companyX, engine.y, {
         maxWidth: 120,
         maxHeight: P.logoMaxH,
       });
-      textX += box.width + 10;
+      textX = rtl ? companyX : companyX + box.width + 10;
       logoBottom = engine.y + box.height;
     }
   }
@@ -214,22 +216,25 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   }
   const companyBottom = Math.max(engine.y, logoBottom);
 
-  // ---- Titre (droite) ----
+  // ---- Titre (droite en LTR / gauche en RTL) ----
   let ty = pageTop;
+  const titleX = rtl ? engine.contentLeft : right;
+  const titleAlign: Align = rtl ? "left" : "right";
   engine.drawText(labels.docType, {
-    x: right, y: ty, size: P.titleSize, style: "bold", color: brandColor, align: "right",
+    x: titleX, y: ty, size: P.titleSize, style: "bold", color: brandColor, align: titleAlign,
   });
   ty += P.titleSize * 1.3;
   engine.drawText(`${labels.ref} ${doc.document.number}`, {
-    x: right, y: ty, size: P.bodySize + 1, style: "bold", align: "right",
+    x: titleX, y: ty, size: P.bodySize + 1, style: "bold", align: titleAlign,
   });
   ty += (P.bodySize + 1) * 1.5;
 
   const chipW = engine.measure(labels.statusLabel, "bold", P.bodySize) + 10;
   const chipH = P.bodySize * 1.9;
-  engine.fillRect(right - chipW, ty, chipW, chipH, statusColor(doc.document.status));
+  const chipX = rtl ? engine.contentLeft : right - chipW;
+  engine.fillRect(chipX, ty, chipW, chipH, statusColor(doc.document.status));
   engine.drawText(labels.statusLabel, {
-    x: right - chipW / 2, y: ty + (chipH - P.bodySize) / 2,
+    x: chipX + chipW / 2, y: ty + (chipH - P.bodySize) / 2,
     size: P.bodySize, style: "bold", color: COLORS.white, align: "center",
   });
   const titleBottom = ty + chipH + P.gap;
@@ -263,17 +268,19 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   for (const [label, value] of metaRows) {
     if (!value) continue;
     engine.drawText(`${label} : ${value}`, {
-      x: right, y: metaY, size: P.bodySize, align: "right", maxWidth: metaWidth,
+      x: titleX, y: metaY, size: P.bodySize, align: titleAlign, maxWidth: metaWidth,
     });
     metaY += lineH;
   }
 
+  const colW = engine.contentWidth - metaWidth - P.gap;
+  const partyX = rtl ? right - colW : engine.contentLeft;
   let partyY = blockTop;
   const party = doc.party;
-  const colW = engine.contentWidth - metaWidth - P.gap;
   if (party) {
     engine.drawText(labels.party, {
-      x: engine.contentLeft, y: partyY, size: P.sectionSize, style: "bold", color: brandColor,
+      x: partyX, y: partyY, size: P.sectionSize, style: "bold", color: brandColor,
+      align: rtl ? "right" : "left",
     });
     partyY += P.sectionSize * 1.4;
 
@@ -299,9 +306,10 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       const lineH = size * 1.4;
       for (const w of wrapped) {
         engine.drawText(w, {
-          x: engine.contentLeft, y: partyY, size,
+          x: partyX, y: partyY, size,
           style: opts?.bold ? "bold" : "regular",
           color: opts?.gray ? COLORS.gray : COLORS.black, maxWidth: colW,
+          align: rtl ? "right" : "left",
         });
         partyY += lineH;
       }
@@ -466,12 +474,16 @@ function drawTotals(ctx: TemplateCtx): void {
   const { engine, doc, labels, locale } = ctx;
   const P = layout(engine.format);
   const currency = doc.document.currency;
+  const rtl = engine.rtl;
   const right = engine.contentRight;
   const boxW = Math.min(
     engine.contentWidth * (engine.format === "THERMAL" ? 0.85 : 0.5),
     220,
   );
   const labelX = right - boxW;
+  const valueX = rtl ? right - boxW : right;
+  const labelAlign: Align = rtl ? "right" : "left";
+  const valueAlign: Align = rtl ? "left" : "right";
 
   const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color }> = [
     { label: labels.totalHt, value: formatAmount(doc.totals.totalHt, locale, currency) },
@@ -489,7 +501,7 @@ function drawTotals(ctx: TemplateCtx): void {
     if (doc.totals.netPayable != null) {
       totalRows.push({
         label: labels.netPayable,
-        value: formatAmount(doc.totals.netPayable, locale, currency),
+        value: formatAmount(doc.totals.netPayable ?? 0, locale, currency),
         bold: true,
         color: brand(ctx),
       });
@@ -504,11 +516,11 @@ function drawTotals(ctx: TemplateCtx): void {
   for (const row of totalRows) {
     engine.drawText(row.label, {
       x: labelX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
-      style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: "left",
+      style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: labelAlign,
     });
     engine.drawText(row.value, {
-      x: right, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
-      style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: "right",
+      x: valueX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
+      style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: valueAlign,
     });
     engine.y += lineH;
   }
