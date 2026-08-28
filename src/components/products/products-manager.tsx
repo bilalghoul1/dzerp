@@ -161,6 +161,7 @@ export function ProductsManager({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<FormState>(emptyForm);
   const [busy, setBusy] = React.useState(false);
+  const [showDetails, setShowDetails] = React.useState(false);
 
   const showArabic = locale === "ar";
   const topCategories = options.categories.filter((c) => !c.parentId);
@@ -485,36 +486,65 @@ export function ProductsManager({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product-sku">{t("products.sku")}</Label>
-                  <Input
-                    id="product-sku"
-                    value={form.sku}
-                    onChange={(e) => setField("sku", e.target.value)}
-                    placeholder={t("products.code")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product-barcode">{t("products.barcode")}</Label>
-                  <Input
-                    id="product-barcode"
-                    value={form.barcode}
-                    onChange={(e) => setField("barcode", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product-internal-ref">{t("products.internalReference")}</Label>
-                  <Input
-                    id="product-internal-ref"
-                    value={form.internalReference}
-                    onChange={(e) => setField("internalReference", e.target.value)}
-                  />
-                </div>
               </div>
             </section>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold">{t("products.sectionCategorization")}</h3>
+            <div className="rounded-xl border">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-medium"
+                onClick={() => setShowDetails((v) => !v)}
+                aria-expanded={showDetails}
+                aria-controls="product-additional-details"
+              >
+                <span>{t("products.sectionMore")}</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  {showDetails ? "expand_less" : "expand_more"}
+                </span>
+              </Button>
+
+              <div
+                id="product-additional-details"
+                className={
+                  "overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out " +
+                  (showDetails ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0")
+                }
+              >
+                <div className="space-y-6 px-4 pb-4">
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("products.sectionGeneral")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="product-sku">{t("products.sku")}</Label>
+                        <Input
+                          id="product-sku"
+                          value={form.sku}
+                          onChange={(e) => setField("sku", e.target.value)}
+                          placeholder={t("products.code")}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="product-barcode">{t("products.barcode")}</Label>
+                        <Input
+                          id="product-barcode"
+                          value={form.barcode}
+                          onChange={(e) => setField("barcode", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="product-internal-ref">{t("products.internalReference")}</Label>
+                        <Input
+                          id="product-internal-ref"
+                          value={form.internalReference}
+                          onChange={(e) => setField("internalReference", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("products.sectionCategorization")}</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="product-category">{t("products.category")}</Label>
@@ -958,6 +988,9 @@ export function ProductsManager({
                 </div>
               </div>
             </section>
+                </div>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

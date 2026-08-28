@@ -174,7 +174,7 @@ export default async function CustomerCenterPage({
         </Card>
 
         {/* Guided commercial flow reminder for this customer. */}
-        <Card className="sm:col-span-2 lg:col-span-4">
+        <Card className="sm:col-span-2 lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t("documentsUI.workflowSteps")}
@@ -225,10 +225,10 @@ export default async function CustomerCenterPage({
               <CardContent>
                 <p className="text-2xl font-semibold tabular-nums">{rows.length}</p>
                 <a
-                href={`/documents/${type.toLowerCase()}`}
-                className="mt-1 inline-block text-xs text-primary hover:underline"
+                  href={`/documents/${type.toLowerCase()}`}
+                  className="mt-1 inline-block text-xs text-primary hover:underline"
                 >
-                {t("dashboard.viewAll")}
+                  {t("dashboard.viewAll")}
                 </a>
               </CardContent>
             </Card>

@@ -115,8 +115,8 @@ export function BusinessPartnersManager({
   rows,
 }: {
   kind: BusinessPartnerModuleKind;
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   rows: BusinessPartnerRow[];
 }) {
   const { t, locale } = useI18n();
@@ -125,6 +125,7 @@ export function BusinessPartnersManager({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
+  const [showDetails, setShowDetails] = React.useState(false);
 
   const apiBase = API_BY_KIND[kind];
 
@@ -178,6 +179,10 @@ export function BusinessPartnersManager({
   };
 
   const save = async () => {
+    if (!form.name.trim()) {
+      toast.error(t("parties.name") + " " + t("common.required"));
+      return;
+    }
     setBusy(true);
     try {
       const payload: Record<string, unknown> = {
@@ -262,8 +267,8 @@ export function BusinessPartnersManager({
     <Card>
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          {title ? <CardTitle>{title}</CardTitle> : null}
+          {description ? <CardDescription>{description}</CardDescription> : null}
         </div>
         <Button onClick={openCreate} disabled={busy}>
           <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
@@ -286,30 +291,34 @@ export function BusinessPartnersManager({
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
-              <EmptyState
-                illustration={
-                  kind === "customer" ? (
-                    <CustomersIllustration className="size-24" />
-                  ) : (
-                    <SuppliersIllustration className="size-24" />
-                  )
-                }
-                icon={kind === "customer" ? "group" : "handshake"}
-                title={t("parties.empty")}
-                description={t(
-                  kind === "customer"
-                    ? "parties.emptyCustomerHint"
-                    : "parties.emptySupplierHint",
-                )}
-                action={
-                  <Button onClick={openCreate} disabled={busy}>
-                    <span className="material-symbols-outlined text-[18px] me-1" aria-hidden="true">
-                      add
-                    </span>
-                    {t("parties.add")}
-                  </Button>
-                }
-              />
+              <TableRow>
+                <TableCell colSpan={6} className="p-0">
+                  <EmptyState
+                    illustration={
+                      kind === "customer" ? (
+                        <CustomersIllustration className="size-24" />
+                      ) : (
+                        <SuppliersIllustration className="size-24" />
+                      )
+                    }
+                    icon={kind === "customer" ? "group" : "handshake"}
+                    title={t("parties.empty")}
+                    description={t(
+                      kind === "customer"
+                        ? "parties.emptyCustomerHint"
+                        : "parties.emptySupplierHint",
+                    )}
+                    action={
+                      <Button onClick={openCreate} disabled={busy}>
+                        <span className="material-symbols-outlined text-[18px] me-1" aria-hidden="true">
+                          add
+                        </span>
+                        {t("parties.add")}
+                      </Button>
+                    }
+                  />
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((row) => (
                 <TableRow key={row.id}>
@@ -419,204 +428,236 @@ export function BusinessPartnersManager({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-sector">{t("parties.sector")}</Label>
-                  <Input
-                    id="party-sector"
-                    value={form.sector}
-                    onChange={(e) => setField("sector", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-first-name">{t("parties.firstName")}</Label>
-                  <Input
-                    id="party-first-name"
-                    value={form.firstName}
-                    onChange={(e) => setField("firstName", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-last-name">{t("parties.lastName")}</Label>
-                  <Input
-                    id="party-last-name"
-                    value={form.lastName}
-                    onChange={(e) => setField("lastName", e.target.value)}
-                  />
-                </div>
               </div>
             </section>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold">{t("parties.sectionLegal")}</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="party-legal-name">{t("parties.legalName")}</Label>
-                  <Input
-                    id="party-legal-name"
-                    value={form.legalName}
-                    onChange={(e) => setField("legalName", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-commercial-name">{t("parties.commercialName")}</Label>
-                  <Input
-                    id="party-commercial-name"
-                    value={form.commercialName}
-                    onChange={(e) => setField("commercialName", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-legal-form">{t("parties.legalForm")}</Label>
-                  <Input
-                    id="party-legal-form"
-                    value={form.legalForm}
-                    onChange={(e) => setField("legalForm", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-activity">{t("parties.activity")}</Label>
-                  <Input
-                    id="party-activity"
-                    value={form.activity}
-                    onChange={(e) => setField("activity", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-taxid">{t("parties.taxId")}</Label>
-                  <Input
-                    id="party-taxid"
-                    value={form.taxId}
-                    onChange={(e) => setField("taxId", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-rc">{t("parties.rc")}</Label>
-                  <Input
-                    id="party-rc"
-                    value={form.rc}
-                    onChange={(e) => setField("rc", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-nis">{t("parties.nis")}</Label>
-                  <Input
-                    id="party-nis"
-                    value={form.nis}
-                    onChange={(e) => setField("nis", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-ai">{t("parties.ai")}</Label>
-                  <Input
-                    id="party-ai"
-                    value={form.ai}
-                    onChange={(e) => setField("ai", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-vat">{t("parties.vatNumber")}</Label>
-                  <Input
-                    id="party-vat"
-                    value={form.vatNumber}
-                    onChange={(e) => setField("vatNumber", e.target.value)}
-                  />
-                </div>
-              </div>
-            </section>
+            <div className="rounded-xl border">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-medium"
+                onClick={() => setShowDetails((v) => !v)}
+                aria-expanded={showDetails}
+                aria-controls="party-additional-details"
+              >
+                <span>{t("parties.sectionMore")}</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                  {showDetails ? "expand_less" : "expand_more"}
+                </span>
+              </Button>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold">{t("parties.sectionAddress")}</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="party-address">{t("parties.address")}</Label>
-                  <Input
-                    id="party-address"
-                    value={form.address}
-                    onChange={(e) => setField("address", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-wilaya">{t("parties.wilaya")}</Label>
-                  <Input
-                    id="party-wilaya"
-                    value={form.wilaya}
-                    onChange={(e) => setField("wilaya", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-commune">{t("parties.commune")}</Label>
-                  <Input
-                    id="party-commune"
-                    value={form.commune}
-                    onChange={(e) => setField("commune", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-postal">{t("parties.postalCode")}</Label>
-                  <Input
-                    id="party-postal"
-                    value={form.postalCode}
-                    onChange={(e) => setField("postalCode", e.target.value)}
-                  />
-                </div>
-              </div>
-            </section>
+              <div
+                id="party-additional-details"
+                className={
+                  "overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out " +
+                  (showDetails ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0")
+                }
+              >
+                <div className="space-y-6 px-4 pb-4">
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("parties.sectionGeneral")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="party-sector">{t("parties.sector")}</Label>
+                        <Input
+                          id="party-sector"
+                          value={form.sector}
+                          onChange={(e) => setField("sector", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-first-name">{t("parties.firstName")}</Label>
+                        <Input
+                          id="party-first-name"
+                          value={form.firstName}
+                          onChange={(e) => setField("firstName", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-last-name">{t("parties.lastName")}</Label>
+                        <Input
+                          id="party-last-name"
+                          value={form.lastName}
+                          onChange={(e) => setField("lastName", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold">{t("parties.sectionContacts")}</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="party-email">{t("parties.email")}</Label>
-                  <Input
-                    id="party-email"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setField("email", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-phone">{t("parties.phone")}</Label>
-                  <Input
-                    id="party-phone"
-                    value={form.phone}
-                    onChange={(e) => setField("phone", e.target.value)}
-                  />
-                </div>
-              </div>
-            </section>
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("parties.sectionLegal")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="party-legal-name">{t("parties.legalName")}</Label>
+                        <Input
+                          id="party-legal-name"
+                          value={form.legalName}
+                          onChange={(e) => setField("legalName", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-commercial-name">{t("parties.commercialName")}</Label>
+                        <Input
+                          id="party-commercial-name"
+                          value={form.commercialName}
+                          onChange={(e) => setField("commercialName", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-legal-form">{t("parties.legalForm")}</Label>
+                        <Input
+                          id="party-legal-form"
+                          value={form.legalForm}
+                          onChange={(e) => setField("legalForm", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-activity">{t("parties.activity")}</Label>
+                        <Input
+                          id="party-activity"
+                          value={form.activity}
+                          onChange={(e) => setField("activity", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-taxid">{t("parties.taxId")}</Label>
+                        <Input
+                          id="party-taxid"
+                          value={form.taxId}
+                          onChange={(e) => setField("taxId", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-rc">{t("parties.rc")}</Label>
+                        <Input
+                          id="party-rc"
+                          value={form.rc}
+                          onChange={(e) => setField("rc", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-nis">{t("parties.nis")}</Label>
+                        <Input
+                          id="party-nis"
+                          value={form.nis}
+                          onChange={(e) => setField("nis", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-ai">{t("parties.ai")}</Label>
+                        <Input
+                          id="party-ai"
+                          value={form.ai}
+                          onChange={(e) => setField("ai", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-vat">{t("parties.vatNumber")}</Label>
+                        <Input
+                          id="party-vat"
+                          value={form.vatNumber}
+                          onChange={(e) => setField("vatNumber", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-            <section className="space-y-4">
-              <h3 className="text-sm font-semibold">{t("parties.sectionTerms")}</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="party-payment-terms">{t("parties.paymentTerms")}</Label>
-                  <Input
-                    id="party-payment-terms"
-                    value={form.paymentTerms}
-                    onChange={(e) => setField("paymentTerms", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="party-credit-limit">{t("parties.creditLimit")}</Label>
-                  <Input
-                    id="party-credit-limit"
-                    type="number"
-                    min={0}
-                    value={form.creditLimit}
-                    onChange={(e) => setField("creditLimit", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="party-notes">{t("parties.notes")}</Label>
-                  <Textarea
-                    id="party-notes"
-                    rows={3}
-                    value={form.notes}
-                    onChange={(e) => setField("notes", e.target.value)}
-                  />
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("parties.sectionAddress")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="party-address">{t("parties.address")}</Label>
+                        <Input
+                          id="party-address"
+                          value={form.address}
+                          onChange={(e) => setField("address", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-wilaya">{t("parties.wilaya")}</Label>
+                        <Input
+                          id="party-wilaya"
+                          value={form.wilaya}
+                          onChange={(e) => setField("wilaya", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-commune">{t("parties.commune")}</Label>
+                        <Input
+                          id="party-commune"
+                          value={form.commune}
+                          onChange={(e) => setField("commune", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-postal">{t("parties.postalCode")}</Label>
+                        <Input
+                          id="party-postal"
+                          value={form.postalCode}
+                          onChange={(e) => setField("postalCode", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("parties.sectionContacts")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="party-email">{t("parties.email")}</Label>
+                        <Input
+                          id="party-email"
+                          type="email"
+                          value={form.email}
+                          onChange={(e) => setField("email", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-phone">{t("parties.phone")}</Label>
+                        <Input
+                          id="party-phone"
+                          value={form.phone}
+                          onChange={(e) => setField("phone", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold">{t("parties.sectionTerms")}</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="party-payment-terms">{t("parties.paymentTerms")}</Label>
+                        <Input
+                          id="party-payment-terms"
+                          value={form.paymentTerms}
+                          onChange={(e) => setField("paymentTerms", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="party-credit-limit">{t("parties.creditLimit")}</Label>
+                        <Input
+                          id="party-credit-limit"
+                          type="number"
+                          min={0}
+                          value={form.creditLimit}
+                          onChange={(e) => setField("creditLimit", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="party-notes">{t("parties.notes")}</Label>
+                        <Textarea
+                          id="party-notes"
+                          rows={3}
+                          value={form.notes}
+                          onChange={(e) => setField("notes", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
-            </section>
+            </div>
           </div>
 
           <DialogFooter>

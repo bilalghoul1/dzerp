@@ -27,8 +27,6 @@ export default async function CustomersPage() {
       />
       <BusinessPartnersManager
         kind="customer"
-        title={t("customers.title")}
-        description={t("customers.subtitle")}
         rows={customers}
       />
     </div>

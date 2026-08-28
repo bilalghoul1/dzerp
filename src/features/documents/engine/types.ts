@@ -60,6 +60,11 @@ export interface InputDocument {
   conditions?: string | null;
   // Champs spécifiques à PROFORMA / QUOTATION (validUntil).
   validUntil?: string | null;
+  // Champs spécifiques à INVOICE (dueDate).
+  dueDate?: string | null;
+  // Champs spécifiques à CREDIT_NOTE.
+  invoiceId?: string | null;
+  reason?: string | null;
 }
 
 export interface UpdateDocument {
@@ -79,6 +84,9 @@ export interface UpdateDocument {
   requestedDeliveryDate?: string | null;
   conditions?: string | null;
   validUntil?: string | null;
+  dueDate?: string | null;
+  invoiceId?: string | null;
+  reason?: string | null;
 }
 
 export interface StatusTransition {

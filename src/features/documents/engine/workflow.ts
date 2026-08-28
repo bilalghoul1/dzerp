@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ApiError } from "@/lib/http";
 import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
 import { AuditAction, ActivityType } from "@/generated/prisma/enums";
@@ -77,8 +78,10 @@ export async function approveDocument(
   ctx: DocumentContext,
 ): Promise<void> {
   if (!canApprove(currentStatus as never)) {
-    throw new Error(
+    throw new ApiError(
+      422,
       `Document en statut ${currentStatus} ne peut pas être approuvé`,
+      "INVALID_STATUS_TRANSITION",
     );
   }
 

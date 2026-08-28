@@ -28,6 +28,11 @@ const LINE_INCLUDE = {
   amountTtc: true,
 };
 
+const LINE_INCLUDE_CUSTOMER_SPECS = {
+  ...LINE_INCLUDE,
+  customerSpecs: true,
+};
+
 const HEADER_INCLUDE_PARTY = {
   customer: { select: { id: true, name: true } },
 };
@@ -56,6 +61,17 @@ function docTypeSpecificCreateFields(
       conditions: data.conditions ?? null,
     };
   }
+  if (docType === "QUOTATION") {
+    return {
+      validUntil: data.validUntil ?? null,
+    };
+  }
+  if (docType === "CREDIT_NOTE") {
+    return {
+      invoiceId: data.invoiceId ?? null,
+      reason: data.reason ?? null,
+    };
+  }
   return {};
 }
 
@@ -73,9 +89,9 @@ function getDelegate(model: string, client: unknown = prisma) {
 
 /** Sélection des lignes : `remainingQty` n'existe que sur SalesOrderLine. */
 function getLineSelect(docType: CommercialDocType) {
-  return docType === "SALES_ORDER"
-    ? { ...LINE_INCLUDE, remainingQty: true }
-    : LINE_INCLUDE;
+  if (docType === "SALES_ORDER") return { ...LINE_INCLUDE, remainingQty: true };
+  if (docType === "CUSTOMER_ORDER" || docType === "PROFORMA") return LINE_INCLUDE_CUSTOMER_SPECS;
+  return LINE_INCLUDE;
 }
 
 function getHeaderInclude(docType: CommercialDocType) {
@@ -125,7 +141,7 @@ export async function createDocument(
     data: {
       companyId: ctx.companyId,
       number,
-      status: "DRAFT",
+      status: docType === "CUSTOMER_ORDER" ? "RECEIVED" : "DRAFT",
       branchId: data.branchId,
       [partyKey]: config.partyField === "customerId" ? data.customerId : data.supplierId,
       clientId: data.clientId ?? null,
@@ -134,6 +150,9 @@ export async function createDocument(
       exchangeRate: data.exchangeRate ?? 1,
       notes: data.notes ?? null,
       meta: data.meta ?? undefined,
+      ...(docType === "INVOICE" || docType === "SUPPLIER_INVOICE"
+        ? { dueDate: data.dueDate ?? null }
+        : {}),
       totalHt: computed.totalHt,
       totalTva: computed.totalTva,
       totalTtc: computed.totalTtc,
@@ -259,6 +278,40 @@ export async function updateDocument(
   if (docType === "PROFORMA") {
     if (data.validUntil !== undefined) updateData.validUntil = data.validUntil;
     if (data.conditions !== undefined) updateData.conditions = data.conditions;
+  }
+  if (docType === "QUOTATION") {
+    if (data.validUntil !== undefined) updateData.validUntil = data.validUntil;
+  }
+  if (docType === "INVOICE") {
+    if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
+  }
+  if (docType === "SUPPLIER_INVOICE") {
+    if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
+  }
+  if (docType === "CREDIT_NOTE") {
+    if (data.invoiceId !== undefined) updateData.invoiceId = data.invoiceId;
+    if (data.reason !== undefined) updateData.reason = data.reason;
+  }
+
+  // Recompute invoice tax fields when lines change OR when meta changes.
+  if (docType === "INVOICE" && (data.lines || data.meta !== undefined)) {
+    let computedForTax: import("./types").ComputedTotals;
+    if (data.lines) {
+      computedForTax = computeAllLines(data.lines);
+    } else {
+      // Meta changed but no lines: recompute tax from existing document totals.
+      const existingDoc = (await delegate.findUnique({
+        where: { id: docId },
+        select: { totalHt: true, totalTva: true, totalTtc: true },
+      })) as { totalHt: unknown; totalTva: unknown; totalTtc: unknown };
+      computedForTax = {
+        totalHt: Number(existingDoc.totalHt) || 0,
+        totalTva: Number(existingDoc.totalTva) || 0,
+        totalTtc: Number(existingDoc.totalTtc) || 0,
+        lines: [],
+      };
+    }
+    Object.assign(updateData, dzInvoiceTaxFields(computedForTax, data.meta));
   }
 
   if (data.lines) {

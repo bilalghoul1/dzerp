@@ -185,6 +185,8 @@ export async function mapToPrintableDocument(
   const hasPayment = config.hasPayment;
   const paidAmount = hasPayment ? toNum(raw.paidAmount) : null;
 
+  const tapAmount = hasPayment ? toNum(raw.tapAmount) : null;
+
   return {
     company,
     branch: mapBranch(raw),
@@ -212,7 +214,7 @@ export async function mapToPrintableDocument(
       issuedBy: getUserName(raw, "issuedBy"),
       createdBy: getUserName(raw, "createdBy"),
       notes: toStr(raw.notes),
-      terms: company.paymentTerms,
+      terms: toStr(raw.conditions) ?? company.paymentTerms,
       meta: buildPrintMeta(raw, docType),
     },
     lines: mapLines(raw),
@@ -224,6 +226,7 @@ export async function mapToPrintableDocument(
       netPayable: hasPayment
         ? Math.max(0, toNum(raw.totalTtc) - (paidAmount ?? 0))
         : null,
+      tap: tapAmount && tapAmount > 0 ? tapAmount : null,
     },
     branding,
   };

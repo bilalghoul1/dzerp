@@ -66,6 +66,7 @@ const DOCUMENT_CONFIGS: Record<CommercialDocType, DocumentTypeConfig> = {
     partyField: "customerId",
     hasPayment: false,
     hasDelivery: false,
+    hasValidUntil: true,
   },
   SALES_ORDER: {
     type: "SALES_ORDER",

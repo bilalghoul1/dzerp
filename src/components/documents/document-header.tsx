@@ -183,6 +183,32 @@ export function DocumentHeader() {
             />
           </div>
 
+          {(editor.type === "INVOICE" || editor.type === "SUPPLIER_INVOICE") ? (
+            <div className="space-y-2">
+              <Label htmlFor="doc-due-date">{t("print.dueDate")}</Label>
+              <Input
+                id="doc-due-date"
+                type="date"
+                value={editor.header.dueDate ? editor.header.dueDate.slice(0, 10) : ""}
+                onChange={(e) => editor.setHeaderField("dueDate", e.target.value ? e.target.value + "T00:00:00.000Z" : "")}
+                disabled={!isEditable || editor.busy}
+              />
+            </div>
+          ) : null}
+
+          {config.hasValidUntil ? (
+            <div className="space-y-2">
+              <Label htmlFor="doc-valid-until">{t("documentsUI.fieldValidUntil")}</Label>
+              <Input
+                id="doc-valid-until"
+                type="date"
+                value={editor.header.validUntil ? editor.header.validUntil.slice(0, 10) : ""}
+                onChange={(e) => editor.setHeaderField("validUntil", e.target.value ? e.target.value + "T00:00:00.000Z" : "")}
+                disabled={!isEditable || editor.busy}
+              />
+            </div>
+          ) : null}
+
           <div className="space-y-2 sm:col-span-2 lg:col-span-4">
             <Label htmlFor="doc-notes">{t("documentsUI.fieldNotes")}</Label>
             <Textarea
@@ -194,6 +220,20 @@ export function DocumentHeader() {
               disabled={!isEditable || editor.busy}
             />
           </div>
+
+          {(editor.type === "CUSTOMER_ORDER" || editor.type === "PROFORMA") ? (
+            <div className="space-y-2 sm:col-span-2 lg:col-span-4">
+              <Label htmlFor="doc-conditions">{t("documentsUI.fieldConditions")}</Label>
+              <Textarea
+                id="doc-conditions"
+                rows={2}
+                value={editor.header.conditions}
+                onChange={(e) => editor.setHeaderField("conditions", e.target.value)}
+                placeholder={t("documentsUI.conditionsPlaceholder")}
+                disabled={!isEditable || editor.busy}
+              />
+            </div>
+          ) : null}
         </div>
       </CardContent>
       {editor.docId ? (

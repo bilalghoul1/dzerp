@@ -32,7 +32,7 @@ const PRINT_CONFIGS: Record<CommercialDocType, PrintTypeConfig> = {
     showShippedAt: false,
     showReceivedAt: false,
     showNeededAt: false,
-    showPriority: true,
+    showPriority: false,
   },
   SALES_ORDER: {
     docType: "SALES_ORDER",
@@ -44,7 +44,7 @@ const PRINT_CONFIGS: Record<CommercialDocType, PrintTypeConfig> = {
     showShippedAt: false,
     showReceivedAt: false,
     showNeededAt: false,
-    showPriority: true,
+    showPriority: false,
   },
   DELIVERY_NOTE: {
     docType: "DELIVERY_NOTE",
@@ -128,7 +128,7 @@ const PRINT_CONFIGS: Record<CommercialDocType, PrintTypeConfig> = {
     showShippedAt: false,
     showReceivedAt: false,
     showNeededAt: false,
-    showPriority: true,
+    showPriority: false,
   },
   GOODS_RECEIPT: {
     docType: "GOODS_RECEIPT",

@@ -52,6 +52,7 @@ export interface EditorHeaderState {
   notes: string;
   issuedAt: string;
   validUntil: string;
+  dueDate: string;
   customerOrderNumber: string;
   customerOrderDate: string;
   receivedDate: string;
@@ -70,6 +71,7 @@ function blankHeader(branchId: string, currency: string): EditorHeaderState {
     notes: "",
     issuedAt: "",
     validUntil: "",
+    dueDate: "",
     customerOrderNumber: "",
     customerOrderDate: "",
     receivedDate: "",
@@ -89,6 +91,7 @@ function detailToHeader(detail: DocumentDetailModel): EditorHeaderState {
     notes: detail.notes ?? "",
     issuedAt: detail.issuedAt,
     validUntil: detail.validUntil ?? "",
+    dueDate: detail.dueDate ?? "",
     customerOrderNumber: detail.customerOrderNumber ?? "",
     customerOrderDate: detail.customerOrderDate ?? "",
     receivedDate: detail.receivedDate ?? "",
@@ -331,12 +334,21 @@ export function DocumentEditorProvider({
       payload.requestedDeliveryDate = header.requestedDeliveryDate || null;
       payload.conditions = header.conditions || null;
     }
-    if (type === "PROFORMA" || type === "QUOTATION") {
+    if (type === "PROFORMA") {
       payload.validUntil = header.validUntil || null;
       payload.conditions = header.conditions || null;
     }
+    if (type === "QUOTATION") {
+      payload.validUntil = header.validUntil || null;
+    }
+    if (type === "INVOICE" || type === "SUPPLIER_INVOICE") {
+      payload.dueDate = header.dueDate || null;
+    }
+    if (detail?.meta) {
+      payload.meta = detail.meta;
+    }
     return payload;
-  }, [config.partyField, header, lines, type]);
+  }, [config.partyField, header, lines, type, detail]);
 
   const refresh = React.useCallback(async () => {
     if (!docId) return;

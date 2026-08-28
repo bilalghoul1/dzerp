@@ -132,6 +132,7 @@ export function normalizeDocumentDetail(
     issuedByName: getUserName(raw, "issuedBy"),
     issuedAt: toDate(raw.issuedAt ?? raw.createdAt),
     validUntil: toOptionalString(raw.validUntil),
+    dueDate: toOptionalString(raw.dueDate),
     currency: String(raw.currency ?? "DZD"),
     exchangeRate: toNumber(raw.exchangeRate) || 1,
     notes: toOptionalString(raw.notes),

@@ -27,8 +27,6 @@ export default async function SuppliersPage() {
       />
       <BusinessPartnersManager
         kind="supplier"
-        title={t("suppliers.title")}
-        description={t("suppliers.subtitle")}
         rows={suppliers}
       />
     </div>

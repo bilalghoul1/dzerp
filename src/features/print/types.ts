@@ -21,6 +21,7 @@ export interface PrintMargins {
 
 export interface PrintCompany {
   name: string;
+  activity: string | null;
   legalName: string | null;
   legalForm: string | null;
   commercialName: string | null;

@@ -102,6 +102,7 @@ export interface DocumentDetailModel {
   issuedByName: string | null;
   issuedAt: string;
   validUntil: string | null;
+  dueDate: string | null;
   currency: string;
   exchangeRate: number;
   notes: string | null;

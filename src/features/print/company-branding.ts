@@ -72,6 +72,7 @@ export async function getCompanyPrintData(companyId: string): Promise<{
   return {
     company: {
       name: company.name,
+      activity: toStr(company.activity),
       legalName: toStr(company.legalName),
       legalForm: toStr(company.legalForm),
       commercialName: toStr(company.commercialName),

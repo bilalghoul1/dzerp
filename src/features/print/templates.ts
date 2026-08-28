@@ -23,6 +23,8 @@ export type PrintLabels = Dictionary["print"] & {
   priorityLabel: string;
   customerOrderNumber: string;
   customerOrderDate: string;
+  issuerStamp: string;
+  clientLabel: string;
 };
 
 interface TemplateCtx {
@@ -110,112 +112,20 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   let logoBottom = engine.y;
   const companyX = rtl ? right - Math.min(260, engine.contentWidth * 0.5) : engine.contentLeft;
-  let textX = companyX;
   if (doc.branding.logo) {
+    // Ensure space for logo before drawing
+    engine.ensureSpace(P.logoMaxH + 8 + P.gap);
     const img = await engine.embedImage(doc.branding.logo, doc.branding.logoMimeType);
     if (img) {
       const box = engine.drawImage(img, companyX, engine.y, {
-        maxWidth: 120,
-        maxHeight: P.logoMaxH,
+        maxWidth: 140,
+        maxHeight: P.logoMaxH + 8,
       });
-      textX = rtl ? companyX : companyX + box.width + 10;
       logoBottom = engine.y + box.height;
     }
   }
 
-  // Largeur de la colonne société : bornée pour ne jamais empiéter sur la
-  // colonne méta (droite).
-  const metaX = right - engine.contentWidth * P.metaWidth;
-  const companyWidth = Math.max(
-    80,
-    Math.min(metaX - textX - P.gap, 260),
-  );
-
-  const companyLines: Array<{ text: string; style?: "bold"; color?: Color } | null> = [
-    { text: doc.company.name, style: "bold" },
-    doc.company.legalName ? { text: doc.company.legalName, color: COLORS.gray } : null,
-    joinParts([
-      doc.company.legalForm,
-      doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null,
-    ])
-      ? { text: joinParts([
-          doc.company.legalForm,
-          doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null,
-        ]), color: COLORS.gray }
-      : null,
-    joinParts([
-      doc.company.rc ? `${labels.rc} : ${doc.company.rc}` : null,
-      doc.company.taxId ? `${labels.taxId} : ${doc.company.taxId}` : null,
-      doc.company.nis ? `${labels.nis} : ${doc.company.nis}` : null,
-      doc.company.ai ? `${labels.ai} : ${doc.company.ai}` : null,
-      doc.company.vatNumber ? `${labels.vatNumber} : ${doc.company.vatNumber}` : null,
-    ])
-      ? { text: joinParts([
-          doc.company.rc ? `${labels.rc} : ${doc.company.rc}` : null,
-          doc.company.taxId ? `${labels.taxId} : ${doc.company.taxId}` : null,
-          doc.company.nis ? `${labels.nis} : ${doc.company.nis}` : null,
-          doc.company.ai ? `${labels.ai} : ${doc.company.ai}` : null,
-          doc.company.vatNumber ? `${labels.vatNumber} : ${doc.company.vatNumber}` : null,
-        ]) }
-      : null,
-    joinParts([
-      doc.company.bank ? `${labels.bank} : ${doc.company.bank}` : null,
-      doc.company.rib ? `${labels.rib} : ${doc.company.rib}` : null,
-      doc.company.bankAccount ? `${labels.bankAccount} : ${doc.company.bankAccount}` : null,
-    ])
-      ? {
-          text: joinParts([
-            doc.company.bank ? `${labels.bank} : ${doc.company.bank}` : null,
-            doc.company.rib ? `${labels.rib} : ${doc.company.rib}` : null,
-            doc.company.bankAccount ? `${labels.bankAccount} : ${doc.company.bankAccount}` : null,
-          ]),
-          color: COLORS.gray,
-        }
-      : null,
-    joinParts([
-      doc.company.address,
-      doc.company.commune,
-      doc.company.wilaya,
-      doc.company.postalCode,
-      doc.company.country,
-    ])
-      ? { text: joinParts([
-          doc.company.address,
-          doc.company.commune,
-          doc.company.wilaya,
-          doc.company.postalCode,
-          doc.company.country,
-        ]), color: COLORS.gray }
-      : null,
-    joinParts([
-      doc.company.phone ? `${labels.phone} : ${doc.company.phone}` : null,
-      doc.company.mobile ? `${labels.phone} : ${doc.company.mobile}` : null,
-      doc.company.email,
-      doc.company.website,
-    ])
-      ? { text: joinParts([
-          doc.company.phone ? `${labels.phone} : ${doc.company.phone}` : null,
-          doc.company.mobile ? `${labels.phone} : ${doc.company.mobile}` : null,
-          doc.company.email,
-          doc.company.website,
-        ]), color: COLORS.gray }
-      : null,
-  ];
-
-  for (const line of companyLines) {
-    if (!line) continue;
-    const size = line.style === "bold" ? P.nameSize : P.bodySize;
-    const wrapped = engine.wrap(line.text, line.style ?? "regular", size, companyWidth);
-    const lineH = size * 1.35;
-    for (const w of wrapped) {
-      engine.drawText(w, {
-        x: textX, y: engine.y, size, style: line.style ?? "regular",
-        color: line.color ?? COLORS.black, maxWidth: companyWidth,
-      });
-      engine.y += lineH;
-    }
-  }
-  const companyBottom = Math.max(engine.y, logoBottom);
+  const companyBottom = logoBottom;
 
   // ---- Titre (droite en LTR / gauche en RTL) ----
   let ty = pageTop;
@@ -246,6 +156,8 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   let metaY = blockTop;
   const lineH = P.bodySize * 1.5;
+  // Ensure space for at least 4 meta rows
+  engine.ensureSpace(lineH * 4 + P.gap);
   const metaRows: Array<[string, string | null]> = [
     [labels.date, formatDate(doc.document.issuedAt, ctx.locale)],
     [labels.validUntil, ctx.config.showValidUntil ? formatDate(doc.document.validUntil, ctx.locale) : null],
@@ -278,11 +190,12 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const cardGap = P.gap;
   const cardW = (engine.contentWidth - cardGap) / 2;
   const party = doc.party;
-  const cardTop = blockTop;
+  const cardTop = metaY;
   const cardTitleH = P.sectionSize * 1.6;
   // Measure content height for both cards to align their bottom borders.
   const emitLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = [
     { text: doc.company.name, bold: true },
+    ...(doc.company.activity ? [{ text: doc.company.activity, gray: true }] : []),
     { text: joinParts([doc.company.legalForm, doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null]) ?? "", gray: true },
     { text: joinParts([doc.company.rc ? `${labels.rc} ${doc.company.rc}` : null, doc.company.taxId ? `${labels.taxId} ${doc.company.taxId}` : null, doc.company.nis ? `${labels.nis} ${doc.company.nis}` : null]) ?? "", gray: true },
     { text: joinParts([doc.company.address, doc.company.commune, doc.company.wilaya]) ?? "", gray: true },
@@ -295,12 +208,22 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
         { text: joinParts([party.phone ? `${labels.phone} ${party.phone}` : null, party.email]) ?? "", gray: true },
       ].filter((l) => !!l.text && l.text.trim().length > 0)
     : [];
-  const cardBodyH = Math.max(
-    emitLines.length,
-    clientLines.length,
-    2,
-  ) * P.bodySize * 1.4 + P.gap;
+
+  // Measure actual wrapped line counts for accurate card heights
+  function countWrappedLines(lines: Array<{ text: string; bold?: boolean }>): number {
+    let count = 0;
+    for (const l of lines) {
+      const wrapped = engine.wrap(l.text, l.bold ? "bold" : "regular", P.bodySize, cardW - 12);
+      count += Math.max(wrapped.length, 1);
+    }
+    return Math.max(count, 1);
+  }
+  const emitLineCount = countWrappedLines(emitLines);
+  const clientLineCount = countWrappedLines(clientLines);
+  const cardBodyH = Math.max(emitLineCount, clientLineCount) * P.bodySize * 1.4 + P.gap;
   const cardH = cardTitleH + cardBodyH;
+
+  engine.ensureSpace(cardH + P.gap);
 
   const drawCard = (
     x: number,
@@ -337,11 +260,14 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   };
 
   drawCard(engine.contentLeft, labels.issuer, emitLines);
-  drawCard(rtl ? engine.contentLeft : engine.contentRight - cardW, labels.party, clientLines);
+  if (clientLines.length > 0) {
+    drawCard(rtl ? engine.contentLeft : engine.contentRight - cardW, labels.party, clientLines);
+  }
 
   let partyY = cardTop + cardH;
   if (doc.branch.name) {
     partyY += P.gap;
+    engine.ensureSpace(P.bodySize * 3 + P.gap);
     engine.drawText(labels.branch, {
       x: engine.contentLeft, y: partyY, size: P.bodySize, style: "bold", color: COLORS.gray,
     });
@@ -644,7 +570,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
     border: COLORS.lineGray,
     borderWidth: 0.7,
   });
-  engine.drawText("L'Émetteur — Cachet", {
+  engine.drawText(labels.issuerStamp, {
     x: engine.contentLeft + 2,
     y: sigTop + 3,
     size: P.bodySize, style: "bold", maxWidth: sigColW,
@@ -654,8 +580,8 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   if (doc.branding.stamp) {
     const img = await engine.embedImage(doc.branding.stamp, doc.branding.stampMimeType);
     if (img) {
-      engine.drawImage(img, engine.contentLeft + 6, sigTop + 12, {
-        maxWidth: sigColW - 12, maxHeight: sigBoxH - 16,
+      engine.drawImage(img, engine.contentLeft + 6, sigTop + 14, {
+        maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 10,
       });
     }
   }
@@ -663,8 +589,9 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   if (doc.branding.signature) {
     const img = await engine.embedImage(doc.branding.signature, doc.branding.signatureMimeType);
     if (img) {
-      engine.drawImage(img, engine.contentLeft + 6, sigTop + 12, {
-        maxWidth: sigColW - 12, maxHeight: sigBoxH - 16,
+      const sigOffset = doc.branding.stamp ? sigBoxH / 2 + 2 : 12;
+      engine.drawImage(img, engine.contentLeft + 6, sigTop + sigOffset, {
+        maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 8,
       });
     }
   }
@@ -676,7 +603,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
       border: COLORS.lineGray,
       borderWidth: 0.7,
     });
-    engine.drawText("Le Client", {
+    engine.drawText(labels.clientLabel, {
       x: rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
     });
     engine.drawText(party.name, {

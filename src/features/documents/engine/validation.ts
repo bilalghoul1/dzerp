@@ -111,8 +111,8 @@ export function validateLines(lines: InputLine[]): void {
     }
 
     if (kind === "PRODUCT" || kind === "SERVICE") {
-      if (line.quantity !== undefined && line.quantity < 0) {
-        throw new ApiError(422, `Ligne ${i + 1}: la quantité ne peut pas être négative`, "VALIDATION");
+      if (line.quantity !== undefined && line.quantity <= 0) {
+        throw new ApiError(422, `Ligne ${i + 1}: la quantité doit être supérieure à 0`, "VALIDATION");
       }
       if (line.unitPrice !== undefined && line.unitPrice < 0) {
         throw new ApiError(422, `Ligne ${i + 1}: le prix unitaire ne peut pas être négatif`, "VALIDATION");

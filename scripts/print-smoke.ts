@@ -20,6 +20,7 @@ function mockDoc(lines: number, format: "A4" | "A5" | "THERMAL" = "A4"): Printab
   return {
     company: {
       name: "SARL DZ Services",
+      activity: "Services informatiques et conseil",
       legalName: "DZ Services Sarl",
       legalForm: "SARL",
       commercialName: null,
