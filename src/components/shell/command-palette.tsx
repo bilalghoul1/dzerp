@@ -22,12 +22,12 @@ type SearchHit = {
   icon: string;
 };
 
-const QUICK_ACTIONS: (SearchHit & { permission?: PermissionKey })[] = [
-  { type: "action", id: "devis", title: "devis", titleAr: null, subtitle: null, href: "/documents/quotation/nouveau", icon: "note_add", permission: "ventes.devis.create" },
-  { type: "action", id: "proforma", title: "facture proforma", titleAr: null, subtitle: null, href: "/documents/proforma/nouveau", icon: "receipt_long", permission: "ventes.proforma.create" },
-  { type: "action", id: "salesOrder", title: "sales order", titleAr: null, subtitle: null, href: "/documents/sales_order/nouveau", icon: "shopping_cart", permission: "ventes.commande.create" },
-  { type: "action", id: "client", title: "client", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
-  { type: "action", id: "commande", title: "commande", titleAr: null, subtitle: null, href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart", permission: "achats.bon.create" },
+const QUICK_ACTIONS: (SearchHit & { permission?: PermissionKey; labelKey?: string })[] = [
+  { type: "action", id: "devis", title: "", titleAr: null, subtitle: null, href: "/documents/quotation/nouveau", icon: "note_add", permission: "ventes.devis.create", labelKey: "quickCreate.quotation" },
+  { type: "action", id: "proforma", title: "", titleAr: null, subtitle: null, href: "/documents/proforma/nouveau", icon: "receipt_long", permission: "ventes.proforma.create", labelKey: "quickCreate.proforma" },
+  { type: "action", id: "salesOrder", title: "", titleAr: null, subtitle: null, href: "/documents/sales_order/nouveau", icon: "shopping_cart", permission: "ventes.commande.create", labelKey: "quickCreate.salesOrder" },
+  { type: "action", id: "client", title: "", titleAr: null, subtitle: null, href: "/crm/customers", icon: "person_add", permission: "crm.customer.create", labelKey: "quickCreate.customer" },
+  { type: "action", id: "commande", title: "", titleAr: null, subtitle: null, href: "/documents/purchase_order/nouveau", icon: "add_shopping_cart", permission: "achats.bon.create", labelKey: "quickCreate.purchaseOrder" },
 ];
 
 export function CommandPalette({
@@ -53,6 +53,11 @@ export function CommandPalette({
     let visible = permissions ? filterNav(items, permissions) : items;
     // Les pages d'administration PLATEFORME ne sont proposées qu'au SUPER_ADMIN.
     if (!isSuperAdmin) visible = visible.filter((item) => !item.href.startsWith("/admin"));
+    // « Ventes » et « Achats » sont de simples redirections vers /documents :
+    // retirées de la palette pour ne pas dupliquer la page « Documents ».
+    visible = visible.filter(
+      (item) => item.href !== "/ventes" && item.href !== "/achats",
+    );
     return visible.map((item) => ({
       type: "page",
       id: item.href,
@@ -103,14 +108,8 @@ export function CommandPalette({
       for (const hit of hits) push(labelOf(hit.type), hit);
     } else {
       for (const page of pages) push(t("search.pages"), page);
-      const actionTitles = new Map([
-        ["devis", t("quickCreate.quotation")],
-        ["salesOrder", t("quickCreate.salesOrder")],
-        ["client", t("quickCreate.customer")],
-        ["commande", t("quickCreate.purchaseOrder")],
-      ]);
       for (const action of visibleActions) {
-        push(t("search.actions"), { ...action, title: actionTitles.get(action.id) ?? action.title });
+        push(t("search.actions"), { ...action, title: action.labelKey ? t(action.labelKey) : action.title });
       }
       for (const doc of recent) push(t("search.recentDocuments"), doc);
     }

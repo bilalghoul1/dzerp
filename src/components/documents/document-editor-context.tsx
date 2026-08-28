@@ -363,6 +363,33 @@ export function DocumentEditorProvider({
     setBusy(true);
     try {
       const payload = buildPayload();
+
+      // Contextual validation (UX continuity): before calling the API, surface
+      // the missing requirement in the user's language and indicate what to do.
+      // This does not weaken server-side checks (still the authority); it only
+      // makes the guidance clear and actionable for the company owner.
+      if (!header.branchId) {
+        toast.error(t("documentsUI.missingBranch"));
+        return null;
+      }
+      if (!header.partyId) {
+        toast.error(t("documentsUI.missingParty"));
+        return null;
+      }
+      if (lines.length === 0) {
+        toast.error(t("documentsUI.missingLines"));
+        return null;
+      }
+      const emptyLabel = lines.some(
+        (line) => line.kind === "PRODUCT" || line.kind === "SERVICE"
+          ? !(line.label ?? "").trim()
+          : false,
+      );
+      if (emptyLabel) {
+        toast.error(t("documentsUI.missingLineLabel"));
+        return null;
+      }
+
       const saved = docId
         ? await apiUpdateDocument(type, docId, payload)
         : await apiCreateDocument(type, payload);
@@ -391,7 +418,7 @@ export function DocumentEditorProvider({
     } finally {
       setBusy(false);
     }
-  }, [buildPayload, docId, type, t, router]);
+  }, [buildPayload, docId, type, t, router, header.branchId, header.partyId, lines]);
 
   const applyStatus = React.useCallback(
     async (target: DocumentStatus) => {

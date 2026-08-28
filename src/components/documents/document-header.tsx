@@ -67,8 +67,7 @@ export function DocumentHeader() {
             <Label htmlFor="doc-branch">{t("documentsUI.fieldBranch")} *</Label>
             {company.branches.length === 0 ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {t("documentsUI.noBranchWarning") ??
-                  "Cette société ne possède aucune succursale. Créez une succursale dans les paramètres de la société avant d'enregistrer un document."}
+                {t("documentsUI.noBranchWarning")}
               </div>
             ) : (
               <Select

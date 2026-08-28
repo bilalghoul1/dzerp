@@ -221,21 +221,6 @@ export function DocumentWorkflowBar() {
           </Button>
         )}
 
-        {editor.permissions.print && editor.docId && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setPreviewOpen(true)}
-            disabled={editor.busy}
-          >
-            <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
-              print
-            </span>
-            {t("documentsUI.print")}
-          </Button>
-        )}
-
         {editor.permissions.create && editor.docId && (
           <Button
             type="button"

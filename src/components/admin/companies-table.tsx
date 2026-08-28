@@ -485,7 +485,7 @@ export function CompaniesTable({
       {table.getFilteredRowModel().rows.length > 0 ? (
         <div className="flex items-center justify-between gap-2 py-4">
           <div className="text-sm text-muted-foreground">
-            {table.getFilteredRowModel().rows.length} résultat(s)
+            {t("common.resultsCount", { n: table.getFilteredRowModel().rows.length })}
           </div>
           <div className="flex items-center gap-2">
             <Button

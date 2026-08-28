@@ -219,8 +219,9 @@ export default async function DashboardPage() {
   const hasPending = pending.some((p) => p.value > 0);
 
   // Layer 3 - actions rapides courantes (routes + libelles existants).
+  // Le devis dispose deja du CTA principal "Créer un devis" dans la carte
+  // « Attention » (meme destination) : on ne le duplique pas ici.
   const quickActions = [
-    { key: "quotation", labelKey: "quickCreate.quotation", href: "/documents/quotation/nouveau", icon: "description", permission: "ventes.devis.create" },
     { key: "invoice", labelKey: "quickCreate.invoice", href: "/documents/invoice/nouveau", icon: "receipt", permission: "ventes.facture.create" },
     { key: "customer", labelKey: "quickCreate.customer", href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
     { key: "product", labelKey: "quickCreate.product", href: "/stock", icon: "inventory_2", permission: "product.create" },

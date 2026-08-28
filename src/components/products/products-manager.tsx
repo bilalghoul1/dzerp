@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,8 +157,13 @@ export function ProductsManager({
   options: ProductCatalogOptions;
 }) {
   const { t, locale } = useI18n();
+  const searchParams = useSearchParams();
   const [items, setItems] = React.useState<ProductRow[]>(rows);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(
+    // « Nouveau produit » depuis la barre globale (+ Nouveau) : le lien arrive
+    // avec ?create=1 et ouvre directement le formulaire.
+    () => searchParams.get("create") === "1",
+  );
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<FormState>(emptyForm);
   const [busy, setBusy] = React.useState(false);

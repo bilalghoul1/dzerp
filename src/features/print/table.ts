@@ -83,7 +83,7 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
     totals = [],
   } = options;
 
-  const headerHeight = headerHeightOpt ?? Math.max(rowSize * 1.9, 14);
+  const headerHeight = headerHeightOpt ?? Math.max(rowSize * 2.3, 16);
   const lineH = engine.lineHeight(rowSize);
   const totalWidth = columns.reduce((sum, c) => sum + c.width, 0);
   const right = x + totalWidth;
@@ -115,6 +115,10 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
       cursor = rtl ? cursor - col.width : cursor + col.width;
     }
     engine.y += headerHeight;
+    engine.drawLine(x, engine.y, right, engine.y, {
+      thickness: 1.4,
+      color: headerColor ?? COLORS.lineGray,
+    });
   };
 
   drawHeader();

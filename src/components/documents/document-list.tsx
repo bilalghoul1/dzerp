@@ -652,21 +652,6 @@ export function DocumentList({
                       icon="description"
                       title={t("documentsUI.emptyList")}
                       description={t("documentsUI.emptyListDescription")}
-                      action={
-                        canCreate ? (
-                          <Button
-                            onClick={() => {
-                              if (basePath) window.location.href = `${basePath}/nouveau`;
-                            }}
-                            className="mt-2"
-                          >
-                            <span className="material-symbols-outlined me-1 text-[18px]" aria-hidden="true">
-                              add
-                            </span>
-                            {newDocumentLabel}
-                          </Button>
-                        ) : undefined
-                      }
                     />
                   </TableCell>
                 </TableRow>

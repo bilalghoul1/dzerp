@@ -53,10 +53,10 @@ const COMPANY_GROUPS: QuickCreateGroup[] = [
   {
     labelKey: "quickCreate.masterData",
     items: [
-      { key: "customer", href: "/crm/customers", icon: "person_add", permission: "crm.customer.create" },
-      { key: "supplier", href: "/crm/suppliers", icon: "handshake", permission: "crm.supplier.create" },
-      { key: "product", href: "/stock", icon: "inventory_2", permission: "product.create" },
-      { key: "warehouse", href: "/stock/entrepots", icon: "warehouse", permission: "warehouse.create" },
+      { key: "customer", href: "/crm/customers?create=1", icon: "person_add", permission: "crm.customer.create" },
+      { key: "supplier", href: "/crm/suppliers?create=1", icon: "handshake", permission: "crm.supplier.create" },
+      { key: "product", href: "/stock?create=1", icon: "inventory_2", permission: "product.create" },
+      { key: "warehouse", href: "/stock/entrepots?create=1", icon: "warehouse", permission: "warehouse.create" },
     ],
   },
   {

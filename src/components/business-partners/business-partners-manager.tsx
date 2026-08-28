@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,8 +121,13 @@ export function BusinessPartnersManager({
   rows: BusinessPartnerRow[];
 }) {
   const { t, locale } = useI18n();
+  const searchParams = useSearchParams();
   const [items, setItems] = React.useState<BusinessPartnerRow[]>(rows);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(
+    // « Nouveau client/fournisseur » depuis la barre globale (+ Nouveau) :
+    // le lien arrive avec ?create=1 et ouvre directement le formulaire.
+    () => searchParams.get("create") === "1",
+  );
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
@@ -308,14 +314,6 @@ export function BusinessPartnersManager({
                         ? "parties.emptyCustomerHint"
                         : "parties.emptySupplierHint",
                     )}
-                    action={
-                      <Button onClick={openCreate} disabled={busy}>
-                        <span className="material-symbols-outlined text-[18px] me-1" aria-hidden="true">
-                          add
-                        </span>
-                        {t("parties.add")}
-                      </Button>
-                    }
                   />
                 </TableCell>
               </TableRow>

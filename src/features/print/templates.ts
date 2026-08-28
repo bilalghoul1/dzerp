@@ -4,6 +4,7 @@ import type { Locale } from "@/lib/constants";
 import { amountToWords, formatAmount, formatDate, formatQuantity, formatRate } from "./format";
 import type { PrintTypeConfig } from "./registry";
 import { getPrintConfig } from "./registry";
+import { rgb } from "pdf-lib";
 import { COLORS, toColor, type Align, type Color, type PdfEngine } from "./renderer";
 import { drawTable, type TableColumn } from "./table";
 import type { PrintableDocument, PrintFormat } from "./types";
@@ -46,6 +47,8 @@ interface LayoutParams {
   logoMaxH: number;
   metaWidth: number;
   titleSizeStamp: number;
+  /** Hauteur du bandeau d'en-tête (banner) sur la première page. */
+  bannerH: number;
 }
 
 function layout(format: PrintFormat): LayoutParams {
@@ -54,16 +57,19 @@ function layout(format: PrintFormat): LayoutParams {
       return {
         titleSize: 13, bodySize: 8, tableSize: 7.5, nameSize: 11,
         sectionSize: 8.5, gap: 6, colWidth: 130, logoMaxH: 42, metaWidth: 0.45, titleSizeStamp: 26,
+        bannerH: 30,
       };
     case "THERMAL":
       return {
         titleSize: 11, bodySize: 7.5, tableSize: 7, nameSize: 10,
         sectionSize: 8, gap: 4, colWidth: 90, logoMaxH: 30, metaWidth: 0.55, titleSizeStamp: 20,
+        bannerH: 24,
       };
     default:
       return {
         titleSize: 15, bodySize: 8.5, tableSize: 8, nameSize: 12,
         sectionSize: 9.5, gap: 8, colWidth: 210, logoMaxH: 52, metaWidth: 0.42, titleSizeStamp: 34,
+        bannerH: 38,
       };
   }
 }
@@ -98,6 +104,15 @@ function brand(ctx: TemplateCtx): Color {
   return toColor(ctx.doc.company.primaryColor, COLORS.black);
 }
 
+/** Mélange une couleur avec du blanc (factor 0..1) pour un fond "teinté". */
+function tint(color: Color, factor: number): Color {
+  return rgb(
+    color.red + (1 - color.red) * factor,
+    color.green + (1 - color.green) * factor,
+    color.blue + (1 - color.blue) * factor,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // En-tête : identité société + logo + titre + statut + méta + contrepartie
 // ---------------------------------------------------------------------------
@@ -110,10 +125,31 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const brandColor = brand(ctx);
   const rtl = engine.rtl;
 
+  // ---- Bandeau d'en-tête (banner) : nom société + type de document ----
+  const bannerH = P.bannerH;
+  engine.ensureSpace(bannerH + 4);
+  engine.fillRect(engine.contentLeft, pageTop, engine.contentWidth, bannerH, brandColor);
+
+  const bannerTextColor = COLORS.white;
+  engine.drawText(doc.company.name, {
+    x: engine.contentLeft + 10,
+    y: pageTop + (bannerH - P.nameSize) / 2,
+    size: P.nameSize, style: "bold", color: bannerTextColor,
+    align: rtl ? "right" : "left", maxWidth: engine.contentWidth * 0.55,
+  });
+  const titleX = rtl ? engine.contentLeft : right;
+  const titleAlign: Align = rtl ? "left" : "right";
+  const bannerTitleX = rtl ? engine.contentLeft + 10 : right - 10;
+  engine.drawText(labels.docType, {
+    x: bannerTitleX, y: pageTop + (bannerH - P.titleSize) / 2,
+    size: P.titleSize, style: "bold", color: bannerTextColor, align: titleAlign,
+  });
+  engine.y = pageTop + bannerH + P.gap;
+
+  // ---- Identité société (logo) sous le bandeau ----
   let logoBottom = engine.y;
   const companyX = rtl ? right - Math.min(260, engine.contentWidth * 0.5) : engine.contentLeft;
   if (doc.branding.logo) {
-    // Ensure space for logo before drawing
     engine.ensureSpace(P.logoMaxH + 8 + P.gap);
     const img = await engine.embedImage(doc.branding.logo, doc.branding.logoMimeType);
     if (img) {
@@ -127,16 +163,12 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   const companyBottom = logoBottom;
 
-  // ---- Titre (droite en LTR / gauche en RTL) ----
-  let ty = pageTop;
-  const titleX = rtl ? engine.contentLeft : right;
-  const titleAlign: Align = rtl ? "left" : "right";
-  engine.drawText(labels.docType, {
-    x: titleX, y: ty, size: P.titleSize, style: "bold", color: brandColor, align: titleAlign,
-  });
-  ty += P.titleSize * 1.3;
+  // ---- Référence + statut sous le bandeau ----
+  let ty = Math.max(companyBottom, engine.y);
+  const refX = rtl ? engine.contentLeft : right;
+  const refAlign: Align = rtl ? "left" : "right";
   engine.drawText(`${labels.ref} ${doc.document.number}`, {
-    x: titleX, y: ty, size: P.bodySize + 1, style: "bold", align: titleAlign,
+    x: refX, y: ty, size: P.bodySize + 1, style: "bold", align: refAlign,
   });
   ty += (P.bodySize + 1) * 1.5;
 
@@ -452,11 +484,19 @@ function drawTotals(ctx: TemplateCtx): void {
   }
 
   const lineH = P.bodySize * 1.7;
-  engine.ensureSpace(totalRows.length * lineH + 8);
-  engine.drawLine(labelX, engine.y, right, engine.y);
-  engine.y += 4;
+  engine.ensureSpace(totalRows.length * lineH + 10);
+  const boxTop = engine.y;
+  engine.drawRect(labelX, boxTop, right - labelX, totalRows.length * lineH + 6, {
+    border: COLORS.lineGray,
+    borderWidth: 0.5,
+  });
+  engine.y = boxTop + 4;
 
   for (const row of totalRows) {
+    // Mise en avant douce des lignes "finales" (Total TTC / Net à payer).
+    if (row.color != null) {
+      engine.fillRect(labelX, engine.y, right - labelX, lineH, tint(row.color, 0.9));
+    }
     engine.drawText(row.label, {
       x: labelX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
       style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: labelAlign,

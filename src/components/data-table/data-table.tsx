@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { Spinner } from "@/components/feedback/spinner";
+import { useI18n } from "@/features/i18n/i18n-provider";
 import { cn } from "@/lib/utils";
 
 export interface DataTableProps<TData, TValue> {
@@ -49,6 +50,7 @@ export function DataTable<TData, TValue>({
   rowClassName,
   onRowClick,
 }: DataTableProps<TData, TValue>) {
+  const { t } = useI18n();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] =
@@ -135,7 +137,7 @@ export function DataTable<TData, TValue>({
       {pagination && table.getRowModel().rows.length > 0 ? (
         <div className="flex items-center justify-between gap-2 py-4">
           <div className="text-sm text-muted-foreground">
-            {table.getFilteredRowModel().rows.length} résultat(s)
+            {t("common.resultsCount", { n: table.getFilteredRowModel().rows.length })}
           </div>
           <div className="flex items-center gap-2">
             <Button

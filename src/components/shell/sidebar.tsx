@@ -54,7 +54,7 @@ export function SidebarNav({
         </div>
         <div>
           <p className="font-semibold leading-none">{t("common.appName")}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">Algérie Enterprise</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("common.appTagline")}</p>
         </div>
       </Link>
 
