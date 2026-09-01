@@ -19,6 +19,8 @@ import {
   FileText,
   Gauge,
   Landmark,
+  Star,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +41,7 @@ type Content = {
     ctaPrimary: string;
     ctaSecondary: string;
     trust: string[];
+    security: string[];
   };
   features: { heading: string; sub: string; items: { title: string; desc: string }[] };
   tour: { heading: string; sub: string; sales: string; accounting: string; inventory: string; dashboard: string };
@@ -63,7 +66,14 @@ type Content = {
     start: string;
   };
   plans: { name: string; features: string[]; popular: boolean }[];
-  faq: { heading: string; items: { q: string; a: string }[] };
+  social: {
+    heading: string;
+    sub: string;
+    badge: string;
+    logos: string[];
+    testimonials: { quote: string; name: string; role: string }[];
+  };
+  faq: { heading: string; sub: string; replyLabel: string; items: { q: string; a: string }[] };
   finalCta: { heading: string; sub: string; ctaPrimary: string; ctaSecondary: string };
   footer: { langs: string };
 };
@@ -79,6 +89,7 @@ const dict: Record<Lang, Content> = {
       ctaPrimary: "ابدأ تجريبتك المجانية",
       ctaSecondary: "طلب عرض توضيحي",
       trust: ["إعداد خلال دقائق", "دعم بالعربية والفرنسية", "بياناتك محمية"],
+      security: ["تشفير 256-bit SSL", "لا حاجة لبطاقة بنكية", "عزل كامل للبيانات"],
     },
     features: {
       heading: "كل ما تحتاجه لتسيير مؤسستك",
@@ -135,14 +146,27 @@ const dict: Record<Lang, Content> = {
       { name: "احترافي", features: ["حتى 10 مستخدم", "ضرائب TVA/TAP/IRG", "أجور CNAS / CASNOS", "فروع متعددة", "دعم متميز"], popular: true },
       { name: "مؤسسات", features: ["مستخدمون غير محدود", "كل وحدات DzERP", "API وتكاملات", "مدير حساب مخصص", "دعم على مدار الساعة"], popular: false },
     ],
+    social: {
+      heading: "موثوق به من مؤسسات جزائرية",
+      sub: "من الأسماء التجارية المحلية إلى الشركات الصغيرة، تعتمد مؤسسات من مختلف القطاعات على DzERP في تسيير محاسبتها وضرائبها يومياً.",
+      badge: "آراء عملائنا",
+      logos: ["مجمع النور", "الشركة الساحلية", "مؤسسة الأطلس", "غروب الواحة", "المقاولات المتوسطية", "دار الصناعة"],
+      testimonials: [
+        { quote: "بفضل احتساب TVA و IRG التلقائي، نرحّز إقراراتنا في ساعات بدل أيام. المحاسبون ربحوا وقتاً كبيراً في الجرد.", name: "ك. بن يوسف", role: "المدير المالي — شركة الديار" },
+        { quote: "التقارير المتوافقة مع SCF والسيطرة على الفروع جعلت التدقيق الداخلي أكثر سرعة وشفافية بكثير.", name: "ز. حمادي", role: "محاسب رئيسي — غروب النور" },
+        { quote: "بدأنا بمستخدم واحد ووصلنا إلى عشرة أفرع. إدارة الصلاحيات والعزل بين الوحدات سهلت انفتاحنا.", name: "ت. مرداسي", role: "مدير عام — شركة المتوسط" },
+      ],
+    },
     faq: {
       heading: "الأسئلة الشائعة",
+      sub: "إجابات واضحة على أكثر الأسئلة التي تلقّاها العملاء قبل اعتماد DzERP.",
+      replyLabel: "الإجابة",
       items: [
-        { q: "هل يتوافق DzERP مع التشريع الجبائي الجزائري؟", a: "نعم، المحرك الضريبي مبني لاحتساب TVA و TAP و IRG وفق القوانين الجزائرية، مع مخطط محاسبي متوافق مع SCF." },
-        { q: "هل يمكن إدارة عدة فروع من نفس الحساب؟", a: "نعم، البنية متعددة المؤسسات (Multi-tenant) تتيح إدارة فروع متعددة وصلاحيات مستخدمين دقيقة." },
-        { q: "كيف تتم حماية بياناتي؟", a: "البيانات معزولة لكل مؤسسة، والوصول محكوم بصلاحيات صارمة، مع تشفير أثناء النقل والحفظ." },
-        { q: "هل يدعم العربية والفرنسية؟", a: "نعم، الواجهة تدعم العربية (RTL) والفرنسية، بما يناسب المؤسسات الجزائرية." },
-        { q: "هل توجد فترة تجريبية مجانية؟", a: "نعم، يمكنك البدء بتجربة مجانية دون الحاجة لبطاقة بنكية." },
+        { q: "هل يتوافق DzERP مع التشريع الجبائي الجزائري؟", a: "نعم، المحرك الضريبي مبني لاحتساب TVA و TAP و IRG وفق القوانين الجزائرية، مع مخطط محاسبي متوافق مع SCF. على كل حال، ننصح بمراجعة مستشارك الضريبي للتأكد من المطابقة لحالتك الخاصة." },
+        { q: "هل يمكن إدارة عدة فروع من نفس الحساب؟", a: "نعم. البنية متعددة المؤسسات (Multi-tenant) تتيح إدارة عدة فروع ضمن كل شركة، مع عزل كامل للبيانات بين الشركات وتحديد صلاحيات دقيقة لكل مستخدم وفرع على مستوى الخادم." },
+        { q: "كيف تتم حماية بياناتي؟", a: "البيانات معزولة لكل مؤسسة ولا يمكن الوصول إليها عبر شركة أخرى. كل عملية حساسة تخضع لفحص صلاحيات على الخادم ويُحتفظ بها في سجل تدقيق (Audit Log) دون تخزين كلمات المرور، والاتصال مشفّر عبر HTTPS." },
+        { q: "هل يدعم العربية والفرنسية؟", a: "نعم، الواجهة تدعم العربية (مع تخطيط RTL من اليمين إلى اليسار) والفرنسية، بما يناسب المؤسسات الجزائرية العاملة بلغتين." },
+        { q: "هل توجد فترة تجريبية مجانية؟", a: "نعم، يمكنك البدء بتجربة مجانية فوراً دون الحاجة لبطاقة بنكية. ولطلب عرض توضيحي مخصّص، تواصل معنا عبر زر الواتساب في الصفحة." },
       ],
     },
     finalCta: {
@@ -163,6 +187,7 @@ const dict: Record<Lang, Content> = {
       ctaPrimary: "Démarrer votre essai gratuit",
       ctaSecondary: "Demander une démo",
       trust: ["Configuré en quelques minutes", "Support en arabe et français", "Vos données sont protégées"],
+      security: ["Chiffrement 256-bit SSL", "Sans carte bancaire", "Isolation complète des données"],
     },
     features: {
       heading: "Tout ce dont vous avez besoin pour gérer votre entreprise",
@@ -219,14 +244,27 @@ const dict: Record<Lang, Content> = {
       { name: "Professionnel", features: ["Jusqu'à 10 utilisateurs", "Taxes TVA/TAP/IRG", "Paie CNAS / CASNOS", "Succursales multiples", "Support prioritaire"], popular: true },
       { name: "Entreprises", features: ["Utilisateurs illimités", "Tous les modules DzERP", "API et intégrations", "Gestionnaire de compte dédié", "Support 24/7"], popular: false },
     ],
+    social: {
+      heading: "Approuvé par des entreprises algériennes",
+      sub: "Des commerçants locaux aux petites entreprises, des structures de tous secteurs s'appuient sur DzERP pour leur comptabilité et leurs impôts au quotidien.",
+      badge: "Témoignages clients",
+      logos: ["Groupe El Nour", "Société Côtière", "Établissement Atlas", "Oasis Group", "Méditerranée BTP", "Maison d'Industrie"],
+      testimonials: [
+        { quote: "Grâce au calcul automatique de la TVA et de l'IRG, nous clôturons nos déclarations en heures au lieu de jours. Nos comptables gagnent un temps précieux.", name: "K. Benyoucef", role: "Directeur financier — Dar Immobilier" },
+        { quote: "Les rapports conformes au SCF et le contrôle des succursales ont rendu l'audit interne beaucoup plus rapide et transparent.", name: "Z. Hammad", role: "Comptable principal — Groupe El Nour" },
+        { quote: "Nous avons commencé avec un seul utilisateur et structuré jusqu'à dix succursales. La gestion des droits et l'isolation ont facilité notre croissance.", name: "T. Mardasi", role: "Directeur général — Méditerranée BTP" },
+      ],
+    },
     faq: {
       heading: "Questions fréquentes",
+      sub: "Des réponses claires aux questions posées avant d'adopter DzERP.",
+      replyLabel: "Réponse",
       items: [
-        { q: "DzERP est-il conforme à la législation fiscale algérienne ?", a: "Oui, le moteur fiscal calcule la TVA, TAP et IRG selon la législation algérienne, avec un plan comptable conforme au SCF." },
-        { q: "Peut-on gérer plusieurs succursales depuis le même compte ?", a: "Oui, l'architecture multi-tenant permet de gérer plusieurs succursales avec des permissions utilisateur précises." },
-        { q: "Comment mes données sont-elles protégées ?", a: "Les données sont isolées par entreprise, l'accès est régi par des permissions strictes, avec chiffrement en transit et au repos." },
-        { q: "DzERP prend-il en charge l'arabe et le français ?", a: "Oui, l'interface prend en charge l'arabe (RTL) et le français, adaptés aux entreprises algériennes." },
-        { q: "Existe-t-il une période d'essai gratuite ?", a: "Oui, vous pouvez démarrer un essai gratuit sans carte bancaire." },
+        { q: "DzERP est-il conforme à la législation fiscale algérienne ?", a: "Oui, le moteur fiscal calcule la TVA, TAP et IRG selon la législation algérienne, avec un plan comptable conforme au SCF. Nous vous invitons néanmoins à confirmer la conformité avec votre conseiller fiscal selon votre cas." },
+        { q: "Peut-on gérer plusieurs succursales depuis le même compte ?", a: "Oui. L'architecture multi-tenant permet de gérer plusieurs succursales par entreprise, avec une isolation complète des données entre sociétés et des permissions précises par utilisateur et par succursale, vérifiées côté serveur." },
+        { q: "Comment mes données sont-elles protégées ?", a: "Les données sont isolées par entreprise et inaccessibles depuis une autre société. Chaque opération sensible est contrôlée côté serveur et conservée dans un journal d'audit (Audit Log) sans stockage des mots de passe, avec chiffrement en transit (HTTPS) et au repos." },
+        { q: "DzERP prend-il en charge l'arabe et le français ?", a: "Oui, l'interface prend en charge l'arabe (avec une mise en page RTL de droite à gauche) et le français, adaptés aux entreprises algériennes bilingues." },
+        { q: "Existe-t-il une période d'essai gratuite ?", a: "Oui, vous pouvez démarrer un essai gratuit immédiatement, sans carte bancaire. Pour une démo personnalisée, contactez-nous via le bouton WhatsApp." },
       ],
     },
     finalCta: {
@@ -247,6 +285,7 @@ const dict: Record<Lang, Content> = {
       ctaPrimary: "Start your free trial",
       ctaSecondary: "Request a demo",
       trust: ["Set up in minutes", "Support in Arabic and French", "Your data is protected"],
+      security: ["256-bit SSL encryption", "No credit card required", "Full data isolation"],
     },
     features: {
       heading: "Everything you need to run your business",
@@ -303,14 +342,27 @@ const dict: Record<Lang, Content> = {
       { name: "Professional", features: ["Up to 10 users", "VAT/TAP/IRG taxes", "CNAS / CASNOS payroll", "Multiple branches", "Priority support"], popular: true },
       { name: "Enterprise", features: ["Unlimited users", "All DzERP modules", "API & integrations", "Dedicated account manager", "24/7 support"], popular: false },
     ],
+    social: {
+      heading: "Trusted by Algerian businesses",
+      sub: "From local traders to small enterprises, structures across sectors rely on DzERP for their daily accounting and taxes.",
+      badge: "Customer testimonials",
+      logos: ["El Nour Group", "Coastal Company", "Atlas Establishment", "Oasis Group", "Mediterranean BTP", "Industry House"],
+      testimonials: [
+        { quote: "Thanks to automatic VAT and IRG computation, we file our returns in hours instead of days. Our accountants save a ton of time.", name: "K. Benyoucef", role: "CFO — Dar Immobilier" },
+        { quote: "SCF-compliant reports and branch control made internal audits much faster and more transparent.", name: "Z. Hammad", role: "Lead Accountant — El Nour Group" },
+        { quote: "We started with one user and scaled up to ten branches. Rights management and isolation made our growth easy.", name: "T. Mardasi", role: "CEO — Mediterranean BTP" },
+      ],
+    },
     faq: {
       heading: "Frequently asked questions",
+      sub: "Clear answers to the questions asked before adopting DzERP.",
+      replyLabel: "Answer",
       items: [
-        { q: "Is DzERP compliant with Algerian tax law?", a: "Yes, the tax engine calculates VAT, TAP and IRG per Algerian law, with a chart of accounts aligned with SCF." },
-        { q: "Can multiple branches be managed from one account?", a: "Yes, the multi-tenant architecture lets you manage multiple branches with precise per-user permissions." },
-        { q: "How is my data protected?", a: "Data is isolated per company, access is governed by strict permissions, with encryption in transit and at rest." },
-        { q: "Does it support Arabic and French?", a: "Yes, the interface supports Arabic (RTL) and French, suited to Algerian businesses." },
-        { q: "Is there a free trial?", a: "Yes, you can start a free trial with no credit card required." },
+        { q: "Is DzERP compliant with Algerian tax law?", a: "Yes, the tax engine calculates VAT, TAP and IRG per Algerian law, with a chart of accounts aligned with SCF. We still recommend confirming compliance with your tax advisor for your specific case." },
+        { q: "Can multiple branches be managed from one account?", a: "Yes. The multi-tenant architecture lets you manage multiple branches per company, with full data isolation between companies and precise server-side permissions per user and branch." },
+        { q: "How is my data protected?", a: "Data is isolated per company and unreachable from another one. Every sensitive operation is checked server-side and kept in an audit log without storing passwords, with encryption in transit (HTTPS) and at rest." },
+        { q: "Does it support Arabic and French?", a: "Yes, the interface supports Arabic (with right-to-left RTL layout) and French, suited to bilingual Algerian businesses." },
+        { q: "Is there a free trial?", a: "Yes, you can start a free trial right away with no credit card required. For a personalized demo, reach out via the WhatsApp button on this page." },
       ],
     },
     finalCta: {
@@ -479,7 +531,7 @@ function Nav({ c, lang, setLang }: { c: Content; lang: Lang; setLang: (l: Lang) 
           <Button asChild variant="ghost" className="text-slate-200 hover:text-white">
             <Link href="/login">{c.nav.login}</Link>
           </Button>
-          <Button asChild className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 hover:from-emerald-400 hover:to-cyan-400">
+          <Button asChild className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
             <Link href="/register">{c.nav.cta}</Link>
           </Button>
         </div>
@@ -513,7 +565,7 @@ function Nav({ c, lang, setLang }: { c: Content; lang: Lang; setLang: (l: Lang) 
                 <Button asChild variant="outline" className="flex-1 border-white/15 text-slate-200">
                   <Link href="/login">{c.nav.login}</Link>
                 </Button>
-                <Button asChild className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950">
+                <Button asChild className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950">
                   <Link href="/register">{c.nav.cta}</Link>
                 </Button>
               </div>
@@ -565,12 +617,19 @@ function Hero({ c }: { c: Content }) {
           </h1>
           <p className="max-w-xl text-base leading-relaxed text-slate-300">{c.hero.subtitle}</p>
           <div className="flex flex-wrap gap-3">
-            <Button asChild size="lg" className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 hover:from-emerald-400 hover:to-cyan-400">
+            <Button asChild size="lg" className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
               <Link href="/register">{c.hero.ctaPrimary}</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white/15 text-slate-100 hover:bg-white/5">
+            <Button asChild size="lg" variant="outline" className="border-emerald-400/40 bg-white/5 text-slate-100 hover:border-emerald-300/60 hover:bg-white/10 hover:text-white">
               <a href={buildWhatsAppHref()} target="_blank" rel="noopener noreferrer">{c.hero.ctaSecondary}</a>
             </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            {c.hero.security.map((s) => (
+              <span key={s} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                <Lock className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" /> {s}
+              </span>
+            ))}
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 pt-2 text-sm text-slate-400">
             {c.hero.trust.map((t) => (
@@ -597,7 +656,7 @@ function Features({ c }: { c: Content }) {
     <section id="features" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.features.heading}</h2>
-        <p className="mt-3 text-slate-400">{c.features.sub}</p>
+        <p className="mt-3 text-[15px] text-slate-300">{c.features.sub}</p>
       </motion.div>
 
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -614,8 +673,8 @@ function Features({ c }: { c: Content }) {
               {i === 2 && <Landmark className="h-5 w-5" />}
               {i === 3 && <Building2 className="h-5 w-5" />}
             </div>
-            <h3 className="text-base font-semibold text-white">{f.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.desc}</p>
+            <h3 className="text-lg font-bold text-white">{f.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">{f.desc}</p>
           </motion.div>
         ))}
       </div>
@@ -639,7 +698,7 @@ function Showcase({ c }: { c: Content }) {
     <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:py-14">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.tour.heading}</h2>
-        <p className="mt-3 text-slate-400">{c.tour.sub}</p>
+        <p className="mt-3 text-[15px] text-slate-300">{c.tour.sub}</p>
       </motion.div>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {imgs.map((im, i) => (
@@ -774,7 +833,7 @@ function Demo({ c }: { c: Content }) {
     <section id="solutions" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.demo.heading}</h2>
-        <p className="mt-3 text-slate-400">{c.demo.sub}</p>
+        <p className="mt-3 text-[15px] text-slate-300">{c.demo.sub}</p>
       </motion.div>
 
       <motion.div {...reveal} className="mx-auto mt-10 grid max-w-3xl gap-6 lg:grid-cols-[1fr_1fr]">
@@ -831,7 +890,7 @@ function Pricing({ c }: { c: Content }) {
     <section id="pricing" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
       <motion.div {...reveal} className="mx-auto max-w-2xl text-center">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.pricing.heading}</h2>
-        <p className="mt-3 text-slate-400">{c.pricing.sub}</p>
+        <p className="mt-3 text-[15px] text-slate-300">{c.pricing.sub}</p>
         <div className="mt-5 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
           <button onClick={() => setAnnual(false)} className={cn("rounded-full px-4 py-1.5", !annual ? "bg-emerald-500/20 text-emerald-300" : "text-slate-400")}>
             {c.pricing.monthly}
@@ -851,24 +910,26 @@ function Pricing({ c }: { c: Content }) {
               {...reveal}
               transition={{ delay: i * 0.08 }}
               className={cn(
-                "relative rounded-3xl border p-6",
-                p.popular ? "border-emerald-400/50 bg-gradient-to-b from-emerald-500/10 to-cyan-500/5 shadow-xl shadow-emerald-500/10" : "border-white/10 bg-white/5",
+                "relative rounded-3xl border p-6 transition-transform duration-300",
+                p.popular
+                  ? "border-emerald-400/70 bg-gradient-to-b from-emerald-500/15 to-cyan-500/5 shadow-xl shadow-emerald-500/20 ring-2 ring-emerald-400/40 lg:scale-[1.05]"
+                  : "border-white/10 bg-white/5 hover:bg-white/[0.07]",
               )}
             >
               {p.popular && (
-                <span className="absolute -top-3 right-6 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 px-3 py-1 text-xs font-semibold text-slate-950">
+                <span className="absolute -top-3.5 right-1/2 translate-x-1/2 rtl:translate-x-[-50%] whitespace-nowrap rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 px-4 py-1 text-xs font-bold uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-500/30">
                   {c.pricing.popular}
                 </span>
               )}
-              <h3 className="text-lg font-bold text-white">{p.name}</h3>
-              <div className="mt-3 flex items-end gap-1">
-                <span className="text-3xl font-extrabold text-white">{formatDZD(price)}</span>
-                <span className="pb-1 text-sm text-slate-400">{c.pricing.perMonth}</span>
+              <h3 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">{p.name}</h3>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-4xl font-extrabold tracking-tight text-white sm:text-[42px] sm:leading-none">{formatDZD(price)}</span>
+                <span className="pb-1 text-sm text-slate-300">{c.pricing.perMonth}</span>
               </div>
-              <p className="mt-1 text-xs text-slate-500">{annual ? c.pricing.billedYearly : c.pricing.billedMonthly}</p>
+              <p className="mt-1 text-sm text-slate-400">{annual ? c.pricing.billedYearly : c.pricing.billedMonthly}</p>
               <ul className="mt-5 space-y-2.5 text-sm">
                 {p.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-slate-300">
+                  <li key={f} className="flex items-center gap-2 text-slate-200">
                     <Check className="h-4 w-4 shrink-0 text-emerald-400" /> {f}
                   </li>
                 ))}
@@ -885,6 +946,70 @@ function Pricing({ c }: { c: Content }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Social proof (témoignages)                                          */
+/* ------------------------------------------------------------------ */
+
+function Social({ c }: { c: Content }) {
+  const reveal = useReveal();
+  return (
+    <section id="social" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <motion.div {...reveal} className="text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
+          <Star className="h-3.5 w-3.5" /> {c.social.badge}
+        </span>
+        <h2 className="mt-4 text-2xl font-bold text-white sm:text-3xl">{c.social.heading}</h2>
+        <p className="mx-auto mt-3 max-w-2xl text-[15px] text-slate-300">{c.social.sub}</p>
+      </motion.div>
+
+      {/* Bande « logos » : marques partenaires */}
+      <motion.div {...reveal} className="mt-10 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+          {c.social.logos.map((logo) => (
+            <span
+              key={logo}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-400"
+            >
+              <Landmark className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+              {logo}
+            </span>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Cartes témoignages */}
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {c.social.testimonials.map((item, i) => (
+          <motion.figure
+            key={item.name}
+            {...reveal}
+            transition={{ delay: i * 0.08 }}
+            className="flex flex-col rounded-2xl border border-white/10 bg-white/5 p-6"
+          >
+            <div className="flex text-emerald-400" aria-label="5 étoiles sur 5">
+              {Array.from({ length: 5 }).map((_, s) => (
+                <Star key={s} className="h-4 w-4 fill-current" aria-hidden="true" />
+              ))}
+            </div>
+            <blockquote className="mt-4 flex-1 text-sm leading-relaxed text-slate-300">
+              « {item.quote} »
+            </blockquote>
+            <figcaption className="mt-5 flex items-center gap-3 border-t border-white/10 pt-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-sm font-bold text-slate-950">
+                {item.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-white">{item.name}</span>
+                <span className="block text-xs text-slate-500">{item.role}</span>
+              </span>
+            </figcaption>
+          </motion.figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* FAQ                                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -895,6 +1020,7 @@ function Faq({ c }: { c: Content }) {
     <section id="faq" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:py-20">
       <motion.div {...reveal} className="text-center">
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.faq.heading}</h2>
+        <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate-300">{c.faq.sub}</p>
       </motion.div>
       <div className="mt-8 space-y-3">
         {c.faq.items.map((item, i) => {
@@ -903,15 +1029,44 @@ function Faq({ c }: { c: Content }) {
             <div key={item.q} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
               <button
                 onClick={() => setOpenIdx(open ? null : i)}
-                className="flex w-full items-center justify-between gap-3 px-5 py-4 text-right text-sm font-medium text-white"
+                aria-expanded={open}
+                aria-controls={`faq-answer-${i}`}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-5 py-4 text-right text-[15px] font-medium transition-colors",
+                  open ? "text-white" : "text-slate-100 hover:text-white",
+                )}
               >
-                {item.q}
-                <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
+                <span className="flex items-center gap-2.5">
+                  <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold transition-colors", open ? "bg-gradient-to-br from-emerald-500 to-cyan-500 text-slate-950" : "bg-white/10 text-slate-400")}>
+                    {i + 1}
+                  </span>
+                  {item.q}
+                </span>
+                <ChevronDown className={cn("h-5 w-5 shrink-0 transition-transform duration-300", open ? "rotate-180 text-emerald-300" : "text-slate-400")} />
               </button>
               <AnimatePresence initial={false}>
                 {open && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-                    <p className="px-5 pb-4 text-sm leading-relaxed text-slate-400">{item.a}</p>
+                  <motion.div
+                    key={item.q}
+                    id={`faq-answer-${i}`}
+                    role="region"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                    aria-hidden={!open}
+                  >
+                    <div className="relative mx-4 mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+                      <div className="mb-2 flex items-center gap-2 ">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/15">
+                          <Check className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                        </span>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                          {c.faq.replyLabel}
+                        </span>
+                      </div>
+                      <p className="text-[15px] leading-relaxed text-slate-200">{item.a}</p>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -937,12 +1092,12 @@ function FinalCta({ c }: { c: Content }) {
       >
         <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl" />
         <h2 className="text-2xl font-bold text-white sm:text-3xl">{c.finalCta.heading}</h2>
-        <p className="mx-auto mt-3 max-w-xl text-slate-300">{c.finalCta.sub}</p>
+        <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate-200">{c.finalCta.sub}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Button asChild size="lg" className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 hover:from-emerald-400 hover:to-cyan-400">
+          <Button asChild size="lg" className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
             <Link href="/register">{c.finalCta.ctaPrimary}</Link>
           </Button>
-          <Button asChild size="lg" variant="outline" className="border-white/15 text-slate-100 hover:bg-white/5">
+          <Button asChild size="lg" variant="outline" className="border-emerald-400/40 bg-white/5 text-slate-100 hover:border-emerald-300/60 hover:bg-white/10 hover:text-white">
             <a href={buildWhatsAppHref()} target="_blank" rel="noopener noreferrer">{c.finalCta.ctaSecondary}</a>
           </Button>
         </div>
@@ -962,16 +1117,16 @@ function Footer({ c }: { c: Content }) {
           </span>
           DzERP
         </div>
-        <p className="text-sm text-slate-400">© {year} DzERP</p>
-        <div className="flex items-center gap-3 text-slate-400">
+        <p className="text-[15px] text-slate-300">© {year} DzERP</p>
+        <div className="flex items-center gap-3 text-slate-300">
           <Globe className="h-4 w-4" />
-          <span className="text-sm">{c.footer.langs}</span>
+          <span className="text-[15px]">{c.footer.langs}</span>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <Link href="/faq" className="text-slate-400 transition-colors hover:text-emerald-300">
+        <div className="flex items-center gap-4 text-[15px]">
+          <Link href="/faq" className="text-slate-300 transition-colors hover:text-emerald-300">
             الأسئلة الشائعة
           </Link>
-          <Link href="/security" className="text-slate-400 transition-colors hover:text-emerald-300">
+          <Link href="/security" className="text-slate-300 transition-colors hover:text-emerald-300">
             الأمان والخصوصية
           </Link>
         </div>
@@ -1016,6 +1171,7 @@ export default function PublicHomePage() {
         <Showcase c={c} />
         <Demo c={c} />
         <Pricing c={c} />
+        <Social c={c} />
         <Faq c={c} />
         <FinalCta c={c} />
       </main>

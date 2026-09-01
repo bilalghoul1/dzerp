@@ -29,8 +29,12 @@ export {
   createDocument,
   updateDocument,
   deleteDocument,
+  duplicateDocument,
+  deleteDocumentsBulk,
+  duplicateDocumentsBulk,
   getDocument,
   listDocuments,
+  listDocumentsOverview,
   changeStatus,
   approveDoc,
 } from "./service";

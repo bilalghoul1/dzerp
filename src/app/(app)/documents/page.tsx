@@ -10,7 +10,7 @@ import { getAllDocTypes, getDocConfig } from "@/features/documents/engine/config
 import { listDocuments } from "@/features/documents/engine/service";
 import { normalizeDocumentRow } from "@/features/documents/framework/normalize";
 import { DocumentsHubList, type HubDocType } from "@/components/documents/documents-hub-list";
-import type { CommercialDocType } from "@/features/documents/engine/types";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +64,16 @@ export default async function DocumentsHubPage() {
         breadcrumbs={[{ label: t("nav.documents") }]}
         title={t("nav.documents")}
         description={t("documentsUI.listSubtitle")}
+        actions={
+          <Button variant="outline" asChild>
+            <Link href="/documents/groups">
+              <span className="material-symbols-outlined mr-1 text-[18px]" aria-hidden="true">
+                group
+              </span>
+              {t("documentsUI.viewGroups")}
+            </Link>
+          </Button>
+        }
       />
 
       {creatableTypes.length > 0 ? (

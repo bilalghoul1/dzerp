@@ -2,6 +2,7 @@ import type { CommercialDocType } from "@/features/documents/engine/types";
 import type {
   AttachmentItem,
   DocumentDetailModel,
+  DocumentOverviewRow,
   ListResult,
   RelationItem,
   TransitionsResult,
@@ -132,6 +133,51 @@ export async function deleteDocument(
 ): Promise<void> {
   await request<{ deleted: boolean }>(`/api/documents/${docId}?type=${type}`, {
     method: "DELETE",
+  });
+}
+
+export type OverviewSelectionItem = {
+  docType: CommercialDocType;
+  id: string;
+};
+
+export type BulkDeleteResult = {
+  deleted: Array<{ docType: CommercialDocType; id: string; number: string }>;
+  failed: Array<{ docType: CommercialDocType; id: string; reason: string }>;
+};
+
+export type BulkDuplicateResult = {
+  duplicated: Array<{
+    docType: CommercialDocType;
+    id: string;
+    newId: string;
+    newNumber: string;
+  }>;
+  failed: Array<{ docType: CommercialDocType; id: string; reason: string }>;
+};
+
+export async function listDocumentsOverview(): Promise<DocumentOverviewRow[]> {
+  const raw = await request<{ items: DocumentOverviewRow[] }>(
+    "/api/documents/overview",
+  );
+  return raw.items;
+}
+
+export async function bulkDeleteDocuments(
+  docs: OverviewSelectionItem[],
+): Promise<BulkDeleteResult> {
+  return request<BulkDeleteResult>("/api/documents/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ docs }),
+  });
+}
+
+export async function bulkDuplicateDocuments(
+  docs: OverviewSelectionItem[],
+): Promise<BulkDuplicateResult> {
+  return request<BulkDuplicateResult>("/api/documents/bulk-duplicate", {
+    method: "POST",
+    body: JSON.stringify({ docs }),
   });
 }
 

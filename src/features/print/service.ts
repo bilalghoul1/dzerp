@@ -62,8 +62,11 @@ export async function printDocument(params: PrintDocumentParams): Promise<PrintR
   const engine = await PdfEngine.create({
     format: doc.company.printFormat,
     margins: doc.company.printMargins ?? undefined,
-    rtl: false,
-    onPage: createRunningHeader(doc, labels),
+    // Le sens d'écriture suit la locale demandée : une demande `ar` bascule
+    // tout le rendu en RTL (le moteur, le tableau et les templates sont
+    // conçus pour honorer `engine.rtl`), `fr`/`en` restent en LTR.
+    rtl: locale === "ar",
+    onPage: createRunningHeader(doc, labels, locale),
     onFooter: createFooter(doc, labels),
   });
 

@@ -18,7 +18,7 @@ import {
   renderPrintableDocument,
 } from "../src/features/print/templates";
 import { mockDoc } from "./print-smoke";
-import { shapeArabicForRender, hasArabicScript } from "../src/features/print/fonts";
+import { prepareArabicText, hasArabicScript } from "../src/features/print/fonts";
 import type { PrintableDocument } from "../src/features/print/types";
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ async function renderMock(doc: PrintableDocument, locale: "fr" | "ar" | "en") {
     format: doc.company.printFormat,
     margins: doc.company.printMargins ?? undefined,
     rtl: locale === "ar",
-    onPage: createRunningHeader(doc, labels),
+    onPage: createRunningHeader(doc, labels, locale),
     onFooter: createFooter(doc, labels),
   });
   await renderPrintableDocument(engine, doc, labels, locale);
@@ -100,7 +100,7 @@ const normWs = (s: string) => s.replace(/\s+/g, " ").trim();
 /** Vérifie qu'un texte extrait contient une phrase arabe composée (formes). */
 function hasShaped(text: string, phrase: string): boolean {
   const norm = normWs(text);
-  return shapeArabicForRender(phrase)
+  return prepareArabicText(phrase)
     .split(" ")
     .every((word) => norm.includes(word));
 }
@@ -243,7 +243,7 @@ async function renderDbDoc(
       format: doc.company.printFormat,
       margins: doc.company.printMargins ?? undefined,
       rtl: locale === "ar",
-      onPage: createRunningHeader(doc, labels),
+      onPage: createRunningHeader(doc, labels, locale),
       onFooter: createFooter(doc, labels),
     });
     await renderPrintableDocument(engine, doc, labels, locale);
@@ -263,6 +263,7 @@ async function sectionFonts() {
   const ar = mockDoc(4, "A4");
   ar.document.number = "FAC-AR-2025-0001";
   ar.company.name = "مؤسسة النور";
+  ar.company.nameAr = null;
   const { pdf: pdfAr } = await renderMock(ar, "ar");
   const textAr = await extractText(pdfAr);
   record(
@@ -379,6 +380,7 @@ async function sectionRtl() {
 
   const ar = mockDoc(5, "A4");
   ar.company.name = "مؤسسة النور";
+  ar.company.nameAr = null;
   ar.document.notes = "ملاحظات بالعربية sur facture bilingue";
   const { pdf: pdfAr } = await renderMock(ar, "ar");
   const textAr = await extractText(pdfAr);
@@ -404,6 +406,36 @@ async function sectionRtl() {
     textBi.includes("Notes en français") && hasShaped(textBi, "ملاحظات عربية"),
     "disposition bilingue : les deux scripts coexistents",
   );
+
+  // nameAr est utilisé en demande arabe (avec repli sur le nom principal).
+  const arNamed = mockDoc(3, "A4");
+  arNamed.company.name = "Alpha Impression";
+  arNamed.company.nameAr = "مؤسسة ألفا للطباعة";
+  const { pdf: pdfArNamed } = await renderMock(arNamed, "ar");
+  const textArNamed = await extractText(pdfArNamed);
+  record(
+    hasShaped(textArNamed, "مؤسسة ألفا"),
+    "nameAr utilisé en arabe (repli sur name si absent)",
+  );
+
+  // Multilingue / multi-page arabe.
+  const arMulti = mockDoc(30, "A4");
+  arMulti.company.nameAr = "مؤسسة ألفا للطباعة";
+  arMulti.document.notes = "ملاحظات عربية متعددة الأسطر pour vérifier la césure sur plusieurs pages.";
+  const arM = await renderMock(arMulti, "ar");
+  await validatePdf(arM.pdf);
+  const textArMulti = await extractText(arM.pdf);
+  record(
+    arM.pages >= 2 && hasShaped(textArMulti, "ألفا"),
+    "facture arabe multi-page (RTL)",
+    `${arM.pages} page(s)`,
+  );
+
+  // LTR inchangé : un devis court français reste sur une seule page.
+  const frShort = mockDoc(3, "A4");
+  frShort.document.docType = "QUOTATION";
+  const frS = await renderMock(frShort, "fr");
+  record(frS.pages === 1, "facture française courte reste 1 page (aucune régression LTR)", `${frS.pages} page(s)`);
 }
 
 async function sectionImages(db: { a: Awaited<ReturnType<typeof makeCompany>> }) {

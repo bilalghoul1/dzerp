@@ -4,6 +4,7 @@ import type {
   AttachmentItem,
   DocumentDetailModel,
   DocumentLineModel,
+  DocumentOverviewRow,
   DocumentRow,
   RelationItem,
 } from "./ui-types";
@@ -83,6 +84,24 @@ export function normalizeDocumentRow(
     totalTtc: toNumber(raw.totalTtc),
     linesCount,
   };
+}
+
+export function normalizeOverviewRow(
+  raw: AnyRecord,
+  docType: CommercialDocType,
+): DocumentOverviewRow {
+  const base = normalizeDocumentRow(raw, docType);
+  const config = getDocConfig(docType);
+  const party =
+    config.partyField === "customerId"
+      ? (raw.customer as AnyRecord | null | undefined)
+      : (raw.supplier as AnyRecord | null | undefined);
+  const partyStatus: DocumentOverviewRow["partyStatus"] = !party?.id
+    ? "missing"
+    : party.deletedAt
+      ? "deleted"
+      : "active";
+  return { ...base, partyStatus };
 }
 
 export function normalizeLine(raw: AnyRecord, index: number): DocumentLineModel {

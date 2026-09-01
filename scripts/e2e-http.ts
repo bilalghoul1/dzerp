@@ -8,7 +8,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { SESSION_COOKIE, COMPANY_COOKIE, SESSION_TTL_SECONDS } from "../src/lib/constants";
 import { sanitizeStorageKey, uploadRoot } from "../src/features/upload/storage";
-import { shapeArabicForRender } from "../src/features/print/fonts";
+import { prepareArabicText } from "../src/features/print/fonts";
 
 const PORT = Number(process.env.E2E_PORT ?? 3199);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -66,7 +66,7 @@ const normWs = (s: string) => s.replace(/\s+/g, " ").trim();
 
 function hasShaped(text: string, phrase: string): boolean {
   const norm = normWs(text);
-  return shapeArabicForRender(phrase)
+  return prepareArabicText(phrase)
     .split(" ")
     .map((w) => w.trim())
     .filter(Boolean)

@@ -100,6 +100,17 @@ function joinParts(parts: Array<string | null | undefined>): string {
   return parts.filter((p): p is string => !!p && p.trim().length > 0).join(" • ");
 }
 
+/**
+ * Nom d'affichage de la société : en demande arabe, on préfère le nom arabe
+ * (nameAr) s'il est renseigné, sinon repli sur le nom principal. Les demandes
+ * fr/en utilisent toujours le nom principal.
+ */
+function companyName(doc: PrintableDocument, locale: Locale): string {
+  return locale === "ar" && doc.company.nameAr
+    ? doc.company.nameAr
+    : doc.company.name;
+}
+
 function brand(ctx: TemplateCtx): Color {
   return toColor(ctx.doc.company.primaryColor, COLORS.black);
 }
@@ -131,8 +142,10 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   engine.fillRect(engine.contentLeft, pageTop, engine.contentWidth, bannerH, brandColor);
 
   const bannerTextColor = COLORS.white;
-  engine.drawText(doc.company.name, {
-    x: engine.contentLeft + 10,
+  // En RTL l'identité est ancrée à droite du bandeau (miroir), sinon à gauche.
+  const nameX = rtl ? engine.contentRight - 10 : engine.contentLeft + 10;
+  engine.drawText(companyName(doc, ctx.locale), {
+    x: nameX,
     y: pageTop + (bannerH - P.nameSize) / 2,
     size: P.nameSize, style: "bold", color: bannerTextColor,
     align: rtl ? "right" : "left", maxWidth: engine.contentWidth * 0.55,
@@ -226,7 +239,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const cardTitleH = P.sectionSize * 1.6;
   // Measure content height for both cards to align their bottom borders.
   const emitLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = [
-    { text: doc.company.name, bold: true },
+    { text: companyName(doc, ctx.locale), bold: true },
     ...(doc.company.activity ? [{ text: doc.company.activity, gray: true }] : []),
     { text: joinParts([doc.company.legalForm, doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null]) ?? "", gray: true },
     { text: joinParts([doc.company.rc ? `${labels.rc} ${doc.company.rc}` : null, doc.company.taxId ? `${labels.taxId} ${doc.company.taxId}` : null, doc.company.nis ? `${labels.nis} ${doc.company.nis}` : null]) ?? "", gray: true },
@@ -271,9 +284,9 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       fill: brandColor,
     });
     engine.drawText(title, {
-      x: x + 6, y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
+      x: rtl ? x + cardW - 6 : x + 6, y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
       style: "bold", color: COLORS.white,
-      align: rtl ? "right" : "left", maxWidth: cardW - 12,
+      maxWidth: cardW - 12,
     });
     let ly = cardTop + cardTitleH + P.bodySize * 1.4;
     for (const l of lines) {
@@ -281,17 +294,17 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
       const wrapped = engine.wrap(l.text, l.bold ? "bold" : "regular", P.bodySize, cardW - 12);
       for (const w of wrapped) {
         engine.drawText(w, {
-          x: x + 6, y: ly, size: P.bodySize,
+          x: rtl ? x + cardW - 6 : x + 6, y: ly, size: P.bodySize,
           style: l.bold ? "bold" : "regular",
           color: l.gray ? COLORS.gray : COLORS.black,
-          align: rtl ? "right" : "left", maxWidth: cardW - 12,
+          maxWidth: cardW - 12,
         });
         ly += P.bodySize * 1.4;
       }
     }
   };
 
-  drawCard(engine.contentLeft, labels.issuer, emitLines);
+  drawCard(rtl ? engine.contentRight - cardW : engine.contentLeft, labels.issuer, emitLines);
   if (clientLines.length > 0) {
     drawCard(rtl ? engine.contentLeft : engine.contentRight - cardW, labels.party, clientLines);
   }
@@ -301,7 +314,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     partyY += P.gap;
     engine.ensureSpace(P.bodySize * 3 + P.gap);
     engine.drawText(labels.branch, {
-      x: engine.contentLeft, y: partyY, size: P.bodySize, style: "bold", color: COLORS.gray,
+      x: rtl ? engine.contentRight : engine.contentLeft, y: partyY, size: P.bodySize, style: "bold", color: COLORS.gray,
     });
     partyY += P.bodySize * 1.4;
     const branchLine = joinParts([
@@ -315,7 +328,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     const bLineH = P.bodySize * 1.4;
     for (const w of wrapped) {
       engine.drawText(w, {
-        x: engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: engine.contentWidth,
+        x: rtl ? engine.contentRight : engine.contentLeft, y: partyY, size: P.bodySize, color: COLORS.gray, maxWidth: engine.contentWidth,
       });
       partyY += bLineH;
     }
@@ -330,7 +343,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   if (doc.company.printHeader) {
     engine.y = engine.drawParagraph(doc.company.printHeader, {
-      x: engine.contentLeft, y: engine.y, size: P.bodySize, color: COLORS.gray,
+      x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, color: COLORS.gray,
       align: "start", maxWidth: engine.contentWidth,
     });
     engine.y += P.gap;
@@ -417,7 +430,7 @@ function drawLines(ctx: TemplateCtx): void {
 
   if (doc.lines.length === 0) {
     engine.drawText("—", {
-      x: engine.contentLeft, y: engine.y, size: P.bodySize, color: COLORS.gray,
+      x: engine.rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, color: COLORS.gray,
     });
     engine.y += P.bodySize * 1.6;
     return;
@@ -453,8 +466,10 @@ function drawTotals(ctx: TemplateCtx): void {
     220,
   );
   const labelX = right - boxW;
-  const valueX = rtl ? right - boxW : right;
+  // RTL : libellés à droite, valeurs à gauche (miroir de l'axe de lecture).
+  const labelTextX = rtl ? right : labelX;
   const labelAlign: Align = rtl ? "right" : "left";
+  const valueTextX = rtl ? labelX : right;
   const valueAlign: Align = rtl ? "left" : "right";
 
   const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color }> = [
@@ -498,11 +513,11 @@ function drawTotals(ctx: TemplateCtx): void {
       engine.fillRect(labelX, engine.y, right - labelX, lineH, tint(row.color, 0.9));
     }
     engine.drawText(row.label, {
-      x: labelX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
+      x: labelTextX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
       style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: labelAlign,
     });
     engine.drawText(row.value, {
-      x: valueX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
+      x: valueTextX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
       style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: valueAlign,
     });
     engine.y += lineH;
@@ -518,7 +533,7 @@ function sectionTitle(ctx: TemplateCtx, text: string): void {
   const { engine } = ctx;
   const P = layout(engine.format);
   engine.drawText(text, {
-    x: engine.contentLeft, y: engine.y, size: P.sectionSize, style: "bold", color: brand(ctx),
+    x: engine.rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.sectionSize, style: "bold", color: brand(ctx),
   });
   engine.y += P.sectionSize * 1.4;
 }
@@ -526,17 +541,18 @@ function sectionTitle(ctx: TemplateCtx, text: string): void {
 function drawNotesAndTerms(ctx: TemplateCtx): void {
   const { engine, doc, labels } = ctx;
   const P = layout(engine.format);
+  const rtl = engine.rtl;
   if (doc.document.notes) {
     sectionTitle(ctx, labels.notes);
     engine.y = engine.drawParagraph(doc.document.notes, {
-      x: engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: engine.contentWidth,
+      x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: engine.contentWidth,
     });
     engine.y += P.gap;
   }
   if (doc.document.terms) {
     sectionTitle(ctx, labels.terms);
     engine.y = engine.drawParagraph(doc.document.terms, {
-      x: engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: engine.contentWidth,
+      x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: engine.contentWidth,
     });
     engine.y += P.gap;
   }
@@ -545,6 +561,7 @@ function drawNotesAndTerms(ctx: TemplateCtx): void {
 function drawAmountInWords(ctx: TemplateCtx): void {
   const { engine, doc, labels, locale } = ctx;
   const P = layout(engine.format);
+  const rtl = engine.rtl;
   const currency = doc.document.currency;
   const amount =
     ctx.config.hasPayment && doc.totals.netPayable != null
@@ -555,7 +572,7 @@ function drawAmountInWords(ctx: TemplateCtx): void {
   sectionTitle(ctx, labels.amountInWords);
   const boxTop = engine.y;
   engine.y = engine.drawParagraph(words, {
-    x: engine.contentLeft + 6, y: engine.y + 3, size: P.bodySize, maxWidth: engine.contentWidth - 12,
+    x: rtl ? engine.contentRight - 6 : engine.contentLeft + 6, y: engine.y + 3, size: P.bodySize, maxWidth: engine.contentWidth - 12,
   });
   engine.drawRect(engine.contentLeft, boxTop, engine.contentWidth, engine.y - boxTop + 2, {
     border: COLORS.lineGray,
@@ -572,6 +589,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   const { engine, doc, labels } = ctx;
   const P = layout(engine.format);
   const party = doc.party;
+  const rtl = engine.rtl;
 
   const bankInfo: Array<[string, string | null]> = [
     [labels.bank, doc.company.bank],
@@ -593,7 +611,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
     sectionTitle(ctx, labels.bank);
     for (const [label, value] of bankLines) {
       engine.drawText(`${label} : ${value}`, {
-        x: engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: colW,
+        x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: colW,
       });
       engine.y += P.bodySize * 1.4;
     }
@@ -606,12 +624,14 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   const sigBoxH = 50;
 
   // Cadre "L'Émetteur — Cachet" (toujours visible, même sans image).
-  engine.drawRect(engine.contentLeft, sigTop, sigColW, sigBoxH, {
+  // RTL : miroir — cadre émetteur à droite, cadre client à gauche.
+  const issuerSigX = rtl ? engine.contentRight - sigColW : engine.contentLeft;
+  engine.drawRect(issuerSigX, sigTop, sigColW, sigBoxH, {
     border: COLORS.lineGray,
     borderWidth: 0.7,
   });
   engine.drawText(labels.issuerStamp, {
-    x: engine.contentLeft + 2,
+    x: rtl ? issuerSigX + sigColW - 2 : issuerSigX + 2,
     y: sigTop + 3,
     size: P.bodySize, style: "bold", maxWidth: sigColW,
   });
@@ -620,7 +640,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   if (doc.branding.stamp) {
     const img = await engine.embedImage(doc.branding.stamp, doc.branding.stampMimeType);
     if (img) {
-      engine.drawImage(img, engine.contentLeft + 6, sigTop + 14, {
+      engine.drawImage(img, issuerSigX + 6, sigTop + 14, {
         maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 10,
       });
     }
@@ -630,7 +650,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
     const img = await engine.embedImage(doc.branding.signature, doc.branding.signatureMimeType);
     if (img) {
       const sigOffset = doc.branding.stamp ? sigBoxH / 2 + 2 : 12;
-      engine.drawImage(img, engine.contentLeft + 6, sigTop + sigOffset, {
+      engine.drawImage(img, issuerSigX + 6, sigTop + sigOffset, {
         maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 8,
       });
     }
@@ -638,16 +658,16 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   engine.y = Math.max(engine.y, sigTop + sigBoxH + P.gap);
 
   if (party) {
-    const rx = engine.contentRight - sigColW;
+    const rx = rtl ? engine.contentLeft : engine.contentRight - sigColW;
     engine.drawRect(rx, sigTop, sigColW, sigBoxH, {
       border: COLORS.lineGray,
       borderWidth: 0.7,
     });
     engine.drawText(labels.clientLabel, {
-      x: rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
+      x: rtl ? rx + sigColW - 2 : rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
     });
     engine.drawText(party.name, {
-      x: rx + 2, y: sigTop + 3 + P.bodySize * 1.4, size: P.bodySize, color: COLORS.gray,
+      x: rtl ? rx + sigColW - 2 : rx + 2, y: sigTop + 3 + P.bodySize * 1.4, size: P.bodySize, color: COLORS.gray,
       align: "start", maxWidth: sigColW,
     });
   }
@@ -676,7 +696,7 @@ function drawStatusStamps(ctx: TemplateCtx): void {
     });
   } else if (ctx.config.hasPayment && doc.document.paymentStatus === "PAID") {
     engine.stampText(labels.paid, {
-      x: engine.contentRight - 60, y: cy, size: P.titleSize, color: COLORS.green, rotateDeg: -15, opacity: 0.35,
+      x: engine.rtl ? engine.contentLeft + 60 : engine.contentRight - 60, y: cy, size: P.titleSize, color: COLORS.green, rotateDeg: -15, opacity: 0.35,
     });
   }
 }
@@ -685,7 +705,7 @@ function drawStatusStamps(ctx: TemplateCtx): void {
 // En-tête courant + pied de page
 // ---------------------------------------------------------------------------
 
-export function createRunningHeader(doc: PrintableDocument, labels: PrintLabels) {
+export function createRunningHeader(doc: PrintableDocument, labels: PrintLabels, locale: Locale) {
   return (engine: PdfEngine, _pageIndex: number): void => {
     void _pageIndex;
     const P = layout(engine.format);
@@ -695,11 +715,13 @@ export function createRunningHeader(doc: PrintableDocument, labels: PrintLabels)
       color: brandColor,
     });
     engine.y += 6;
-    engine.drawText(doc.company.name, {
-      x: engine.contentLeft, y: engine.y, size: P.bodySize, style: "bold", maxWidth: engine.contentWidth * 0.6,
+    engine.drawText(companyName(doc, locale), {
+      x: engine.rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, style: "bold",
+      maxWidth: engine.contentWidth * 0.6,
     });
     engine.drawText(`${labels.ref} ${doc.document.number}`, {
-      x: engine.contentRight, y: engine.y, size: P.bodySize, align: "right",
+      x: engine.rtl ? engine.contentLeft : engine.contentRight, y: engine.y, size: P.bodySize,
+      align: engine.rtl ? "left" : "right",
     });
     engine.y += P.bodySize * 1.7;
   };
@@ -728,7 +750,7 @@ export function createFooter(doc: PrintableDocument, labels: PrintLabels) {
     }
     ctx.engine.drawText(
       `${labels.page} ${ctx.pageIndex + 1} ${labels.of} ${ctx.totalPages}`,
-      { x: ctx.engine.contentRight, y: fy, size: P.bodySize - 1, color: COLORS.gray, align: "right" },
+      { x: ctx.engine.rtl ? ctx.engine.contentLeft : ctx.engine.contentRight, y: fy, size: P.bodySize - 1, color: COLORS.gray, align: ctx.engine.rtl ? "left" : "right" },
     );
   };
 }

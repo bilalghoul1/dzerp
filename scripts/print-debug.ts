@@ -13,7 +13,7 @@ async function main() {
     format: doc.company.printFormat,
     margins: doc.company.printMargins ?? undefined,
     rtl: false,
-    onPage: createRunningHeader(doc, labels),
+    onPage: createRunningHeader(doc, labels, "fr"),
     onFooter: createFooter(doc, labels),
   });
   log("engine ready");

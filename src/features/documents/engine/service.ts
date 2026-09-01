@@ -4,8 +4,16 @@ import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
 import { AuditAction, ActivityType } from "@/generated/prisma/enums";
 import { nextDocumentNumber } from "@/features/documents/series";
-import type { CommercialDocType, InputDocument, UpdateDocument, DocumentContext } from "./types";
-import { getDocConfig } from "./config";
+import { normalizeOverviewRow } from "@/features/documents/framework/normalize";
+import type { DocumentOverviewRow } from "@/features/documents/framework/ui-types";
+import type {
+  CommercialDocType,
+  InputDocument,
+  InputLine,
+  UpdateDocument,
+  DocumentContext,
+} from "./types";
+import { getDocConfig, getAllDocTypes } from "./config";
 import { computeAllLines } from "./calculation";
 import { validateDocumentInput, validateLines, validateDocumentReferences } from "./validation";
 import { transitionStatus, approveDocument } from "./workflow";
@@ -378,7 +386,7 @@ export async function deleteDocument(
   docType: CommercialDocType,
   docId: string,
   ctx: DocumentContext,
-): Promise<void> {
+): Promise<{ id: string; number: string }> {
   const config = getDocConfig(docType);
   const delegate = getDelegate(config.prismaModel);
 
@@ -399,13 +407,25 @@ export async function deleteDocument(
     throw new ApiError(422, "Seuls les documents en brouillon peuvent être supprimés", "NOT_DRAFT");
   }
 
-  // Lignes + en-tête : suppression atomique (aucune ligne orpheline possible).
+  // Lignes + en-tête + relations/conversions + demandes d'approbation :
+  // suppression atomique (aucune ligne/référence orpheline possible).
   await prisma.$transaction(async (tx) => {
     const lineModel = `${config.prismaModel}Line`;
     await getDelegate(lineModel, tx).deleteMany({
       where: { [`${config.prismaModel}Id`]: docId },
     });
     await getDelegate(config.prismaModel, tx).delete({ where: { id: docId } });
+    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
+      .documentRelation.deleteMany({
+        where: {
+          companyId: ctx.companyId,
+          OR: [{ sourceDocId: docId }, { targetDocId: docId }],
+        },
+      });
+    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
+      .documentApproval.deleteMany({
+        where: { companyId: ctx.companyId, docId, docType },
+      });
   });
 
   await Promise.all([
@@ -430,6 +450,8 @@ export async function deleteDocument(
       meta: { docType },
     }),
   ]);
+
+  return { id: docId, number: existing.number };
 }
 
 export async function getDocument(
@@ -572,4 +594,187 @@ function dzInvoiceTaxFields(
     stampAmount: result.stampAmount,
     totalDue: result.totalDue,
   };
+}
+
+/**
+ * Liste plate de TOUS les documents de la société (tous types), avec l'état de
+ * la partie liée (client/fournisseur) — alimente la vue groupée par client et
+ * le groupe « documents sans client ». Sans pagination : la vue est client-side.
+ */
+export async function listDocumentsOverview(
+  companyId: string,
+): Promise<DocumentOverviewRow[]> {
+  const grouped = await Promise.all(
+    getAllDocTypes().map(async (docType) => {
+      const config = getDocConfig(docType);
+      const delegate = getDelegate(config.prismaModel);
+      const partyKey = config.partyField;
+      const partySelect = { select: { id: true, name: true, deletedAt: true } };
+      const partyInclude =
+        partyKey === "customerId" ? { customer: partySelect } : { supplier: partySelect };
+
+      const rows = (await delegate.findMany({
+        where: { companyId },
+        include: {
+          ...partyInclude,
+          branch: { select: { id: true, name: true } },
+          _count: { select: { lines: true } },
+        },
+        orderBy: { issuedAt: "desc" },
+      })) as Record<string, unknown>[];
+
+      return rows.map((row) => normalizeOverviewRow(row, docType));
+    }),
+  );
+
+  return grouped
+    .flat()
+    .sort((a, b) => String(b.issuedAt).localeCompare(String(a.issuedAt)));
+}
+
+/** Duplique un document (nouvel id + nouveau numéro, lignes copiées, date neuve). */
+export async function duplicateDocument(
+  docType: CommercialDocType,
+  docId: string,
+  ctx: DocumentContext,
+): Promise<{ id: string; number: string }> {
+  const config = getDocConfig(docType);
+  const delegate = getDelegate(config.prismaModel);
+
+  const existing = (await delegate.findUnique({
+    where: { id: docId },
+    select: { id: true, companyId: true },
+  })) as { id: string; companyId: string } | null;
+
+  if (!existing) {
+    throw new ApiError(404, `${config.label} introuvable`, "NOT_FOUND");
+  }
+  if (existing.companyId !== ctx.companyId) {
+    throw new ApiError(403, "Accès refusé", "FORBIDDEN");
+  }
+
+  const detail = await getDocument(docType, docId, ctx.companyId);
+  const partyKey = config.partyField;
+  const partyId = detail[partyKey === "customerId" ? "customerId" : "supplierId"];
+
+  const input: InputDocument = {
+    branchId: String(detail.branchId ?? ""),
+    ...(partyKey === "customerId"
+      ? { customerId: String(partyId ?? "") }
+      : { supplierId: String(partyId ?? "") }),
+    clientId: detail.clientId ? String(detail.clientId) : null,
+    issuedById: detail.issuedById ? String(detail.issuedById) : null,
+    currency: String(detail.currency ?? "DZD"),
+    exchangeRate: Number(detail.exchangeRate) || 1,
+    notes: detail.notes != null ? String(detail.notes) : null,
+    meta: (detail.meta as Record<string, unknown> | null) ?? null,
+    lines: ((detail.lines as Record<string, unknown>[]) ?? []).map((line) => ({
+      kind: (line.kind as InputLine["kind"]) ?? "PRODUCT",
+      productId: line.productId ? String(line.productId) : undefined,
+      label: String(line.label ?? ""),
+      unit: line.unit ? String(line.unit) : undefined,
+      quantity: Number(line.quantity) || 1,
+      unitPrice: Number(line.unitPrice) || 0,
+      discountPct: Number(line.discountPct) || 0,
+      taxPct: Number(line.taxPct) || 0,
+      ...(docType === "CUSTOMER_ORDER" || docType === "PROFORMA"
+        ? { customerSpecs: line.customerSpecs != null ? String(line.customerSpecs) : null }
+        : {}),
+    })),
+    ...duplicateSpecificFields(detail, docType),
+  };
+
+  const created = await createDocument(docType, input, ctx);
+  return {
+    id: String((created as { id: string }).id),
+    number: String((created as { number: string }).number),
+  };
+}
+
+/** Champs spécifiques dupliqués selon le type (ignorés pour les autres). */
+function duplicateSpecificFields(
+  detail: Record<string, unknown>,
+  docType: CommercialDocType,
+): Partial<InputDocument> {
+  if (docType === "CUSTOMER_ORDER") {
+    return {
+      customerOrderNumber: detail.customerOrderNumber != null ? String(detail.customerOrderNumber) : null,
+      customerOrderDate: detail.customerOrderDate != null ? String(detail.customerOrderDate) : null,
+      receivedDate: detail.receivedDate != null ? String(detail.receivedDate) : null,
+      requestedDeliveryDate: detail.requestedDeliveryDate != null ? String(detail.requestedDeliveryDate) : null,
+      conditions: detail.conditions != null ? String(detail.conditions) : null,
+    };
+  }
+  if (docType === "PROFORMA") {
+    return {
+      validUntil: detail.validUntil != null ? String(detail.validUntil) : null,
+      conditions: detail.conditions != null ? String(detail.conditions) : null,
+    };
+  }
+  if (docType === "QUOTATION") {
+    return {
+      validUntil: detail.validUntil != null ? String(detail.validUntil) : null,
+    };
+  }
+  if (docType === "INVOICE" || docType === "SUPPLIER_INVOICE") {
+    return {
+      dueDate: detail.dueDate != null ? String(detail.dueDate) : null,
+    };
+  }
+  if (docType === "CREDIT_NOTE") {
+    // La facture liée n'est PAS copiée (évite un double imputation) ; le motif est conservé.
+    return { invoiceId: null, reason: detail.reason != null ? String(detail.reason) : null };
+  }
+  return {};
+}
+
+/** Supprime en masse (chaque document conserve les règles moteur, avec résultat agrégé). */
+export async function deleteDocumentsBulk(
+  docs: Array<{ docType: CommercialDocType; id: string }>,
+  ctx: DocumentContext,
+): Promise<{
+  deleted: Array<{ docType: CommercialDocType; id: string; number: string }>;
+  failed: Array<{ docType: CommercialDocType; id: string; reason: string }>;
+}> {
+  const deleted: Array<{ docType: CommercialDocType; id: string; number: string }> = [];
+  const failed: Array<{ docType: CommercialDocType; id: string; reason: string }> = [];
+  for (const { docType, id } of docs) {
+    try {
+      const result = await deleteDocument(docType, id, ctx);
+      deleted.push({ docType, id: result.id, number: result.number });
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Erreur interne lors de la suppression";
+      failed.push({ docType, id, reason: message });
+    }
+  }
+  return { deleted, failed };
+}
+
+/** Duplique en masse (numéros nouveaux et indépendants pour chaque copie). */
+export async function duplicateDocumentsBulk(
+  docs: Array<{ docType: CommercialDocType; id: string }>,
+  ctx: DocumentContext,
+): Promise<{
+  duplicated: Array<{ docType: CommercialDocType; id: string; newId: string; newNumber: string }>;
+  failed: Array<{ docType: CommercialDocType; id: string; reason: string }>;
+}> {
+  const duplicated: Array<{
+    docType: CommercialDocType;
+    id: string;
+    newId: string;
+    newNumber: string;
+  }> = [];
+  const failed: Array<{ docType: CommercialDocType; id: string; reason: string }> = [];
+  for (const { docType, id } of docs) {
+    try {
+      const result = await duplicateDocument(docType, id, ctx);
+      duplicated.push({ docType, id, newId: result.id, newNumber: result.number });
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Erreur interne lors de la duplication";
+      failed.push({ docType, id, reason: message });
+    }
+  }
+  return { duplicated, failed };
 }

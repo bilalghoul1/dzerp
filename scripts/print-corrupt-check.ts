@@ -18,7 +18,7 @@ async function main() {
     format: corrupt.company.printFormat,
     margins: null,
     rtl: false,
-    onPage: createRunningHeader(corrupt, labels),
+    onPage: createRunningHeader(corrupt, labels, "fr"),
     onFooter: createFooter(corrupt, labels),
   });
   console.log("rendering…");

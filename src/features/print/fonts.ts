@@ -84,9 +84,78 @@ export function shapeArabic(text: string): string {
   return shapeArabicText(sanitizeText(text));
 }
 
-/** Formes contextuelles + ordre visuel (prêt pour rendu LTR). */
-export function shapeArabicForRender(text: string): string {
-  return shapeArabicVisual(sanitizeText(text));
+interface MixedPart {
+  text: string;
+  isArabic: boolean;
+}
+
+/**
+ * Découpe un texte en séquences homogènes. Les caractères arabes (y compris
+ * les formes de présentation déjà composées) forment un segment, tout le reste
+ * (latin, chiffres, symboles) en forme un autre. Les espaces sont attachés au
+ * segment qui les précède pour préserver la lisibilité.
+ */
+function splitScriptParts(text: string): MixedPart[] {
+  const parts: MixedPart[] = [];
+  let buf = "";
+  let bufArabic: boolean | null = null;
+
+  const push = () => {
+    if (!buf) return;
+    parts.push({ text: buf, isArabic: bufArabic ?? false });
+    buf = "";
+    bufArabic = null;
+  };
+
+  for (const ch of text) {
+    const isAr = isArabicChar(ch.codePointAt(0) ?? 0);
+    if (bufArabic === null) {
+      // Espace en tête de chaîne : on le lie au prochain segment.
+      if (ch === " " || ch === "\u00A0") continue;
+      bufArabic = isAr;
+      buf += ch;
+    } else if (isAr === bufArabic || ch === " " || ch === "\u00A0") {
+      buf += ch;
+    } else {
+      push();
+      buf = ch;
+      bufArabic = isAr;
+    }
+  }
+  push();
+  return parts;
+}
+
+/**
+ * DÉFAUT UNIFIÉ — prépare un texte mixte (arabe + latin/chiffres) pour un
+ * rendu LTR dans pdf-lib, qui ne gère pas le BiDi par lui-même.
+ *
+ * - L'arabe est composé avec ses formes contextuelles et mis en ordre visuel
+ *   (uniquement le segment arabe, jamais les chiffres ou le latin).
+ * - Les segments non arabes restent intacts (pas d'inversion interne).
+ * - L'ordre des segments est ajusté selon le sens dominant de la ligne pour
+ *   reproduire un BiDi raisonnable sans dépendre d'une bibliothèque externe.
+ *
+ * À utiliser comme unique passerelle pour tout texte avant splitRuns/mesure.
+ */
+export function prepareArabicText(text: string): string {
+  const clean = sanitizeText(text);
+  if (!hasArabicScript(clean)) return clean;
+
+  const parts = splitScriptParts(clean);
+  if (parts.length === 0) return clean;
+
+  // Direction principale de la ligne : RTL si elle commence par de l'arabe.
+  const rtl = parts[0].isArabic;
+
+  const shaped = parts.map((p) =>
+    p.isArabic ? shapeArabicVisual(p.text) : p.text,
+  );
+
+  // En ligne RTL on lit la fin logique en premier : on inverse les segments
+  // (les segments arabes sont déjà en ordre visuel interne correct).
+  const ordered = rtl && shaped.length > 1 ? [...shaped].reverse() : shaped;
+  return ordered.join("");
 }
 
 /**
@@ -140,7 +209,7 @@ export class FontManager {
     if (!hasArabicScript(clean)) {
       return [{ font: this.getFont("latin", style), text: clean, script: "latin" }];
     }
-    const visual = shapeArabicForRender(clean);
+    const visual = prepareArabicText(clean);
     const runs: Array<{ font: PDFFont; text: string; script: FontScript }> = [];
     let current = "";
     let currentScript: FontScript | null = null;

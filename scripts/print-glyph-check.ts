@@ -12,7 +12,7 @@ async function renderGlyph() {
     format: doc.company.printFormat,
     margins: null,
     rtl: false,
-    onPage: createRunningHeader(doc, labels),
+    onPage: createRunningHeader(doc, labels, "fr"),
     onFooter: createFooter(doc, labels),
   });
   await renderPrintableDocument(engine, doc, labels, "fr");

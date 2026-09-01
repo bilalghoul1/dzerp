@@ -1,7 +1,6 @@
 import type { Align, Color, PdfEngine } from "./renderer";
 import { COLORS } from "./renderer";
 import type { FontStyle } from "./fonts";
-import { hasArabicScript } from "./fonts";
 
 /**
  * Tableau réutilisable pour les templates d'impression : gestion des ruptures
@@ -66,6 +65,16 @@ function fitCellLines(
   return kept;
 }
 
+/**
+ * Résout "start"/"end" vers une valeur concrète selon la direction (RTL/LTR)
+ * pour que l'ancrage (x) et l'alignement soient cohérents dans les cellules.
+ */
+function resolveCellAlign(align: Align | undefined, rtl: boolean, fallback: Align): Align {
+  if (align === "start") return rtl ? "right" : "left";
+  if (align === "end") return rtl ? "left" : "right";
+  return align ?? fallback;
+}
+
 export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable {
   const {
     x,
@@ -102,7 +111,7 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
     let cursor = rtl ? right : x;
     for (const col of orderedColumns) {
       const cx = rtl ? cursor - col.width : cursor;
-      const cellAlign: Align = col.align ?? (rtl ? "right" : "left");
+      const cellAlign: Align = resolveCellAlign(col.align, rtl, rtl ? "right" : "left");
       engine.drawText(col.label, {
         x: cellAlign === "right" ? cx + col.width - cellPaddingX : cellAlign === "center" ? cx + col.width / 2 : cx + cellPaddingX,
         y: engine.y + headerHeight / 2 - rowSize / 2,
@@ -160,7 +169,7 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
       let lineY = engine.y + cellPaddingY;
       for (const line of lines) {
         const cx = rtl ? cursor - col.width : cursor;
-        const cellAlign: Align = col.align ?? (rtl && hasArabicScript(line) ? "right" : rtl ? "right" : "start");
+        const cellAlign: Align = resolveCellAlign(col.align, rtl, rtl ? "right" : "start");
         engine.drawText(line, {
           x: cellAlign === "center" ? cx + col.width / 2 : cellAlign === "right" ? cx + col.width - cellPaddingX : cx + cellPaddingX,
           y: lineY,
@@ -184,19 +193,24 @@ export function drawTable(engine: PdfEngine, options: TableOptions): DrawnTable 
       engine.newPage();
     }
     const totalW = totals.length > 0 ? totalWidth * 0.55 : 0;
+    // LTR : libellé à gauche, valeur à droite. RTL : miroir (libellé à droite, valeur à gauche).
+    const labelX = rtl ? right : x + totalWidth - totalW;
+    const labelAlign: Align = rtl ? "right" : "left";
+    const valueX = rtl ? x : right;
+    const valueAlign: Align = rtl ? "left" : "right";
     engine.drawText(total.label, {
-      x: x + totalWidth - totalW,
+      x: labelX,
       y: engine.y + 2,
       size: total.size ?? rowSize + 1,
       style: total.bold ? "bold" : "regular",
-      align: "left",
+      align: labelAlign,
     });
     engine.drawText(total.value, {
-      x: right,
+      x: valueX,
       y: engine.y + 2,
       size: total.size ?? rowSize + 1,
       style: total.bold ? "bold" : "regular",
-      align: "right",
+      align: valueAlign,
     });
     engine.y += (total.size ?? rowSize + 1) * 1.8;
   }

@@ -20,6 +20,7 @@ function mockDoc(lines: number, format: "A4" | "A5" | "THERMAL" = "A4"): Printab
   return {
     company: {
       name: "SARL DZ Services",
+      nameAr: "مؤسسة دي زد للخدمات",
       activity: "Services informatiques et conseil",
       legalName: "DZ Services Sarl",
       legalForm: "SARL",
@@ -136,7 +137,7 @@ async function render(doc: PrintableDocument, locale: "fr" | "ar" | "en") {
     format: doc.company.printFormat,
     margins: doc.company.printMargins ?? undefined,
     rtl: locale === "ar",
-    onPage: createRunningHeader(doc, labels),
+    onPage: createRunningHeader(doc, labels, locale),
     onFooter: createFooter(doc, labels),
   });
   await renderPrintableDocument(engine, doc, labels, locale);
@@ -146,14 +147,25 @@ async function render(doc: PrintableDocument, locale: "fr" | "ar" | "en") {
 }
 
 async function main() {
+  const arDoc = (() => {
+    const d = mockDoc(8, "A4");
+    return {
+      ...d,
+      party: { ...d.party, name: "مؤسسة محمد حداد للتجارة", address: "حي الصناعي، القطعة 12", commune: "وهران" },
+      issuedBy: "أمينة تومي",
+      lines: d.lines.map((l) => ({ ...l, label: `خدمة الصيانة المعلوماتية — الدفعة ${l.lineNumber}` })),
+      notes: "التسليم متوقع خلال 10 أيام عمل. يرجى التحقق من المطابقة عند الاستلام.",
+      terms: "الدفع عند استلام الفاتورة، عن طريق تحويل بنكي أو شيك.",
+    };
+  })() as PrintableDocument;
   const cases: Array<{ file: string; doc: PrintableDocument; locale: "fr" | "ar" | "en" }> = [
     { file: "smoke-a4-fr.pdf", doc: mockDoc(6), locale: "fr" },
-    { file: "smoke-a4-ar.pdf", doc: mockDoc(8, "A4"), locale: "ar" },
+    { file: "smoke-a4-ar.pdf", doc: arDoc, locale: "ar" },
     { file: "smoke-thermal-en.pdf", doc: mockDoc(5, "THERMAL"), locale: "en" },
     { file: "smoke-a5-fr.pdf", doc: mockDoc(30, "A5"), locale: "fr" },
     { file: "smoke-draft-fr.pdf", doc: { ...mockDoc(4), document: { ...mockDoc(4).document, status: "DRAFT" as const } }, locale: "fr" },
     { file: "smoke-cancelled-fr.pdf", doc: { ...mockDoc(4), document: { ...mockDoc(4).document, status: "CANCELLED" as const } }, locale: "fr" },
-    { file: "smoke-paid-ar.pdf", doc: { ...mockDoc(3), document: { ...mockDoc(3).document, paymentStatus: "PAID" as const } }, locale: "ar" },
+    { file: "smoke-paid-ar.pdf", doc: arDoc, locale: "ar" },
   ];
   for (const c of cases) {
     const { pdf, pages } = await render(c.doc, c.locale);

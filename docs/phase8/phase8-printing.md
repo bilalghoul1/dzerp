@@ -55,7 +55,7 @@ Preview (`/preview`, inline), Téléchargement (`/pdf`, attachment) et Impressio
 - **Inter** (Regular/Bold/Italic/BoldItalic) pour le latin, **Amiri** (Regular/Bold) pour l'arabe, chargées depuis `assets/fonts/` via **fontkit** (subsetting + embedding pdf-lib).
 - Cache au niveau module **par octets** : une seule empreinte `embedFont` par police et par document ; coût dominant amorti entre documents.
 - `assertFontsAvailable()` vérifie la présence des polices avant rendu.
-- Composition arabe : `shapeArabicForRender`/`shapeArabicText` (lettres init/médianes/finales, ZWNJ), `splitRuns` découpe les segments latins/arabes pour un directionnel correct.
+- Composition arabe : `prepareArabicText`/`shapeArabicText` (lettres init/médianes/finales, ZWNJ), `splitRuns` découpe les segments latins/arabes pour un directionnel correct.
 - Cmap **ToUnicode (bfchar)** : les glyphes composés reviennent en **Arabic Presentation Forms** (`\uFB50`–`\uFDFF`, `\uFE70`–`\uFEFF`), donc le texte arabe est copiable et vérifiable à l'extraction.
 - Glyphes non couverts (ex. CJK) : rendu sans échec (espaces de substitution), jamais d'exception.
 

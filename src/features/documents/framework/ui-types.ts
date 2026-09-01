@@ -45,6 +45,17 @@ export interface DocumentUiConfig {
   showValidUntil: boolean;
 }
 
+/** Ligne normalisée pour la vue groupée par client/fournisseur. */
+export interface DocumentOverviewRow extends DocumentRow {
+  /**
+   * État de la partie liée :
+   * - `active` : client/fournisseur présent et non supprimé ;
+   * - `deleted` : partie supprimée (soft delete) — le document est « sans client » ;
+   * - `missing` : partie absente (données historiques) — groupe « sans client ».
+   */
+  partyStatus: "active" | "deleted" | "missing";
+}
+
 /** Ligne normalisée pour la liste générique. */
 export interface DocumentRow {
   id: string;
