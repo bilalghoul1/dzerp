@@ -132,6 +132,11 @@ export function BusinessPartnersManager({
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
   const [showDetails, setShowDetails] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<BusinessPartnerRow | null>(null);
+  const [permanentDelete, setPermanentDelete] = React.useState(false);
+  const [permanentName, setPermanentName] = React.useState("");
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
   const apiBase = API_BY_KIND[kind];
 
@@ -242,18 +247,29 @@ export function BusinessPartnersManager({
     }
   };
 
-  const remove = async (row: BusinessPartnerRow) => {
-    if (!window.confirm(t("parties.deleteConfirm"))) return;
+  const remove = (row: BusinessPartnerRow) => {
+    // Fournisseurs : suppression logique directe (pas de cascade définitive).
+    if (kind !== "customer") {
+      if (!window.confirm(t("parties.deleteConfirm"))) return;
+      void removeSoft(row);
+      return;
+    }
+    // Clients : proposer le choix (logique vs définitif) dans une boîte de dialogue.
+    setDeleteTarget(row);
+    setPermanentDelete(false);
+    setPermanentName("");
+    setDeleteError(null);
+  };
+
+  const removeSoft = async (row: BusinessPartnerRow) => {
     setBusy(true);
     try {
-      const res = await fetch(`${apiBase}?id=${row.id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`${apiBase}?id=${row.id}`, { method: "DELETE" });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(errorMessage(json));
       }
-      toast.success(t("parametres.saveSuccess"));
+      toast.success(t("parties.deletedSoft"));
       setItems((prev) => prev.filter((r) => r.id !== row.id));
     } catch (error) {
       toast.error(
@@ -261,6 +277,36 @@ export function BusinessPartnersManager({
       );
     } finally {
       setBusy(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    // Pour le client, le « permanent » exige la saisie exacte du nom.
+    if (permanentDelete && permanentName.trim() !== deleteTarget.name) {
+      setDeleteError(t("parties.permanentDeleteMismatch"));
+      return;
+    }
+
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const url = `${apiBase}?id=${deleteTarget.id}${permanentDelete ? "&permanent=true" : ""}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(errorMessage(json));
+      }
+      toast.success(t("parties.permanentDeleteSuccess"));
+      setItems((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : t("parametres.saveError"),
+      );
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -668,6 +714,92 @@ export function BusinessPartnersManager({
             </Button>
             <Button onClick={save} disabled={busy}>
               {busy ? t("common.saving") : t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteBusy) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("parties.deleteTitle")}</DialogTitle>
+            <DialogDescription>{deleteTarget?.name}</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <button
+              type="button"
+              onClick={() => setPermanentDelete(false)}
+              className={`rounded-lg border p-3 text-start text-sm transition-colors ${
+                !permanentDelete
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <span className="font-medium">{t("parties.deleteModeSoft")}</span>
+              <span className="mt-1 block text-muted-foreground">
+                {t("parties.deleteModeSoftDesc")}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPermanentDelete(true)}
+              className={`rounded-lg border p-3 text-start text-sm transition-colors ${
+                permanentDelete
+                  ? "border-destructive bg-destructive/5"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <span className="font-medium text-destructive">
+                {t("parties.deleteModePermanent")}
+              </span>
+              <span className="mt-1 block text-muted-foreground">
+                {t("parties.deleteModePermanentDesc")}
+              </span>
+            </button>
+
+            {permanentDelete && (
+              <div className="space-y-2">
+                <Label htmlFor="party-permanent-name">
+                  {t("parties.permanentDeleteLabel")}
+                </Label>
+                <Input
+                  id="party-permanent-name"
+                  value={permanentName}
+                  onChange={(e) => setPermanentName(e.target.value)}
+                  placeholder={deleteTarget?.name ?? ""}
+                />
+              </div>
+            )}
+
+            {deleteError && (
+              <p className="text-sm text-destructive">{deleteError}</p>
+            )}
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant={permanentDelete ? "destructive" : "default"}
+              onClick={() => void confirmDelete()}
+              disabled={deleteBusy || (permanentDelete && permanentName.trim() !== deleteTarget?.name)}
+            >
+              {deleteBusy ? t("common.saving") : t("parties.deleteConfirmAction")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -44,10 +44,6 @@ const ARABIC_FONTS: Record<FontStyle, FontFile> = {
   boldItalic: { file: "Amiri-Bold.ttf", weight: 700, italic: false },
 };
 
-const ARABIC_FONT_NAMES = new Set(
-  Object.values(ARABIC_FONTS).map((f) => f.file),
-);
-
 const ARABIC_BLOCK_RE =
   /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { getServerI18n } from "@/features/i18n/server";
 
 export const dynamic = "force-dynamic";

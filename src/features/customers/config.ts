@@ -1,4 +1,6 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaBase } from "@/lib/prisma";
+import { deleteUploadFile } from "@/features/upload/storage";
+import { ApiError } from "@/lib/http";
 import { requireCompanyContext } from "@/features/company/context";
 import { nextDocumentNumber } from "@/features/documents/series";
 import {
@@ -80,6 +82,159 @@ export async function softDeleteCustomer(
     data: { deletedAt: new Date(), deletedById },
   });
   return normalizeBusinessPartner(row);
+}
+
+type CustomerDocSpec = {
+  type: string;
+  model: string;
+  lineModel: string;
+};
+
+const CUSTOMER_DOC_SPECS: CustomerDocSpec[] = [
+  { type: "QUOTATION", model: "quotation", lineModel: "quotationLine" },
+  { type: "SALES_ORDER", model: "salesOrder", lineModel: "salesOrderLine" },
+  { type: "DELIVERY_NOTE", model: "deliveryNote", lineModel: "deliveryNoteLine" },
+  { type: "INVOICE", model: "invoice", lineModel: "invoiceLine" },
+  { type: "CREDIT_NOTE", model: "creditNote", lineModel: "creditNoteLine" },
+  { type: "CUSTOMER_ORDER", model: "customerOrder", lineModel: "customerOrderLine" },
+  { type: "PROFORMA", model: "proforma", lineModel: "proformaLine" },
+];
+
+/**
+ * Suppression DÉFINITIVE d'un client et de toutes ses dépendances, en une seule
+ * transaction via prismaBase (parcourt le soft-delete). Sûre uniquement si TOUTES
+ * les pièces du client sont des brouillons et qu'aucune écriture comptable ne les
+ * référence. Sinon, le client doit être supprimé en soft-delete à la place.
+ */
+export async function permanentlyDeleteCustomer(
+  id: string,
+  companyId: string,
+): Promise<{ id: string; name: string }> {
+  const customer = await prismaBase.customer.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (!customer) {
+    throw new ApiError(404, "Client introuvable", "NOT_FOUND");
+  }
+
+  // 1. Énumérer toutes les pièces du client.
+  const docResults = await Promise.all(
+    CUSTOMER_DOC_SPECS.map(async (spec) => {
+      const rows = await (prismaBase as unknown as Record<string, { findMany: (a: unknown) => Promise<Array<{ id: string; status: string }>> }>)[spec.model].findMany({
+        where: { customerId: id },
+        select: { id: true, status: true },
+      });
+      return { spec, rows };
+    }),
+  );
+
+  const allDocs = docResults.flatMap((g) =>
+    g.rows.map((r) => ({ type: g.spec.type, model: g.spec.model, id: r.id, status: r.status })),
+  );
+  const docIds = allDocs.map((d) => d.id);
+
+  // 2. Toute pièce non-DRAFT bloque la suppression définitive.
+  if (allDocs.some((d) => d.status !== "DRAFT")) {
+    throw new ApiError(
+      422,
+      "Impossible de supprimer définitivement ce client : il possède des documents historiques (non brouillons). Utilisez la suppression logique.",
+      "HAS_NON_DRAFT_DOCUMENTS",
+    );
+  }
+
+  // 3. Aucune pièce ne doit être référencée par une écriture comptable.
+  if (docIds.length > 0) {
+    const journalRef = await prismaBase.journalEntry.findFirst({
+      where: { companyId, sourceDocId: { in: docIds } },
+      select: { id: true },
+    });
+    if (journalRef) {
+      throw new ApiError(
+        422,
+        "Impossible de supprimer définitivement ce client : des écritures comptables référencent ses documents.",
+        "BLOCKED_BY_ACCOUNTING",
+      );
+    }
+  }
+
+  // 4. Aucun règlement (mouvement d'argent) rattaché au client.
+  const hasPayments = await prismaBase.payment.findFirst({
+    where: { companyId, customerId: id },
+    select: { id: true },
+  });
+  if (hasPayments) {
+    throw new ApiError(
+      422,
+      "Impossible de supprimer définitivement ce client : il possède des règlements (mouvements d'argent). Utilisez la suppression logique.",
+      "BLOCKED_BY_PAYMENTS",
+    );
+  }
+
+  // 5. Collecter les fichiers avant suppression pour nettoyer le stockage ensuite.
+  const fileKeys = (
+    await prismaBase.fileAsset.findMany({
+      where: {
+        companyId,
+        OR: [
+          { entityId: { in: docIds } },
+          { entity: "CUSTOMER", entityId: id },
+        ],
+      },
+      select: { id: true, storageKey: true },
+    })
+  );
+
+  const paymentIds = (
+    await prismaBase.payment.findMany({
+      where: { companyId, customerId: id },
+      select: { id: true },
+    })
+  ).map((p) => p.id);
+
+  // 6. Suppression atomique, ordre strict (enfants avant parents).
+  await prismaBase.$transaction(async (tx) => {
+    if (paymentIds.length > 0) {
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .paymentAllocation.deleteMany({ where: { paymentId: { in: paymentIds } } });
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .payment.deleteMany({ where: { id: { in: paymentIds } } });
+    }
+
+    if (docIds.length > 0) {
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .paymentAllocation.deleteMany({ where: { invoiceId: { in: docIds } } });
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .documentRelation.deleteMany({
+          where: { companyId, OR: [{ sourceDocId: { in: docIds } }, { targetDocId: { in: docIds } }] },
+        });
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .documentApproval.deleteMany({ where: { companyId, docId: { in: docIds } } });
+
+      // Lignes puis en-têtes (les lignes référencent leurs en-têtes en RESTRICT).
+      for (const spec of CUSTOMER_DOC_SPECS) {
+        const ids = allDocs.filter((d) => d.type === spec.type).map((d) => d.id);
+        if (ids.length === 0) continue;
+        await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+          [spec.lineModel].deleteMany({ where: { [`${spec.model}Id`]: { in: ids } } });
+        await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+          [spec.model].deleteMany({ where: { id: { in: ids } } });
+      }
+    }
+
+    if (fileKeys.length > 0) {
+      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
+        .fileAsset.deleteMany({ where: { id: { in: fileKeys.map((f) => f.id) } } });
+    }
+
+    await (tx as unknown as Record<string, { delete: (a: unknown) => Promise<unknown> }>)
+      .customer.delete({ where: { id } });
+  });
+
+  // 7. Nettoyage du stockage physique (best-effort, clés assainies).
+  await Promise.all(fileKeys.map((f) => deleteUploadFile(f.storageKey)));
+
+  return { id: customer.id, name: customer.name };
 }
 
 /**

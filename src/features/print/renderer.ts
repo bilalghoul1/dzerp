@@ -1,4 +1,4 @@
-import { PDFDocument, PDFFont, PDFImage, PDFPage, degrees, rgb, RGB } from "pdf-lib";
+import { PDFDocument, PDFImage, PDFPage, degrees, rgb, RGB } from "pdf-lib";
 import {
   FontManager,
   sanitizeText,
@@ -100,8 +100,6 @@ export function mmToPt(mm: number): number {
   return mm * MM_TO_PT;
 }
 
-const MAX_LINES_PER_WRAP = 12;
-
 export class PdfEngine {
   readonly pdfDoc: PDFDocument;
   readonly format: PrintFormat;
@@ -158,7 +156,7 @@ export class PdfEngine {
     this.contentTop = this.marginTop;
     this.contentWidth = this.contentRight - this.contentLeft;
     this.contentBottom =
-      this.pageHeight - this.marginBottom - mmToPt(options.footerHeight ?? 42);
+      this.pageHeight - this.marginBottom - (options.footerHeight ?? 42);
 
     this.onPage = options.onPage;
     this.onFooter = options.onFooter;

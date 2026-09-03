@@ -60,6 +60,10 @@ export type CompanyAdminRow = {
   status: CompanyStatus;
   isActive: boolean;
   createdAt: string;
+  /** Fin de la période d'essai (société en essai) ou abonnement. Null = illimitée. */
+  expiryDate: string | null;
+  /** `true` si une échéance existe et est déjà dépassée (essai arrivé à terme). */
+  trialExpired: boolean;
   logoKey: string | null;
   branchCount: number;
   memberCount: number;
@@ -94,6 +98,8 @@ export type CompanyAdminDetail = {
   capital: string | null;
   establishedAt: string | null;
   expiryDate: string | null;
+  /** `true` si une échéance existe et est déjà dépassée. */
+  trialExpired: boolean;
   taxId: string | null;
   rc: string | null;
   nis: string | null;

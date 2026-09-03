@@ -4,11 +4,9 @@ import { runUnscoped } from "@/features/company/unscoped";
 import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
 import { hashPassword } from "@/features/auth/password";
-import { Prisma } from "@/generated/prisma/client";
 import type {
   ActivityType,
   AuditAction,
-  DocType,
 } from "@/generated/prisma/enums";
 import { DEFAULT_SERIES, DEFAULT_HEADQUARTER_BRANCH } from "@/features/company-admin/defaults";
 
@@ -107,7 +105,11 @@ export async function registerTrialCompany(input: {
         }
       }
 
-      // Société d'essai (statut ACTIVE par défaut).
+      // Société d'essai (statut ACTIVE par défaut) : la société est utilisable
+      // immédiatement (expérience instant), et `expiryDate` porte la fin de
+      // l'essai. Elle alimente la surface d'administration : le Super
+      // Administrateur y voit les essais et leur échéance pour les vérifier /
+      // prolonger / suspendre.
       const created = await tx.company.create({
         data: {
           code,
@@ -121,6 +123,7 @@ export async function registerTrialCompany(input: {
           currency: "DZD",
           language: "fr",
           printFormat: "A4",
+          expiryDate: expiresAt,
         },
       });
 

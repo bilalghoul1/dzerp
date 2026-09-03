@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiGuardWithContext, runScoped } from "@/features/company/api";
-import { ApiError, errorResponse, okResponse } from "@/lib/http";
+import { errorResponse, okResponse } from "@/lib/http";
 import { consumeMaterials } from "@/features/production/config";
 
 export async function POST(

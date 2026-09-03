@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { apiGuardWithContext, runScoped } from "@/features/company/api";
-import { ApiError, errorResponse, okResponse } from "@/lib/http";
+import { errorResponse, okResponse } from "@/lib/http";
 import { seedChartOfAccounts, ensureFiscalPeriod } from "@/features/finance/service";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: Request): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   const guard = await apiGuardWithContext("accounting.view");
   if (guard.response) return guard.response;
 

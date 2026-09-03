@@ -38,11 +38,6 @@ export type RegisterPaymentResult = {
   amount: number;
 };
 
-const AR_ACCOUNT_BY_TYPE: Record<string, string> = {
-  INVOICE: "411", // Clients
-  SUPPLIER_INVOICE: "401", // Fournisseurs
-};
-
 /**
  * Recalcule le montant payé et le statut de paiement d'une facture vente
  * à partir de ses allocations. paymentStatus est DÉRIVÉ (jamais saisi).

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiGuard } from "@/features/auth/api-guard";
-import { listSettings, setSetting, type SettingValue } from "@/features/settings/server";
+import { listSettings, type SettingValue } from "@/features/settings/server";
 import { ALLOWED_SETTING_KEYS } from "@/features/settings/keys";
 import { okResponse } from "@/lib/http";
 import { prismaBase } from "@/lib/prisma";
@@ -78,7 +78,7 @@ export async function PUT(request: Request): Promise<NextResponse> {
     );
 
     // Map company.* settings to Company model columns.
-    let companyData: Record<string, unknown> = {};
+    const companyData: Record<string, unknown> = {};
     for (const item of companySettings) {
       const field = COMPANY_KEY_MAP[item.key];
       if (field) {

@@ -76,7 +76,7 @@ export function BomsManager({
   rows: BomRow[];
   options: Options;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [items, setItems] = React.useState<BomRow[]>(rows);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);

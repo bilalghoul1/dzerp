@@ -26,7 +26,7 @@ import { getUiConfig, docTypeSlug } from "@/features/documents/framework/ui-conf
 import { STATUS_ORDER } from "@/features/documents/framework/status-meta";
 import type { DocumentRow } from "@/features/documents/framework/ui-types";
 import type { CommercialDocType } from "@/features/documents/engine/types";
-import { formatDate, formatCurrency, cn } from "@/lib/utils";
+import { formatDate, formatCurrency } from "@/lib/utils";
 
 export type HubDocType = {
   type: CommercialDocType;

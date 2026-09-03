@@ -131,6 +131,25 @@ export function CompaniesTable({
         ),
       },
       {
+        accessorKey: "expiryDate",
+        header: t("admin.colExpiry"),
+        cell: ({ row }) => {
+          const c = row.original;
+          if (!c.expiryDate) return "—";
+          const expired = c.trialExpired;
+          return (
+            <div className="flex flex-col gap-1">
+              <Badge variant={expired ? "destructive" : "secondary"}>
+                {expired ? t("admin.trialExpired") : t("admin.trial")}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {c.expiryDate.slice(0, 10)}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "taxId",
         header: t("admin.colNif"),
         cell: ({ row }) => row.original.taxId ?? "—",
@@ -319,6 +338,7 @@ export function CompaniesTable({
       t("admin.colAi"),
       t("admin.ownerColumn"),
       t("admin.colCreated"),
+      t("admin.colExpiry"),
     ];
     const esc = (value: string | null | undefined) =>
       `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -335,6 +355,7 @@ export function CompaniesTable({
         c.ai,
         c.ownerName || c.ownerUsername || "",
         c.createdAt.slice(0, 10),
+        c.expiryDate ? `${c.expiryDate.slice(0, 10)}${c.trialExpired ? " (expiré)" : ""}` : "",
       ]
         .map(esc)
         .join(","),

@@ -8,7 +8,7 @@ import {
   createSession,
 } from "@/features/auth/session";
 import { checkRateLimit, clientIp } from "@/features/auth/rate-limit";
-import { COMPANY_COOKIE, BRANCH_COOKIE } from "@/lib/constants";
+import { COMPANY_COOKIE } from "@/lib/constants";
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(1, "Nom complet requis").max(160),

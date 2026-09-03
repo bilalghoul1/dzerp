@@ -403,6 +403,9 @@ export async function listCompanies(actor: AdminActor): Promise<CompanyAdminRow[
         status: c.status,
         isActive: c.isActive,
         createdAt: c.createdAt.toISOString(),
+        expiryDate: c.expiryDate?.toISOString() ?? null,
+        trialExpired:
+          c.expiryDate !== null && c.expiryDate.getTime() <= Date.now(),
         logoKey: c.logoKey,
         branchCount: c._count.branches,
         memberCount: c._count.userCompanies,
@@ -511,6 +514,8 @@ export async function getCompanyDetail(
       capital: company.capital?.toString() ?? null,
       establishedAt: company.establishedAt?.toISOString() ?? null,
       expiryDate: company.expiryDate?.toISOString() ?? null,
+      trialExpired:
+        company.expiryDate !== null && company.expiryDate.getTime() <= Date.now(),
       taxId: company.taxId,
       rc: company.rc,
       nis: company.nis,

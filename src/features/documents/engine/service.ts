@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaBase } from "@/lib/prisma";
+import { deleteUploadFile } from "@/features/upload/storage";
 import { ApiError } from "@/lib/http";
 import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
@@ -407,13 +408,48 @@ export async function deleteDocument(
     throw new ApiError(422, "Seuls les documents en brouillon peuvent être supprimés", "NOT_DRAFT");
   }
 
-  // Lignes + en-tête + relations/conversions + demandes d'approbation :
-  // suppression atomique (aucune ligne/référence orpheline possible).
-  await prisma.$transaction(async (tx) => {
+  // Garde comptabilité : on ne supprime jamais un brouillon lié à un journal
+  // existant (règlement/écriture) qui ne peut pas être supprimé en toute sécurité.
+  const linkedJournal = await prismaBase.journalEntry.findFirst({
+    where: { companyId: ctx.companyId, sourceDocType: docType, sourceDocId: docId },
+    select: { id: true },
+  });
+  if (linkedJournal) {
+    throw new ApiError(
+      422,
+      "Suppression impossible : ce document est lié à une écriture comptable (journal).",
+      "BLOCKED_BY_ACCOUNTING",
+    );
+  }
+
+  // Pièces jointes : on récupère les clés de stockage AVANT la transaction pour
+  // pouvoir supprimer les fichiers physiques une fois les lignes DB supprimées.
+  const fileAssets = await prismaBase.fileAsset.findMany({
+    where: { companyId: ctx.companyId, entity: docType, entityId: docId },
+    select: { id: true, storageKey: true },
+  });
+
+  // Lignes + en-tête + relations/conversions + demandes d'approbation + pièces
+  // jointes + allocations : suppression atomique via prismaBase (vraie suppression,
+  // aucune ligne/référence orpheline possible).
+  await prismaBase.$transaction(async (tx) => {
     const lineModel = `${config.prismaModel}Line`;
     await getDelegate(lineModel, tx).deleteMany({
       where: { [`${config.prismaModel}Id`]: docId },
     });
+
+    // Allocations de paiement liées à ce document (défensif : les paiements ne
+    // sont pas possibles sur un brouillon, on nettoie par précaution).
+    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
+      .paymentAllocation.deleteMany({
+        where: { invoiceId: docId },
+      });
+
+    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
+      .fileAsset.deleteMany({
+        where: { id: { in: fileAssets.map((f) => f.id) } },
+      });
+
     await getDelegate(config.prismaModel, tx).delete({ where: { id: docId } });
     await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
       .documentRelation.deleteMany({
@@ -427,6 +463,9 @@ export async function deleteDocument(
         where: { companyId: ctx.companyId, docId, docType },
       });
   });
+
+  // Suppression physique des fichiers uploadés (best-effort, clé assainie).
+  await Promise.all(fileAssets.map((f) => deleteUploadFile(f.storageKey)));
 
   await Promise.all([
     recordAudit({

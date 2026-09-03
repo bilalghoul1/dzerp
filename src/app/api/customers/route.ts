@@ -9,6 +9,7 @@ import {
   createCustomer,
   getCustomer,
   listCustomers,
+  permanentlyDeleteCustomer,
   softDeleteCustomer,
   updateCustomer,
 } from "@/features/customers/config";
@@ -129,6 +130,35 @@ export async function DELETE(request: Request): Promise<NextResponse> {
       const existing = await getCustomer(id);
       if (!existing) {
         throw new ApiError(404, "Customer not found.", "NOT_FOUND");
+      }
+
+      const permanent = searchParams.get("permanent") === "true";
+
+      // Suppression définitive : toutes les conditions (toutes pièces en brouillon,
+      // aucune écriture comptable, aucun règlement, cible dans la société courante)
+      // sont forcées côté serveur dans permanentlyDeleteCustomer.
+      if (permanent) {
+        const result = await permanentlyDeleteCustomer(
+          id,
+          guard.context.company.id,
+        );
+
+        await recordAudit({
+          action: "DELETE",
+          entity: "Customer",
+          entityId: result.id,
+          actorId: guard.session.user.id,
+        });
+        await recordActivity({
+          type: "DELETE",
+          entity: "Customer",
+          entityId: result.id,
+          actorId: guard.session.user.id,
+          title: `Customer permanently deleted: ${result.name}`,
+          titleAr: `تم حذف العميل نهائيًا: ${result.name}`,
+        });
+
+        return okResponse({ ...result, permanent: true });
       }
 
       const row = await softDeleteCustomer(id, guard.session.user.id);

@@ -124,6 +124,23 @@ function tint(color: Color, factor: number): Color {
   );
 }
 
+/** Compte le nombre de lignes visuelles qu'occupent les champs "Label : Valeur". */
+function countFieldLines(
+  engine: PdfEngine,
+  fields: Array<{ label: string; value: string }>,
+  labelColW: number,
+  bodySize: number,
+  cardW: number,
+): number {
+  let count = 0;
+  for (const f of fields) {
+    const valMaxW = cardW - 8 - labelColW - 4;
+    const valLines = engine.wrap(f.value, "regular", bodySize, valMaxW);
+    count += Math.max(valLines.length, 1);
+  }
+  return count;
+}
+
 // ---------------------------------------------------------------------------
 // En-tête : identité société + logo + titre + statut + méta + contrepartie
 // ---------------------------------------------------------------------------
@@ -143,19 +160,25 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
 
   const bannerTextColor = COLORS.white;
   // En RTL l'identité est ancrée à droite du bandeau (miroir), sinon à gauche.
-  const nameX = rtl ? engine.contentRight - 10 : engine.contentLeft + 10;
+  const nameX = rtl ? engine.contentRight - 10 : engine.contentLeft + 12;
   engine.drawText(companyName(doc, ctx.locale), {
     x: nameX,
     y: pageTop + (bannerH - P.nameSize) / 2,
     size: P.nameSize, style: "bold", color: bannerTextColor,
-    align: rtl ? "right" : "left", maxWidth: engine.contentWidth * 0.55,
+    align: rtl ? "right" : "left", maxWidth: engine.contentWidth * 0.5,
   });
   const titleX = rtl ? engine.contentLeft : right;
   const titleAlign: Align = rtl ? "left" : "right";
-  const bannerTitleX = rtl ? engine.contentLeft + 10 : right - 10;
-  engine.drawText(labels.docType, {
-    x: bannerTitleX, y: pageTop + (bannerH - P.titleSize) / 2,
-    size: P.titleSize, style: "bold", color: bannerTextColor, align: titleAlign,
+  // Cadre du titre du document : discret, en dégradé du CX sur le bandeau.
+  const titleLabel = labels.docType;
+  const titleSize = P.titleSize;
+  const titleW = engine.measure(titleLabel, "bold", titleSize) + 16;
+  const titleBoxH = titleSize + 10;
+  const titleBoxX = rtl ? engine.contentLeft + 8 : right - 8 - titleW;
+  engine.fillRect(titleBoxX, pageTop + (bannerH - titleBoxH) / 2, titleW, titleBoxH, COLORS.black);
+  engine.drawText(titleLabel, {
+    x: titleBoxX + titleW / 2, y: pageTop + (bannerH - titleSize) / 2,
+    size: titleSize, style: "bold", color: bannerTextColor, align: "center",
   });
   engine.y = pageTop + bannerH + P.gap;
 
@@ -200,7 +223,7 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const metaWidth = engine.contentWidth * P.metaWidth;
 
   let metaY = blockTop;
-  const lineH = P.bodySize * 1.5;
+  const lineH = P.bodySize * 1.3;
   // Ensure space for at least 4 meta rows
   engine.ensureSpace(lineH * 4 + P.gap);
   const metaRows: Array<[string, string | null]> = [
@@ -236,36 +259,75 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const cardW = (engine.contentWidth - cardGap) / 2;
   const party = doc.party;
   const cardTop = metaY;
-  const cardTitleH = P.sectionSize * 1.6;
-  // Measure content height for both cards to align their bottom borders.
-  const emitLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = [
-    { text: companyName(doc, ctx.locale), bold: true },
-    ...(doc.company.activity ? [{ text: doc.company.activity, gray: true }] : []),
-    { text: joinParts([doc.company.legalForm, doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null]) ?? "", gray: true },
-    { text: joinParts([doc.company.rc ? `${labels.rc} ${doc.company.rc}` : null, doc.company.taxId ? `${labels.taxId} ${doc.company.taxId}` : null, doc.company.nis ? `${labels.nis} ${doc.company.nis}` : null]) ?? "", gray: true },
-    { text: joinParts([doc.company.address, doc.company.commune, doc.company.wilaya]) ?? "", gray: true },
-  ].filter((l) => !!l.text && l.text.trim().length > 0);
-  const clientLines: Array<{ text: string; bold?: boolean; gray?: boolean }> = party
-    ? [
-        { text: party.name, bold: true },
-        { text: joinParts([party.rc ? `${labels.rc} ${party.rc}` : null, party.taxId ? `${labels.taxId} ${party.taxId}` : null, party.nis ? `${labels.nis} ${party.nis}` : null]) ?? "", gray: true },
-        { text: joinParts([party.address, party.commune, party.wilaya]) ?? "", gray: true },
-        { text: joinParts([party.phone ? `${labels.phone} ${party.phone}` : null, party.email]) ?? "", gray: true },
-      ].filter((l) => !!l.text && l.text.trim().length > 0)
-    : [];
+  const cardTitleH = P.sectionSize * 1.15;
+  // ---- Champs (Labels & Values) des cartes Émetteur / Client ----
+  // Chaque champ est rendu sur sa propre ligne "Label" puis "Valeur", au lieu
+  // d'une unique phrase — la fiche devient lisible et structurée ("Labels &
+  // Values") plutôt qu'un simple paragraphe.
+  type CardField = { label: string; value: string };
 
-  // Measure actual wrapped line counts for accurate card heights
-  function countWrappedLines(lines: Array<{ text: string; bold?: boolean }>): number {
-    let count = 0;
-    for (const l of lines) {
-      const wrapped = engine.wrap(l.text, l.bold ? "bold" : "regular", P.bodySize, cardW - 12);
-      count += Math.max(wrapped.length, 1);
-    }
-    return Math.max(count, 1);
+  const addressOf = (s: { address?: string | null; commune?: string | null; wilaya?: string | null }) =>
+    joinParts([s.address, s.commune, s.wilaya]);
+
+  const legalFields = (s: { rc?: string | null; taxId?: string | null; nis?: string | null; ai?: string | null; vatNumber?: string | null }): CardField[] =>
+    ([
+      [labels.rc, s.rc],
+      [labels.taxId, s.taxId],
+      [labels.nis, s.nis],
+      [labels.ai, s.ai],
+      [labels.vatNumber, s.vatNumber],
+    ] as Array<[string, string | null | undefined]>)
+      .filter(([, v]) => !!v)
+      .map(([label, v]) => ({ label, value: String(v) }));
+
+  const emitForm = joinParts([
+    doc.company.legalForm,
+    doc.company.capital ? `${labels.capital} ${doc.company.capital}` : null,
+  ]);
+  const emitAddress = addressOf(doc.company);
+  const emitName = companyName(doc, ctx.locale);
+
+  const emitFields: CardField[] = [
+    ...(emitForm ? [{ label: labels.legalForm, value: emitForm }] : []),
+    ...legalFields(doc.company),
+    ...(emitAddress ? [{ label: labels.address, value: emitAddress }] : []),
+    ...(doc.company.phone ? [{ label: labels.phone, value: doc.company.phone }] : []),
+    ...(doc.company.email ? [{ label: labels.email, value: doc.company.email }] : []),
+  ];
+
+  let clientFields: CardField[] = [];
+  if (party) {
+    const cAddress = addressOf(party);
+    clientFields = [
+      ...legalFields(party),
+      ...(cAddress ? [{ label: labels.address, value: cAddress }] : []),
+      ...(party.phone ? [{ label: labels.phone, value: party.phone }] : []),
+      ...(party.email ? [{ label: labels.email, value: party.email }] : []),
+    ];
   }
-  const emitLineCount = countWrappedLines(emitLines);
-  const clientLineCount = countWrappedLines(clientLines);
-  const cardBodyH = Math.max(emitLineCount, clientLineCount) * P.bodySize * 1.4 + P.gap;
+
+  // Largeur de la colonne "Label" : fixe pour aligner toutes les "Valeur".
+  const labelColW = Math.min(
+    cardW * 0.32,
+    Math.ceil(engine.measure(labels.taxId, "regular", P.bodySize) + 4),
+  );
+  // Lignes de champ compactes (1.0×) pour laisser de la place au corps.
+  const fieldLineH = P.bodySize;
+  // Nom / sous-titre slightly larger for readability.
+  const nameLineH = (P.bodySize + 1.5) * 1.3;
+
+  // Hauteurs estimées alignées : nom (1) + activité (0-1) + champs.
+  const emitNameLines = engine.wrap(emitName, "bold", P.bodySize + 1.5, cardW - 12).length;
+  const activityLines = doc.company.activity ? engine.wrap(doc.company.activity, "regular", P.bodySize, cardW - 12).length : 0;
+  const emitFieldLineCount = countFieldLines(engine, emitFields, labelColW, P.bodySize, cardW);
+  const clientFieldLineCount = countFieldLines(engine, clientFields, labelColW, P.bodySize, cardW);
+  const fieldCount = Math.max(emitFieldLineCount, clientFieldLineCount);
+
+  const cardBodyH =
+    Math.max(emitNameLines, 1) * nameLineH
+    + activityLines * fieldLineH
+    + fieldCount * fieldLineH
+    + P.gap;
   const cardH = cardTitleH + cardBodyH;
 
   engine.ensureSpace(cardH + P.gap);
@@ -273,40 +335,57 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   const drawCard = (
     x: number,
     title: string,
-    lines: Array<{ text: string; bold?: boolean; gray?: boolean }>,
+    name: string,
+    subtitle: string | null,
+    fields: CardField[],
   ) => {
     engine.drawRect(x, cardTop, cardW, cardH, {
       border: COLORS.lineGray,
       borderWidth: 0.7,
       fill: COLORS.white,
     });
-    engine.drawRect(x, cardTop, cardW, cardTitleH, {
-      fill: brandColor,
-    });
+    // Bande de titre discrète : fond "teinté" clair + filet d'accent en tête.
+    engine.fillRect(x, cardTop, cardW, cardTitleH, tint(brandColor, 0.93));
+    engine.fillRect(x, cardTop, 3.5, cardTitleH, brandColor);
     engine.drawText(title, {
-      x: rtl ? x + cardW - 6 : x + 6, y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
-      style: "bold", color: COLORS.white,
-      maxWidth: cardW - 12,
+      x: x + (rtl ? cardW - 8 : 8), y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
+      style: "bold", color: COLORS.black,
+      maxWidth: cardW - 14,
     });
-    let ly = cardTop + cardTitleH + P.bodySize * 1.4;
-    for (const l of lines) {
-      if (!l.text) continue;
-      const wrapped = engine.wrap(l.text, l.bold ? "bold" : "regular", P.bodySize, cardW - 12);
-      for (const w of wrapped) {
-        engine.drawText(w, {
-          x: rtl ? x + cardW - 6 : x + 6, y: ly, size: P.bodySize,
-          style: l.bold ? "bold" : "regular",
-          color: l.gray ? COLORS.gray : COLORS.black,
-          maxWidth: cardW - 12,
-        });
-        ly += P.bodySize * 1.4;
+
+    let ly = cardTop + cardTitleH + 4;
+    // Nom de la partie (mise en avant, gras).
+    for (const w of engine.wrap(name, "bold", P.bodySize + 1.5, cardW - 12)) {
+      engine.drawText(w, { x: x + 8, y: ly, size: P.bodySize + 1.5, style: "bold", color: COLORS.black, maxWidth: cardW - 12 });
+      ly += nameLineH;
+    }
+    // Activité / sous-titre (gris, corps standard).
+    if (subtitle) {
+      for (const w of engine.wrap(subtitle, "regular", P.bodySize, cardW - 12)) {
+        engine.drawText(w, { x: x + 8, y: ly, size: P.bodySize, color: COLORS.gray, maxWidth: cardW - 12 });
+        ly += fieldLineH;
+      }
+    }
+    // Champs "Label : Valeur" — chaque champ sur sa propre ligne.
+    for (const f of fields) {
+      engine.drawText(`${f.label}:`, { x: x + 8, y: ly, size: P.bodySize, style: "bold", color: COLORS.gray, maxWidth: labelColW });
+      const valLines = engine.wrap(f.value, "regular", P.bodySize, cardW - 8 - labelColW - 4);
+      for (const v of valLines) {
+        engine.drawText(v, { x: x + 8 + labelColW + 4, y: ly, size: P.bodySize, color: COLORS.black, maxWidth: cardW - 8 - labelColW - 4 });
+        ly += fieldLineH;
       }
     }
   };
 
-  drawCard(rtl ? engine.contentRight - cardW : engine.contentLeft, labels.issuer, emitLines);
-  if (clientLines.length > 0) {
-    drawCard(rtl ? engine.contentLeft : engine.contentRight - cardW, labels.party, clientLines);
+  drawCard(
+    rtl ? engine.contentRight - cardW : engine.contentLeft,
+    labels.issuer, emitName, doc.company.activity ?? null, emitFields,
+  );
+  if (party) {
+    drawCard(
+      rtl ? engine.contentLeft : engine.contentRight - cardW,
+      labels.party, party.name, null, clientFields,
+    );
   }
 
   let partyY = cardTop + cardH;
@@ -388,26 +467,31 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
     ];
   }
 
-  const priceW = Math.max(
+  let priceW = Math.max(
     amountW(),
-    ...doc.lines.map((l) =>
-      Math.max(
-        engine.measure(formatAmount(l.unitPrice ?? 0, locale, currency), "regular", P.tableSize),
-        engine.measure(formatAmount(l.amountHt ?? 0, locale, currency), "regular", P.tableSize),
-        engine.measure(formatAmount(l.amountTtc ?? 0, locale, currency), "bold", P.tableSize),
-      ),
-    ),
-  ) + 10;
+    engine.measure(formatAmount(0, locale, currency), "bold", P.tableSize),
+  ) + 12;
   const qtyW = Math.max(30, engine.measure(labels.quantity, "regular", P.tableSize) + 6);
   const taxW = Math.max(24, engine.measure(labels.tax, "regular", P.tableSize) + 4);
-  const fixed = 20 + qtyW + priceW + priceW + taxW + priceW;
+  // A4 : deux colonnes de montants (Total HT + Total TTC) pour un rendu pro.
+  // On garantit une colonne "désignation" lisible : on compresse si besoin.
+  let fixed = 20 + qtyW + priceW * 3 + taxW + priceW;
+  const minDesc = 70;
+  let descW = w - fixed;
+  if (descW < minDesc) {
+    // Repasse la colonne HT à une largeur "compacte" pour libérer de la place.
+    priceW = Math.max(amountW(), 48);
+    fixed = 20 + qtyW + priceW * 3 + taxW + priceW;
+    descW = w - fixed;
+  }
   return [
     { key: "n", label: "#", width: 20, align: "right" },
-    { key: "desc", label: labels.description, width: Math.max(70, w - fixed), align: "start" },
+    { key: "desc", label: labels.description, width: Math.max(minDesc, descW), align: "start" },
     { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
     { key: "qty", label: labels.quantity, width: qtyW, align: "right" },
     { key: "tax", label: labels.tax, width: taxW, align: "right" },
-    { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
+    { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right" },
+    { key: "ttc", label: labels.lineTotalTtc, width: priceW, align: "right", style: "bold" },
   ];
 }
 
@@ -421,6 +505,7 @@ function lineRows(ctx: TemplateCtx): Array<Record<string, string>> {
     qty: formatQuantity(line.quantity, locale),
     tax: line.taxPct ? `${formatRate(line.taxPct, locale)}%` : "",
     ht: formatAmount(line.amountHt, locale, currency),
+    ttc: formatAmount(line.amountTtc, locale, currency),
   }));
 }
 
@@ -446,7 +531,7 @@ function drawLines(ctx: TemplateCtx): void {
     headerTextColor: COLORS.white,
     zebraColor: COLORS.lightGray,
     maxLines: 2,
-    cellPaddingX: 2,
+    cellPaddingX: 4,
   });
   engine.y = result.y + P.gap;
 }
@@ -472,14 +557,14 @@ function drawTotals(ctx: TemplateCtx): void {
   const valueTextX = rtl ? labelX : right;
   const valueAlign: Align = rtl ? "left" : "right";
 
-  const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color }> = [
+  const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color; band?: boolean }> = [
     { label: labels.totalHt, value: formatAmount(doc.totals.totalHt, locale, currency) },
     { label: labels.totalTva, value: formatAmount(doc.totals.totalTva, locale, currency) },
   ];
   if (doc.totals.tap != null) {
-    totalRows.push({ label: labels.tap, value: formatAmount(doc.totals.tap, locale, currency) });
+    totalRows.push({ label: `${labels.tap}`, value: formatAmount(doc.totals.tap, locale, currency) });
   }
-  totalRows.push({ label: labels.totalTtc, value: formatAmount(doc.totals.totalTtc, locale, currency), bold: true, color: brand(ctx) });
+  totalRows.push({ label: labels.totalTtc, value: formatAmount(doc.totals.totalTtc, locale, currency), bold: true, color: brand(ctx), band: true });
 
   if (ctx.config.hasPayment) {
     if ((doc.totals.paidAmount ?? 0) > 0) {
@@ -494,23 +579,35 @@ function drawTotals(ctx: TemplateCtx): void {
         value: formatAmount(doc.totals.netPayable ?? 0, locale, currency),
         bold: true,
         color: brand(ctx),
+        band: true,
       });
     }
   }
 
-  const lineH = P.bodySize * 1.7;
-  engine.ensureSpace(totalRows.length * lineH + 10);
-  const boxTop = engine.y;
-  engine.drawRect(labelX, boxTop, right - labelX, totalRows.length * lineH + 6, {
-    border: COLORS.lineGray,
-    borderWidth: 0.5,
-  });
-  engine.y = boxTop + 4;
+  const lineH = P.bodySize * 1.5;
+  const titleH = P.sectionSize * 1.15;
+  engine.ensureSpace(titleH + totalRows.length * lineH + 12);
 
-  for (const row of totalRows) {
-    // Mise en avant douce des lignes "finales" (Total TTC / Net à payer).
-    if (row.color != null) {
-      engine.fillRect(labelX, engine.y, right - labelX, lineH, tint(row.color, 0.9));
+  // Titre discret du cadre récapitulatif.
+  engine.drawText(labels.summaryTitle, {
+    x: labelTextX, y: engine.y, size: P.sectionSize, style: "bold", color: brand(ctx), align: labelAlign,
+  });
+  engine.y += titleH + 2;
+
+  const boxTop = engine.y;
+  engine.drawRect(labelX, boxTop, right - labelX, totalRows.length * lineH + 8, {
+    border: COLORS.lineGray,
+    borderWidth: 0.6,
+  });
+  engine.y = boxTop + 3;
+
+  for (let i = 0; i < totalRows.length; i++) {
+    const row = totalRows[i];
+    if (row.band) {
+      // Bande pleine de la ligne finale (TTC / Net à payer) : fond teinté + trait haut.
+      engine.fillRect(labelX, engine.y, right - labelX, lineH, tint(row.color ?? brand(ctx), 0.9));
+      engine.drawLine(labelX, engine.y, right, engine.y, { thickness: 0.9, color: row.color ?? brand(ctx) });
+      engine.drawLine(labelX, engine.y + lineH, right, engine.y + lineH, { thickness: 0.6, color: COLORS.lineGray });
     }
     engine.drawText(row.label, {
       x: labelTextX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
@@ -542,6 +639,15 @@ function drawNotesAndTerms(ctx: TemplateCtx): void {
   const { engine, doc, labels } = ctx;
   const P = layout(engine.format);
   const rtl = engine.rtl;
+  // Avoir / document lié à une facture : afficher le motif (référence explicite
+  // à la facture d'origine) en tête de la zone de texte.
+  if (doc.document.reason) {
+    sectionTitle(ctx, labels.reason);
+    engine.y = engine.drawParagraph(doc.document.reason, {
+      x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: engine.contentWidth,
+    });
+    engine.y += P.gap;
+  }
   if (doc.document.notes) {
     sectionTitle(ctx, labels.notes);
     engine.y = engine.drawParagraph(doc.document.notes, {
@@ -621,7 +727,10 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   // Signatures.
   const sigTop = engine.y;
   const sigColW = (engine.contentWidth - P.gap) / 2;
-  const sigBoxH = 50;
+  // Document de livraison / réception : boîte de signature destinataire plus
+  // grande (le réceptionnaire appose cachet + signature + observation).
+  const isDelivery = doc.document.docType === "DELIVERY_NOTE" || doc.document.docType === "GOODS_RECEIPT";
+  const sigBoxH = isDelivery ? 70 : 50;
 
   // Cadre "L'Émetteur — Cachet" (toujours visible, même sans image).
   // RTL : miroir — cadre émetteur à droite, cadre client à gauche.
@@ -640,8 +749,9 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   if (doc.branding.stamp) {
     const img = await engine.embedImage(doc.branding.stamp, doc.branding.stampMimeType);
     if (img) {
+      const boxH = isDelivery ? sigBoxH / 2 : sigBoxH / 2;
       engine.drawImage(img, issuerSigX + 6, sigTop + 14, {
-        maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 10,
+        maxWidth: sigColW - 12, maxHeight: boxH - 6,
       });
     }
   }
@@ -651,7 +761,7 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
     if (img) {
       const sigOffset = doc.branding.stamp ? sigBoxH / 2 + 2 : 12;
       engine.drawImage(img, issuerSigX + 6, sigTop + sigOffset, {
-        maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 8,
+        maxWidth: sigColW - 12, maxHeight: sigBoxH / 2 - 6,
       });
     }
   }
@@ -663,7 +773,9 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
       border: COLORS.lineGray,
       borderWidth: 0.7,
     });
-    engine.drawText(labels.clientLabel, {
+    // Pour une livraison, le cadre "client" devient explicitement celui du
+    // réceptionnaire ("Destinataire — Cachet").
+    engine.drawText(isDelivery ? labels.receiver : labels.clientLabel, {
       x: rtl ? rx + sigColW - 2 : rx + 2, y: sigTop + 3, size: P.bodySize, style: "bold", align: "start", maxWidth: sigColW,
     });
     engine.drawText(party.name, {

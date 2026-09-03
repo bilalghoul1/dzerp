@@ -371,6 +371,11 @@ export function CompanyDetail({
           <Badge variant={statusBadgeVariant(company.status)}>
             {t(`admin.status_${company.status}` as "admin.status_ACTIVE")}
           </Badge>
+          {company.expiryDate ? (
+            <Badge variant={company.trialExpired ? "destructive" : "secondary"}>
+              {company.trialExpired ? t("admin.trialExpired") : t("admin.trial")}
+            </Badge>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {canUpdate && company.status !== "ARCHIVED" ? (

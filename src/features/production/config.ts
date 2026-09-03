@@ -300,7 +300,7 @@ export async function createBom(input: BomCreateInput, createdById: string): Pro
   return normalizeBom(row);
 }
 
-export async function updateBom(input: BomUpdateInput, updatedById: string): Promise<BomRow> {
+export async function updateBom(input: BomUpdateInput, _updatedById: string): Promise<BomRow> {
   const companyId = requireCompanyContext().company.id;
   const existing = await prisma.productBOM.findFirst({
     where: { id: input.id, companyId },
@@ -414,7 +414,7 @@ export async function createWorkCenter(input: WorkCenterCreateInput, createdById
 
 export async function updateWorkCenter(
   input: z.infer<typeof workCenterUpdateSchema>,
-  updatedById: string,
+  _updatedById: string,
 ): Promise<WorkCenterRow> {
   const companyId = requireCompanyContext().company.id;
   const existing = await prisma.workCenter.findFirst({ where: { id: input.id, companyId } });
@@ -514,7 +514,7 @@ export async function createMachine(input: MachineCreateInput, createdById: stri
 
 export async function updateMachine(
   input: z.infer<typeof machineUpdateSchema>,
-  updatedById: string,
+  _updatedById: string,
 ): Promise<MachineRow> {
   const companyId = requireCompanyContext().company.id;
   const existing = await prisma.machine.findFirst({ where: { id: input.id, companyId } });
@@ -679,7 +679,7 @@ export async function createProductionOrder(
 
 export async function updateProductionOrder(
   input: z.infer<typeof productionOrderUpdateSchema>,
-  updatedById: string,
+  _updatedById: string,
 ): Promise<ProductionOrderRow> {
   const companyId = requireCompanyContext().company.id;
   const existing = await prisma.productionOrder.findFirst({ where: { id: input.id, companyId } });

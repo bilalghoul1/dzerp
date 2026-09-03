@@ -32,6 +32,8 @@ async function main() {
   let found: { id: string; number: string; type: CommercialDocType } | null = null;
   for (const d of DOCS) {
     // Use the extended client (prisma) which auto-filters soft-deleted rows.
+    // Dynamic model access on the extended client; type checked via DOCS union.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const row = await (prisma as any)[d.model].findFirst({
       where: d.model === "invoice" ? { customerId: { not: null } } : { customerId: { not: null } },
       orderBy: { createdAt: "desc" },
