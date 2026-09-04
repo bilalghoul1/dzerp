@@ -51,8 +51,10 @@ export const DEFAULT_UNITS: UnitItem[] = [
 export type CompanyProfile = {
   // Général
   name: string;
+  nameAr: string;
   legalName: string;
   legalForm: string;
+  capital: string;
   activity: string;
   secondaryActivity: string;
   establishedAt: string;
@@ -80,24 +82,29 @@ export type CompanyProfile = {
   rib: string;
   iban: string;
   swift: string;
-  // Identité visuelle
+  // Identité visuelle & Impression
   logoKey: string;
   stampKey: string;
   signatureKey: string;
+  primaryColor: string;
+  printHeader: string;
+  invoiceFooter: string;
+  printFormat: string;
   // Technique
   currency: string;
   fiscalYear: number;
   locale: string;
   theme: string;
   notificationsEmail: boolean;
-  printFormat: string;
   qrEnabled: boolean;
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   name: "DzERP Algérie",
+  nameAr: "",
   legalName: "",
   legalForm: "",
+  capital: "",
   activity: "",
   secondaryActivity: "",
   establishedAt: "",
@@ -124,12 +131,15 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   logoKey: "",
   stampKey: "",
   signatureKey: "",
+  primaryColor: "",
+  printHeader: "",
+  invoiceFooter: "",
+  printFormat: "A4",
   currency: "DZD",
   fiscalYear: new Date().getFullYear(),
   locale: "fr",
   theme: "light",
   notificationsEmail: true,
-  printFormat: "A4",
   qrEnabled: false,
 };
 
@@ -152,8 +162,10 @@ function asArray<T>(value: SettingValue | undefined, fallback: T[]): T[] {
 export async function getCompanyProfile(): Promise<CompanyProfile> {
   const keys = [
     "company.name",
+    "company.nameAr",
     "company.legalName",
     "company.legalForm",
+    "company.capital",
     "company.activity",
     "company.secondaryActivity",
     "company.establishedAt",
@@ -180,6 +192,10 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     "company.logoKey",
     "company.stampKey",
     "company.signatureKey",
+    "company.primaryColor",
+    "company.printHeader",
+    "company.invoiceFooter",
+    "company.printFormat",
     "company.currency",
     "fiscal.year",
     "locale.default",
@@ -198,44 +214,49 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
 
   return {
     name: pick(0, DEFAULT_COMPANY_PROFILE.name),
-    legalName: pick(1, DEFAULT_COMPANY_PROFILE.legalName),
-    legalForm: pick(2, DEFAULT_COMPANY_PROFILE.legalForm),
-    activity: pick(3, DEFAULT_COMPANY_PROFILE.activity),
-    secondaryActivity: pick(4, DEFAULT_COMPANY_PROFILE.secondaryActivity),
-    establishedAt: pick(5, DEFAULT_COMPANY_PROFILE.establishedAt),
-    taxId: pick(6, DEFAULT_COMPANY_PROFILE.taxId),
-    rc: pick(7, DEFAULT_COMPANY_PROFILE.rc),
-    nis: pick(8, DEFAULT_COMPANY_PROFILE.nis),
-    ai: pick(9, DEFAULT_COMPANY_PROFILE.ai),
-    vatNumber: pick(10, DEFAULT_COMPANY_PROFILE.vatNumber),
-    country: pick(11, DEFAULT_COMPANY_PROFILE.country),
-    wilaya: pick(12, DEFAULT_COMPANY_PROFILE.wilaya),
-    commune: pick(13, DEFAULT_COMPANY_PROFILE.commune),
-    postalCode: pick(14, DEFAULT_COMPANY_PROFILE.postalCode),
-    address: pick(15, DEFAULT_COMPANY_PROFILE.address),
-    phone: pick(16, DEFAULT_COMPANY_PROFILE.phone),
-    mobile: pick(17, DEFAULT_COMPANY_PROFILE.mobile),
-    email: pick(18, DEFAULT_COMPANY_PROFILE.email),
-    website: pick(19, DEFAULT_COMPANY_PROFILE.website),
-    bank: pick(20, DEFAULT_COMPANY_PROFILE.bank),
-    bankAgency: pick(21, DEFAULT_COMPANY_PROFILE.bankAgency),
-    bankAccount: pick(22, DEFAULT_COMPANY_PROFILE.bankAccount),
-    rib: pick(23, DEFAULT_COMPANY_PROFILE.rib),
-    iban: pick(24, DEFAULT_COMPANY_PROFILE.iban),
-    swift: pick(25, DEFAULT_COMPANY_PROFILE.swift),
-    logoKey: pick(26, DEFAULT_COMPANY_PROFILE.logoKey),
-    stampKey: pick(27, DEFAULT_COMPANY_PROFILE.stampKey),
-    signatureKey: pick(28, DEFAULT_COMPANY_PROFILE.signatureKey),
-    currency: pick(29, DEFAULT_COMPANY_PROFILE.currency),
-    fiscalYear: asNumber(values[30], DEFAULT_COMPANY_PROFILE.fiscalYear),
-    locale: pick(31, DEFAULT_COMPANY_PROFILE.locale),
-    theme: pick(32, DEFAULT_COMPANY_PROFILE.theme),
+    nameAr: pick(1, DEFAULT_COMPANY_PROFILE.nameAr),
+    legalName: pick(2, DEFAULT_COMPANY_PROFILE.legalName),
+    legalForm: pick(3, DEFAULT_COMPANY_PROFILE.legalForm),
+    capital: pick(4, DEFAULT_COMPANY_PROFILE.capital),
+    activity: pick(5, DEFAULT_COMPANY_PROFILE.activity),
+    secondaryActivity: pick(6, DEFAULT_COMPANY_PROFILE.secondaryActivity),
+    establishedAt: pick(7, DEFAULT_COMPANY_PROFILE.establishedAt),
+    taxId: pick(8, DEFAULT_COMPANY_PROFILE.taxId),
+    rc: pick(9, DEFAULT_COMPANY_PROFILE.rc),
+    nis: pick(10, DEFAULT_COMPANY_PROFILE.nis),
+    ai: pick(11, DEFAULT_COMPANY_PROFILE.ai),
+    vatNumber: pick(12, DEFAULT_COMPANY_PROFILE.vatNumber),
+    country: pick(13, DEFAULT_COMPANY_PROFILE.country),
+    wilaya: pick(14, DEFAULT_COMPANY_PROFILE.wilaya),
+    commune: pick(15, DEFAULT_COMPANY_PROFILE.commune),
+    postalCode: pick(16, DEFAULT_COMPANY_PROFILE.postalCode),
+    address: pick(17, DEFAULT_COMPANY_PROFILE.address),
+    phone: pick(18, DEFAULT_COMPANY_PROFILE.phone),
+    mobile: pick(19, DEFAULT_COMPANY_PROFILE.mobile),
+    email: pick(20, DEFAULT_COMPANY_PROFILE.email),
+    website: pick(21, DEFAULT_COMPANY_PROFILE.website),
+    bank: pick(22, DEFAULT_COMPANY_PROFILE.bank),
+    bankAgency: pick(23, DEFAULT_COMPANY_PROFILE.bankAgency),
+    bankAccount: pick(24, DEFAULT_COMPANY_PROFILE.bankAccount),
+    rib: pick(25, DEFAULT_COMPANY_PROFILE.rib),
+    iban: pick(26, DEFAULT_COMPANY_PROFILE.iban),
+    swift: pick(27, DEFAULT_COMPANY_PROFILE.swift),
+    logoKey: pick(28, DEFAULT_COMPANY_PROFILE.logoKey),
+    stampKey: pick(29, DEFAULT_COMPANY_PROFILE.stampKey),
+    signatureKey: pick(30, DEFAULT_COMPANY_PROFILE.signatureKey),
+    primaryColor: pick(31, DEFAULT_COMPANY_PROFILE.primaryColor),
+    printHeader: pick(32, DEFAULT_COMPANY_PROFILE.printHeader),
+    invoiceFooter: pick(33, DEFAULT_COMPANY_PROFILE.invoiceFooter),
+    printFormat: pick(34, DEFAULT_COMPANY_PROFILE.printFormat),
+    currency: pick(35, DEFAULT_COMPANY_PROFILE.currency),
+    fiscalYear: asNumber(values[36], DEFAULT_COMPANY_PROFILE.fiscalYear),
+    locale: pick(37, DEFAULT_COMPANY_PROFILE.locale),
+    theme: pick(38, DEFAULT_COMPANY_PROFILE.theme),
     notificationsEmail: asBoolean(
-      values[33],
+      values[39],
       DEFAULT_COMPANY_PROFILE.notificationsEmail,
     ),
-    printFormat: pick(34, DEFAULT_COMPANY_PROFILE.printFormat),
-    qrEnabled: asBoolean(values[35], DEFAULT_COMPANY_PROFILE.qrEnabled),
+    qrEnabled: asBoolean(values[41], DEFAULT_COMPANY_PROFILE.qrEnabled),
   };
 }
 
@@ -245,8 +266,10 @@ export async function updateCompanyProfile(
 ): Promise<void> {
   const updates: { key: string; value: SettingValue; type?: "STRING" | "NUMBER" | "BOOLEAN" }[] = [
     { key: "company.name", value: input.name ?? "", type: "STRING" },
+    { key: "company.nameAr", value: input.nameAr ?? "", type: "STRING" },
     { key: "company.legalName", value: input.legalName ?? "", type: "STRING" },
     { key: "company.legalForm", value: input.legalForm ?? "", type: "STRING" },
+    { key: "company.capital", value: input.capital ?? "", type: "STRING" },
     { key: "company.activity", value: input.activity ?? "", type: "STRING" },
     { key: "company.secondaryActivity", value: input.secondaryActivity ?? "", type: "STRING" },
     { key: "company.establishedAt", value: input.establishedAt ?? "", type: "STRING" },
@@ -273,6 +296,10 @@ export async function updateCompanyProfile(
     { key: "company.logoKey", value: input.logoKey ?? "", type: "STRING" },
     { key: "company.stampKey", value: input.stampKey ?? "", type: "STRING" },
     { key: "company.signatureKey", value: input.signatureKey ?? "", type: "STRING" },
+    { key: "company.primaryColor", value: input.primaryColor ?? "", type: "STRING" },
+    { key: "company.printHeader", value: input.printHeader ?? "", type: "STRING" },
+    { key: "company.invoiceFooter", value: input.invoiceFooter ?? "", type: "STRING" },
+    { key: "company.printFormat", value: input.printFormat ?? "A4", type: "STRING" },
     { key: "company.currency", value: input.currency ?? "DZD", type: "STRING" },
     { key: "fiscal.year", value: input.fiscalYear ?? new Date().getFullYear(), type: "NUMBER" },
     { key: "locale.default", value: input.locale ?? "fr", type: "STRING" },

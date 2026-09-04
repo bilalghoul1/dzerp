@@ -81,7 +81,7 @@ export function NotificationCenter() {
             }}
             aria-hidden="true"
           />
-          <div className="absolute end-0 top-10 z-50 w-80 rounded-lg border bg-popover text-popover-foreground shadow-md">
+          <div className="absolute end-0 top-10 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-lg border bg-popover text-popover-foreground shadow-md">
             <div className="border-b px-4 py-2.5">
               <p className="text-sm font-semibold">{t("header.notifications")}</p>
             </div>

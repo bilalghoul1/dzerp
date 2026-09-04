@@ -5,8 +5,10 @@
  */
 export const COMPANY_KEY_MAP: Record<string, string> = {
   "company.name": "name",
+  "company.nameAr": "nameAr",
   "company.legalName": "legalName",
   "company.legalForm": "legalForm",
+  "company.capital": "capital",
   "company.activity": "activity",
   "company.secondaryActivity": "secondaryActivity",
   "company.establishedAt": "establishedAt",
@@ -33,5 +35,9 @@ export const COMPANY_KEY_MAP: Record<string, string> = {
   "company.logoKey": "logoKey",
   "company.stampKey": "stampKey",
   "company.signatureKey": "signatureKey",
+  "company.primaryColor": "primaryColor",
+  "company.printHeader": "printHeader",
+  "company.invoiceFooter": "invoiceFooter",
+  "company.printFormat": "printFormat",
   "company.currency": "currency",
 };

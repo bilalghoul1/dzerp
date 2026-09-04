@@ -160,6 +160,29 @@ export interface ListResult {
   pageSize: number;
 }
 
+/** Résumé calculé sur l'ensemble des résultats du hub (indépendant de la page). */
+export interface DocumentHubSummary {
+  total: number;
+  byStatus: Record<string, number>;
+  totalTtc: number;
+}
+
+export interface HubResult {
+  items: DocumentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: DocumentHubSummary;
+}
+
+export interface HubParams {
+  search?: string;
+  status?: string;
+  type?: CommercialDocType;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface TransitionsResult {
   currentStatus: DocumentStatus;
   transitions: Array<{

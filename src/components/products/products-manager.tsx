@@ -923,12 +923,12 @@ export function ProductsManager({
               ) : (
                 <div className="space-y-2">
                   {form.attributes.map((attr, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={index} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                       <Select
                         value={attr.attributeId}
                         onValueChange={(v) => setAttribute(index, { attributeId: v })}
                       >
-                        <SelectTrigger className="w-56">
+                        <SelectTrigger className="w-full sm:w-56">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

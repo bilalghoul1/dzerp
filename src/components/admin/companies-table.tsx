@@ -197,7 +197,7 @@ export function CompaniesTable({
         cell: ({ row }) => {
           const company = row.original;
           return (
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
               <Button
                 asChild
                 variant="ghost"
@@ -431,7 +431,7 @@ export function CompaniesTable({
         </div>
       </div>
 
-      <div className="mb-4 flex w-fit items-center gap-1 rounded-md border p-1">
+      <div className="mb-4 flex w-full flex-wrap items-center gap-1 rounded-md border p-1 sm:w-fit">
         {STATUS_FILTERS.map((filter) => {
           const label =
             filter === "ALL"
@@ -508,7 +508,7 @@ export function CompaniesTable({
           <div className="text-sm text-muted-foreground">
             {t("common.resultsCount", { n: table.getFilteredRowModel().rows.length })}
           </div>
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

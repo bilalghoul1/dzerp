@@ -7,14 +7,19 @@ import { Button } from "@/components/ui/button";
 import { getServerI18n } from "@/features/i18n/server";
 import { getUiConfig, docTypeSlug } from "@/features/documents/framework/ui-config";
 import { getAllDocTypes, getDocConfig } from "@/features/documents/engine/config";
-import { listDocuments } from "@/features/documents/engine/service";
-import { normalizeDocumentRow } from "@/features/documents/framework/normalize";
+import { listDocumentsHub } from "@/features/documents/engine/service";
 import { DocumentsHubList, type HubDocType } from "@/components/documents/documents-hub-list";
+import type { HubParams } from "@/features/documents/framework/ui-types";
+import type { CommercialDocType } from "@/features/documents/engine/types";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function DocumentsHubPage() {
+export default async function DocumentsHubPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
+}) {
   await requirePermission("documents.read");
   const [{ t }, ctx, session] = await Promise.all([
     getServerI18n(),
@@ -23,6 +28,7 @@ export default async function DocumentsHubPage() {
   ]);
   if (!ctx) redirect("/admin/companies");
 
+  const sp = await searchParams;
   const companyId = ctx.company.id;
   const permissions = session?.permissions ?? [];
   const has = (p: string) => permissions.includes(p as never);
@@ -43,20 +49,21 @@ export default async function DocumentsHubPage() {
     if (has(`${prefix}.create`)) creatableTypes.push(entry);
   }
 
-  // Liste agrégée de tous les documents visibles (réutilise le moteur existant).
-  const aggregated = (
-    await Promise.all(
-      visibleTypes.map(async (e) => {
-        const res = await listDocuments(e.type, companyId, { page: 1, pageSize: 12 });
-        return res.items.map((raw) =>
-          normalizeDocumentRow(raw as Record<string, unknown>, e.type),
-        );
-      }),
-    )
-  )
-    .flat()
-    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt))
-    .slice(0, 60);
+  // Paramètres initiaux depuis l'URL (le filtrage se fait côté serveur).
+  const rawType = sp.type;
+  const validType = getAllDocTypes().includes(rawType as CommercialDocType)
+    ? (rawType as CommercialDocType)
+    : undefined;
+  const page = Number(sp.page) > 0 ? Number(sp.page) : 1;
+  const initialParams: HubParams = {
+    search: sp.q || undefined,
+    status: sp.status || undefined,
+    type: validType,
+    page,
+  };
+
+  // Données initiales rendues côté serveur (2 premiers paramètres de filtrage).
+  const initial = await listDocumentsHub(companyId, { ...initialParams, pageSize: 20 });
 
   return (
     <div className="space-y-6">
@@ -108,7 +115,11 @@ export default async function DocumentsHubPage() {
           {visibleTypes.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("documentsUI.hubNoAccess")}</p>
           ) : (
-            <DocumentsHubList rows={aggregated} types={visibleTypes} />
+            <DocumentsHubList
+              types={visibleTypes}
+              initial={initial}
+              initialParams={initialParams}
+            />
           )}
         </CardContent>
       </Card>

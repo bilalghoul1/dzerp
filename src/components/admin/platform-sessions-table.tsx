@@ -108,7 +108,7 @@ export function PlatformSessionsTable({
         </div>
       </div>
 
-      <div className="mb-4 flex w-fit items-center gap-1 rounded-md border p-1">
+      <div className="mb-4 flex w-full flex-wrap items-center gap-1 rounded-md border p-1 sm:w-fit">
         {ACTIVE_FILTERS.map((filter) => {
           const label =
             filter === "ALL"

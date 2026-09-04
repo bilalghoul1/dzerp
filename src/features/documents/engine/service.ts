@@ -5,8 +5,14 @@ import { recordAudit } from "@/features/audit/service";
 import { recordActivity } from "@/features/activity/service";
 import { AuditAction, ActivityType } from "@/generated/prisma/enums";
 import { nextDocumentNumber } from "@/features/documents/series";
-import { normalizeOverviewRow } from "@/features/documents/framework/normalize";
-import type { DocumentOverviewRow } from "@/features/documents/framework/ui-types";
+import {
+  normalizeDocumentRow,
+  normalizeOverviewRow,
+} from "@/features/documents/framework/normalize";
+import type {
+  DocumentOverviewRow,
+  DocumentRow,
+} from "@/features/documents/framework/ui-types";
 import type {
   CommercialDocType,
   InputDocument,
@@ -404,64 +410,60 @@ export async function deleteDocument(
     throw new ApiError(403, "Accès refusé", "FORBIDDEN");
   }
 
-  if (existing.status !== "DRAFT") {
-    throw new ApiError(422, "Seuls les documents en brouillon peuvent être supprimés", "NOT_DRAFT");
-  }
+  // Suppression forcée : aucun blocage selon l'état, les paiements, les
+  // écritures comptables ou les conversions. On nettoie toutes les dépendances.
 
-  // Garde comptabilité : on ne supprime jamais un brouillon lié à un journal
-  // existant (règlement/écriture) qui ne peut pas être supprimé en toute sécurité.
-  const linkedJournal = await prismaBase.journalEntry.findFirst({
-    where: { companyId: ctx.companyId, sourceDocType: docType, sourceDocId: docId },
-    select: { id: true },
-  });
-  if (linkedJournal) {
-    throw new ApiError(
-      422,
-      "Suppression impossible : ce document est lié à une écriture comptable (journal).",
-      "BLOCKED_BY_ACCOUNTING",
-    );
-  }
-
-  // Pièces jointes : on récupère les clés de stockage AVANT la transaction pour
-  // pouvoir supprimer les fichiers physiques une fois les lignes DB supprimées.
+  // Pièces jointes : collecter les clés AVANT la transaction pour effacer les
+  // fichiers physiques une fois la suppression DB réussie.
   const fileAssets = await prismaBase.fileAsset.findMany({
     where: { companyId: ctx.companyId, entity: docType, entityId: docId },
     select: { id: true, storageKey: true },
   });
 
-  // Lignes + en-tête + relations/conversions + demandes d'approbation + pièces
-  // jointes + allocations : suppression atomique via prismaBase (vraie suppression,
-  // aucune ligne/référence orpheline possible).
+  // Suppression atomique via prismaBase (vraie suppression) : dépendances puis
+  // en-tête. Toute erreur → rollback complet de la transaction.
   await prismaBase.$transaction(async (tx) => {
-    const lineModel = `${config.prismaModel}Line`;
-    await getDelegate(lineModel, tx).deleteMany({
-      where: { [`${config.prismaModel}Id`]: docId },
+    const raw = tx as unknown as Record<
+      string,
+      { deleteMany: (args: unknown) => Promise<unknown>; updateMany: (args: unknown) => Promise<unknown> }
+    >;
+
+    // 1. Relâcher les références entrantes d'autres documents (conversions),
+    //    sinon RESTRICT empêcherait la suppression de la pièce parente.
+    if (docType === "QUOTATION") {
+      await raw.salesOrder.updateMany({ where: { quotationId: docId }, data: { quotationId: null } });
+    } else if (docType === "SALES_ORDER") {
+      await raw.deliveryNote.updateMany({ where: { salesOrderId: docId }, data: { salesOrderId: null } });
+    } else if (docType === "INVOICE") {
+      await raw.creditNote.updateMany({ where: { invoiceId: docId }, data: { invoiceId: null } });
+    } else if (docType === "CUSTOMER_ORDER") {
+      await raw.proforma.updateMany({ where: { customerOrderId: docId }, data: { customerOrderId: null } });
+    }
+
+    // 2. Allocations de paiement, écritures comptables et mouvements de stock
+    //    qui pointent vers ce document (suppression pour éviter tout résidu).
+    await raw.paymentAllocation.deleteMany({ where: { invoiceId: docId } });
+    await raw.journalLine.deleteMany({ where: { sourceDocType: docType, sourceDocId: docId } });
+    await raw.journalEntry.deleteMany({ where: { sourceDocType: docType, sourceDocId: docId } });
+    await raw.inventoryMovement.deleteMany({ where: { referenceDocType: docType, referenceDocId: docId } });
+
+    // 3. Relations, demandes d'approbation et pièces jointes.
+    await raw.fileAsset.deleteMany({ where: { id: { in: fileAssets.map((f) => f.id) } } });
+    await raw.documentRelation.deleteMany({
+      where: {
+        companyId: ctx.companyId,
+        OR: [{ sourceDocId: docId }, { targetDocId: docId }],
+      },
+    });
+    await raw.documentApproval.deleteMany({
+      where: { companyId: ctx.companyId, docId, docType },
     });
 
-    // Allocations de paiement liées à ce document (défensif : les paiements ne
-    // sont pas possibles sur un brouillon, on nettoie par précaution).
-    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
-      .paymentAllocation.deleteMany({
-        where: { invoiceId: docId },
-      });
-
-    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
-      .fileAsset.deleteMany({
-        where: { id: { in: fileAssets.map((f) => f.id) } },
-      });
-
+    // 4. Lignes puis en-tête (les lignes référencent l'en-tête en RESTRICT).
+    await getDelegate(`${config.prismaModel}Line`, tx).deleteMany({
+      where: { [`${config.prismaModel}Id`]: docId },
+    });
     await getDelegate(config.prismaModel, tx).delete({ where: { id: docId } });
-    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
-      .documentRelation.deleteMany({
-        where: {
-          companyId: ctx.companyId,
-          OR: [{ sourceDocId: docId }, { targetDocId: docId }],
-        },
-      });
-    await (tx as unknown as Record<string, { deleteMany: (args: unknown) => Promise<unknown> }>)
-      .documentApproval.deleteMany({
-        where: { companyId: ctx.companyId, docId, docType },
-      });
   });
 
   // Suppression physique des fichiers uploadés (best-effort, clé assainie).
@@ -669,6 +671,94 @@ export async function listDocumentsOverview(
   return grouped
     .flat()
     .sort((a, b) => String(b.issuedAt).localeCompare(String(a.issuedAt)));
+}
+
+/**
+ * Vue « hub » : recherche paginée TOUS types confondus, filtrable par type et
+ * par état, avec un résumé (comptes par état + total TTC) calculé sur l'ensemble
+ * des résultats (pas seulement la page). La recherche porte sur le numéro ET le
+ * nom de la contrepartie (client/fournisseur selon le type).
+ */
+export async function listDocumentsHub(
+  companyId: string,
+  options?: {
+    search?: string;
+    status?: string;
+    type?: CommercialDocType;
+    page?: number;
+    pageSize?: number;
+  },
+): Promise<{
+  items: DocumentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: { total: number; byStatus: Record<string, number>; totalTtc: number };
+}> {
+  const page = options?.page ?? 1;
+  const pageSize = Math.min(options?.pageSize ?? 20, 100);
+  const status = options?.status;
+  const q = options?.search?.trim().toLowerCase();
+  const types = (options?.type ? [options.type] : getAllDocTypes()) as CommercialDocType[];
+
+  const byStatus: Record<string, number> = {};
+  let totalTtc = 0;
+
+  const grouped = await Promise.all(
+    types.map(async (docType) => {
+      const config = getDocConfig(docType);
+      const delegate = getDelegate(config.prismaModel);
+      const partyField = config.partyField;
+
+      const where: Record<string, unknown> = { companyId };
+      if (status) where.status = status;
+      if (q) {
+        const partyMatch =
+          partyField === "customerId"
+            ? { customer: { name: { contains: q, mode: "insensitive" as const } } }
+            : { supplier: { name: { contains: q, mode: "insensitive" as const } } };
+        where.OR = [
+          { number: { contains: q, mode: "insensitive" as const } },
+          partyMatch,
+        ];
+      }
+
+      const rows = (await delegate.findMany({
+        where,
+        include: {
+          ...(partyField === "customerId"
+            ? { customer: { select: { id: true, name: true } } }
+            : { supplier: { select: { id: true, name: true } } }),
+          branch: { select: { id: true, name: true } },
+          _count: { select: { lines: true } },
+        },
+        orderBy: { issuedAt: "desc" },
+      })) as Record<string, unknown>[];
+
+      return rows.map((row) => normalizeDocumentRow(row, docType));
+    }),
+  );
+
+  const all = grouped
+    .flat()
+    .sort((a, b) => String(b.issuedAt).localeCompare(String(a.issuedAt)));
+
+  // Résumé calculé sur TOUT le jeu de résultats (indépendant de la pagination).
+  for (const row of all) {
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
+    totalTtc += row.totalTtc;
+  }
+
+  const start = (page - 1) * pageSize;
+  const items = all.slice(start, start + pageSize);
+
+  return {
+    items,
+    total: all.length,
+    page,
+    pageSize,
+    summary: { total: all.length, byStatus, totalTtc },
+  };
 }
 
 /** Duplique un document (nouvel id + nouveau numéro, lignes copiées, date neuve). */

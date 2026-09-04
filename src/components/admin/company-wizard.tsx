@@ -579,7 +579,7 @@ export function CompanyWizard({
 
       <div className="min-w-0 flex-1">
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <CardHeader className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
             <div>
               <CardTitle>{t(`admin.${STEPS[step]}`)}</CardTitle>
               <CardDescription>
@@ -1006,7 +1006,7 @@ export function CompanyWizard({
                   />
                 </Field>
                 <Field label={t("admin.printMargins")} className="sm:col-span-2">
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {(["top", "right", "bottom", "left"] as const).map((edge) => (
                       <div key={edge} className="flex flex-col gap-1.5">
                         <Label className="text-xs capitalize text-muted-foreground">

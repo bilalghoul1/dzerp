@@ -145,7 +145,7 @@ export function QuickCreate({
             role="menu"
             aria-label={t("nav.quickNew")}
             className={cn(
-              "absolute top-11 z-50 max-h-[70vh] w-72 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md",
+              "absolute top-11 z-50 max-h-[70vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md",
               menuAlign === "end" ? "end-0" : "start-0",
             )}
           >

@@ -224,7 +224,7 @@ export function PlatformUsersTable({
         </div>
       </div>
 
-      <div className="mb-4 flex w-fit items-center gap-1 rounded-md border p-1">
+      <div className="mb-4 flex w-full flex-wrap items-center gap-1 rounded-md border p-1 sm:w-fit">
         {STATUS_FILTERS.map((filter) => {
           const label =
             filter === "ALL"
@@ -307,7 +307,7 @@ export function PlatformUsersTable({
                     {formatDateTime(user.createdAt)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                       {user.isSuperAdmin ? (
                         <span className="text-xs text-muted-foreground">
                           {t("admin.usersProtected")}

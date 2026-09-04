@@ -35,6 +35,7 @@ export {
   getDocument,
   listDocuments,
   listDocumentsOverview,
+  listDocumentsHub,
   changeStatus,
   approveDoc,
 } from "./service";

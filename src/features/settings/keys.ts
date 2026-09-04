@@ -6,8 +6,10 @@
  */
 export const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
   "company.name",
+  "company.nameAr",
   "company.legalName",
   "company.legalForm",
+  "company.capital",
   "company.activity",
   "company.secondaryActivity",
   "company.establishedAt",
@@ -34,6 +36,10 @@ export const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
   "company.logoKey",
   "company.stampKey",
   "company.signatureKey",
+  "company.primaryColor",
+  "company.printHeader",
+  "company.invoiceFooter",
+  "company.printFormat",
   "company.currency",
   "fiscal.year",
   "locale.default",

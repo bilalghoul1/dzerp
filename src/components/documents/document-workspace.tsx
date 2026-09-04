@@ -105,7 +105,7 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
             onClick={() => setCollapsed(false)}
             title={t("documentsUI.summaryCollapsedHint")}
             aria-label={t("documentsUI.summaryCollapsedHint")}
-            className="sticky bottom-4 flex w-full items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 text-sm shadow-lg backdrop-blur transition-colors hover:bg-accent"
+            className="sticky bottom-4 flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border bg-card/95 px-4 py-3 text-sm shadow-lg backdrop-blur transition-colors hover:bg-accent"
           >
             <div className="flex items-center gap-4 tabular-nums">
               <div className="flex flex-col">

@@ -210,7 +210,6 @@ export function DocumentLineEditor() {
                   {t("documentsUI.lineDescription")}
                 </TableHead>
                 <TableHead className="w-[88px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
-                <TableHead className="w-[104px] whitespace-nowrap">{t("documentsUI.lineQty")}</TableHead>
                 {editor.type === "SALES_ORDER" && (
                   <>
                     <TableHead className="w-[88px] whitespace-nowrap text-end">

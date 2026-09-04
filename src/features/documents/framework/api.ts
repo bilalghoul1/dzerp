@@ -3,6 +3,8 @@ import type {
   AttachmentItem,
   DocumentDetailModel,
   DocumentOverviewRow,
+  HubParams,
+  HubResult,
   ListResult,
   RelationItem,
   TransitionsResult,
@@ -161,6 +163,19 @@ export async function listDocumentsOverview(): Promise<DocumentOverviewRow[]> {
     "/api/documents/overview",
   );
   return raw.items;
+}
+
+export async function listDocumentsHub(
+  params: HubParams = {},
+): Promise<HubResult> {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.pageSize) qs.set("pageSize", String(params.pageSize));
+  if (params.search) qs.set("search", params.search);
+  if (params.status) qs.set("status", params.status);
+  if (params.type) qs.set("type", params.type);
+  const query = qs.toString();
+  return request<HubResult>(`/api/documents/hub${query ? `?${query}` : ""}`);
 }
 
 export async function bulkDeleteDocuments(

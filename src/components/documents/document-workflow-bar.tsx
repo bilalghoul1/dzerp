@@ -5,16 +5,7 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/feedback/spinner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { DocumentConvertDialog } from "@/components/documents/document-convert-dialog";
 import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
@@ -50,9 +41,7 @@ export function DocumentWorkflowBar() {
   const [initialTarget, setInitialTarget] = React.useState<CommercialDocType | null>(null);
   const [convertSession, setConvertSession] = React.useState(0);
   const [previewOpen, setPreviewOpen] = React.useState(false);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  const [deleteAcknowledged, setDeleteAcknowledged] = React.useState(false);
 
   const loadTransitions = React.useCallback(async () => {
     if (!editor.docId) return;
@@ -146,12 +135,11 @@ export function DocumentWorkflowBar() {
   };
 
   const canDeletePermanently =
-    !!editor.docId &&
-    editor.permissions.delete &&
-    editor.detail?.status === "DRAFT";
+    !!editor.docId && editor.permissions.delete;
 
   const handlePermanentDelete = async () => {
     if (!editor.docId) return;
+    if (!window.confirm(t("documentsUI.confirmDelete"))) return;
     setDeleting(true);
     try {
       await deleteDocument(editor.type, editor.docId);
@@ -163,7 +151,6 @@ export function DocumentWorkflowBar() {
           ? error.message
           : t("documentsUI.permanentDeleteError"),
       );
-      setConfirmDeleteOpen(false);
       setDeleting(false);
     }
   };
@@ -277,9 +264,10 @@ export function DocumentWorkflowBar() {
             variant="outline"
             size="sm"
             className="border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={() => setConfirmDeleteOpen(true)}
-            disabled={editor.busy}
+            onClick={() => void handlePermanentDelete()}
+            disabled={editor.busy || deleting}
           >
+            {deleting && <Spinner className="me-1 h-4 w-4" />}
             <span className="material-symbols-outlined me-1 text-[16px]" aria-hidden="true">
               delete_forever
             </span>
@@ -325,57 +313,6 @@ export function DocumentWorkflowBar() {
           }
         />
       )}
-
-      <Dialog
-        open={confirmDeleteOpen}
-        onOpenChange={(open) => {
-          if (!deleting) {
-            setConfirmDeleteOpen(open);
-            if (!open) setDeleteAcknowledged(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("documentsUI.permanentDeleteTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("documentsUI.permanentDeleteConfirm")}
-            </DialogDescription>
-          </DialogHeader>
-
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox
-              checked={deleteAcknowledged}
-              onCheckedChange={(checked) =>
-                setDeleteAcknowledged(checked === true)
-              }
-            />
-            <span className="text-muted-foreground">
-              {t("documentsUI.permanentDeleteAcknowledge")}
-            </span>
-          </label>
-
-          <DialogFooter className="mt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setConfirmDeleteOpen(false)}
-              disabled={deleting}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={!deleteAcknowledged || deleting}
-              onClick={() => void handlePermanentDelete()}
-            >
-              {deleting && <Spinner className="me-1 h-4 w-4" />}
-              {t("documentsUI.permanentDeleteConfirmAction")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

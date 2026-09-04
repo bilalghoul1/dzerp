@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 type Lang = "ar" | "fr" | "en";
 
 type Content = {
-  nav: { features: string; solutions: string; pricing: string; faq: string; login: string; cta: string };
+  nav: { features: string; solutions: string; pricing: string; faq: string; login: string; cta: string; dashboard: string };
   hero: {
     badge: string;
     title: string;
@@ -80,7 +80,7 @@ type Content = {
 
 const dict: Record<Lang, Content> = {
   ar: {
-    nav: { features: "الخصائص", solutions: "الحلول", pricing: "الأسعار", faq: "الأسئلة الشائعة", login: "دخول", cta: "تجربة مجانية" },
+    nav: { features: "الخصائص", solutions: "الحلول", pricing: "الأسعار", faq: "الأسئلة الشائعة", login: "دخول", cta: "تجربة مجانية", dashboard: "لوحة التحكم" },
     hero: {
       badge: "متوافق مع النظام الجبائي الجزائري",
       title: "المنصة المتكاملة لإدارة مؤسستك وتسيير حساباتك وفق النظام الجزائري",
@@ -178,7 +178,7 @@ const dict: Record<Lang, Content> = {
     footer: { langs: "العربية · Français" },
   },
   fr: {
-    nav: { features: "Fonctionnalités", solutions: "Solutions", pricing: "Tarifs", faq: "FAQ", login: "Connexion", cta: "Essai gratuit" },
+    nav: { features: "Fonctionnalités", solutions: "Solutions", pricing: "Tarifs", faq: "FAQ", login: "Connexion", cta: "Essai gratuit", dashboard: "Tableau de bord" },
     hero: {
       badge: "Conforme à la fiscalité algérienne",
       title: "La plateforme complète pour gérer votre entreprise et votre comptabilité selon le système algérien",
@@ -276,7 +276,7 @@ const dict: Record<Lang, Content> = {
     footer: { langs: "Arabe · Français" },
   },
   en: {
-    nav: { features: "Features", solutions: "Solutions", pricing: "Pricing", faq: "FAQ", login: "Sign in", cta: "Free trial" },
+    nav: { features: "Features", solutions: "Solutions", pricing: "Pricing", faq: "FAQ", login: "Sign in", cta: "Free trial", dashboard: "Dashboard" },
     hero: {
       badge: "Compliant with Algerian tax law",
       title: "The all-in-one platform to manage your business and your accounting under the Algerian system",
@@ -500,7 +500,7 @@ function LanguageSwitcher({ lang, setLang }: { lang: Lang; setLang: (l: Lang) =>
 /* Nav                                                                 */
 /* ------------------------------------------------------------------ */
 
-function Nav({ c, lang, setLang }: { c: Content; lang: Lang; setLang: (l: Lang) => void }) {
+function Nav({ c, lang, setLang, isAuthenticated }: { c: Content; lang: Lang; setLang: (l: Lang) => void; isAuthenticated: boolean }) {
   const [open, setOpen] = React.useState(false);
   const links = [
     { label: c.nav.features, href: "#features" },
@@ -528,12 +528,20 @@ function Nav({ c, lang, setLang }: { c: Content; lang: Lang; setLang: (l: Lang) 
 
         <div className="hidden items-center gap-2 md:flex">
           <LanguageSwitcher lang={lang} setLang={setLang} />
-          <Button asChild variant="ghost" className="text-slate-200 hover:text-white">
-            <Link href="/login">{c.nav.login}</Link>
-          </Button>
-          <Button asChild className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
-            <Link href="/register">{c.nav.cta}</Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
+              <Link href="/dashboard">{c.nav.dashboard}</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" className="text-slate-200 hover:text-white">
+                <Link href="/login">{c.nav.login}</Link>
+              </Button>
+              <Button asChild className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 hover:from-emerald-400 hover:to-emerald-500">
+                <Link href="/register">{c.nav.cta}</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -562,12 +570,20 @@ function Nav({ c, lang, setLang }: { c: Content; lang: Lang; setLang: (l: Lang) 
               ))}
               <div className="flex items-center gap-2 pt-2">
                 <LanguageSwitcher lang={lang} setLang={setLang} />
-                <Button asChild variant="outline" className="flex-1 border-white/15 text-slate-200">
-                  <Link href="/login">{c.nav.login}</Link>
-                </Button>
-                <Button asChild className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950">
-                  <Link href="/register">{c.nav.cta}</Link>
-                </Button>
+                {isAuthenticated ? (
+                  <Button asChild variant="outline" className="flex-1 border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950">
+                    <Link href="/dashboard">{c.nav.dashboard}</Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button asChild variant="outline" className="flex-1 border-white/15 text-slate-200">
+                      <Link href="/login">{c.nav.login}</Link>
+                    </Button>
+                    <Button asChild className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950">
+                      <Link href="/register">{c.nav.cta}</Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
@@ -1161,10 +1177,33 @@ function WhatsAppButton() {
 
 export default function PublicHomePage() {
   const [lang, setLang] = React.useState<Lang>("ar");
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const c = dict[lang];
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me")
+      .then((res) => res.json().catch(() => null))
+      .then((json) => {
+        if (active) {
+          setIsAuthenticated(
+            !!json && typeof json === "object" && "data" in json
+              ? Boolean((json as { data?: { authenticated?: boolean } }).data?.authenticated)
+              : false,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) setIsAuthenticated(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div dir={lang === "ar" ? "rtl" : "ltr"} lang={lang} className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 font-sans text-slate-200">
-      <Nav c={c} lang={lang} setLang={setLang} />
+      <Nav c={c} lang={lang} setLang={setLang} isAuthenticated={isAuthenticated} />
       <main>
         <Hero c={c} />
         <Features c={c} />

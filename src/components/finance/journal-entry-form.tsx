@@ -84,7 +84,7 @@ export function JournalEntryForm({ accounts }: { accounts: Account[] }) {
 
       <div className="space-y-2">
         {lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-[1fr_80px_80px_auto] items-end gap-2">
+          <div key={i} className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_80px_80px_auto]">
             <div className="space-y-1">
               <Label>Compte</Label>
               <select

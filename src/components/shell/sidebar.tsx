@@ -38,7 +38,9 @@ export function SidebarNav({
 
   // Profil « plateforme » (SUPER_ADMIN sans société) : le logo ramène au
   // centre de contrôle au lieu du tableau de bord société.
-  const homeHref = isPlatform ? "/admin" : "/";
+  // Société : on ramène au tableau de bord (jamais à la page d'accueil
+  // marketing), pour ne pas « déconnecter » visuellement l'utilisateur.
+  const homeHref = isPlatform ? "/admin" : "/dashboard";
 
   return (
     <>

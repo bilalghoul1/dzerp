@@ -79,8 +79,10 @@ export function CompanyForm({
         body: JSON.stringify({
           settings: [
             { key: "company.name", value: values.name, type: "STRING" },
+            { key: "company.nameAr", value: values.nameAr, type: "STRING" },
             { key: "company.legalName", value: values.legalName, type: "STRING" },
             { key: "company.legalForm", value: values.legalForm, type: "STRING" },
+            { key: "company.capital", value: values.capital, type: "STRING" },
             { key: "company.activity", value: values.activity, type: "STRING" },
             { key: "company.secondaryActivity", value: values.secondaryActivity, type: "STRING" },
             { key: "company.establishedAt", value: values.establishedAt, type: "STRING" },
@@ -107,6 +109,10 @@ export function CompanyForm({
             { key: "company.logoKey", value: values.logoKey, type: "STRING" },
             { key: "company.stampKey", value: values.stampKey, type: "STRING" },
             { key: "company.signatureKey", value: values.signatureKey, type: "STRING" },
+            { key: "company.primaryColor", value: values.primaryColor, type: "STRING" },
+            { key: "company.printHeader", value: values.printHeader, type: "STRING" },
+            { key: "company.invoiceFooter", value: values.invoiceFooter, type: "STRING" },
+            { key: "company.printFormat", value: values.printFormat, type: "STRING" },
             { key: "company.currency", value: values.currency, type: "STRING" },
           ],
         }),
@@ -142,6 +148,13 @@ export function CompanyForm({
             value={values.name}
             onChange={(e) => update({ name: e.target.value })}
             required
+          />
+        </Field>
+        <Field label={t("parametres.nameAr")} span={2}>
+          <Input
+            dir="rtl"
+            value={values.nameAr}
+            onChange={(e) => update({ nameAr: e.target.value })}
           />
         </Field>
         <Field label={t("parametres.legalName")} span={2}>
@@ -210,6 +223,13 @@ export function CompanyForm({
       </SectionCard>
 
       <SectionCard title={t("parametres.companyLegal")}>
+        <Field label={t("parametres.capital")}>
+          <Input
+            value={values.capital}
+            onChange={(e) => update({ capital: e.target.value })}
+            placeholder="ex. 100 000 DZD"
+          />
+        </Field>
         <Field label={t("parametres.taxId")}>
           <Input
             value={values.taxId}
@@ -425,6 +445,50 @@ export function CompanyForm({
           onRemove={() => update({ signatureKey: "" })}
           t={brandingT}
         />
+        <Field label={t("parametres.primaryColor")}>
+          <div className="flex items-center gap-3">
+            <Input
+              type="color"
+              className="h-10 w-20 p-1"
+              value={values.primaryColor || "#0f172a"}
+              onChange={(e) => update({ primaryColor: e.target.value })}
+            />
+            <Input
+              value={values.primaryColor}
+              onChange={(e) => update({ primaryColor: e.target.value })}
+              placeholder="#0f172a"
+            />
+          </div>
+        </Field>
+        <Field label={t("parametres.printFormat")}>
+          <Select
+            value={values.printFormat || "A4"}
+            onValueChange={(v) => update({ printFormat: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="A4">A4</SelectItem>
+              <SelectItem value="A5">A5</SelectItem>
+              <SelectItem value="THERMAL">{t("parametres.printFormat_THERMAL")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={t("parametres.printHeader")} span={2}>
+          <Input
+            value={values.printHeader}
+            onChange={(e) => update({ printHeader: e.target.value })}
+            placeholder="Texte d'en-tête optionnel pour les documents"
+          />
+        </Field>
+        <Field label={t("parametres.invoiceFooter")} span={2}>
+          <Input
+            value={values.invoiceFooter}
+            onChange={(e) => update({ invoiceFooter: e.target.value })}
+            placeholder="Notes de bas de page, remerciements, conditions..."
+          />
+        </Field>
       </SectionCard>
 
       <div className="flex justify-end">

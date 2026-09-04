@@ -135,7 +135,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {pagination && table.getRowModel().rows.length > 0 ? (
-        <div className="flex items-center justify-between gap-2 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 py-4">
           <div className="text-sm text-muted-foreground">
             {t("common.resultsCount", { n: table.getFilteredRowModel().rows.length })}
           </div>

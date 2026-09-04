@@ -134,42 +134,8 @@ export async function permanentlyDeleteCustomer(
   );
   const docIds = allDocs.map((d) => d.id);
 
-  // 2. Toute pièce non-DRAFT bloque la suppression définitive.
-  if (allDocs.some((d) => d.status !== "DRAFT")) {
-    throw new ApiError(
-      422,
-      "Impossible de supprimer définitivement ce client : il possède des documents historiques (non brouillons). Utilisez la suppression logique.",
-      "HAS_NON_DRAFT_DOCUMENTS",
-    );
-  }
-
-  // 3. Aucune pièce ne doit être référencée par une écriture comptable.
-  if (docIds.length > 0) {
-    const journalRef = await prismaBase.journalEntry.findFirst({
-      where: { companyId, sourceDocId: { in: docIds } },
-      select: { id: true },
-    });
-    if (journalRef) {
-      throw new ApiError(
-        422,
-        "Impossible de supprimer définitivement ce client : des écritures comptables référencent ses documents.",
-        "BLOCKED_BY_ACCOUNTING",
-      );
-    }
-  }
-
-  // 4. Aucun règlement (mouvement d'argent) rattaché au client.
-  const hasPayments = await prismaBase.payment.findFirst({
-    where: { companyId, customerId: id },
-    select: { id: true },
-  });
-  if (hasPayments) {
-    throw new ApiError(
-      422,
-      "Impossible de supprimer définitivement ce client : il possède des règlements (mouvements d'argent). Utilisez la suppression logique.",
-      "BLOCKED_BY_PAYMENTS",
-    );
-  }
+  // Suppression FORCÉE : on efface le client et TOUTES ses pièces (brouillons,
+  // actives, approuvées...) et toutes leurs dépendances, dans une transaction.
 
   // 5. Collecter les fichiers avant suppression pour nettoyer le stockage ensuite.
   const fileKeys = (
@@ -194,41 +160,50 @@ export async function permanentlyDeleteCustomer(
 
   // 6. Suppression atomique, ordre strict (enfants avant parents).
   await prismaBase.$transaction(async (tx) => {
+    const raw = tx as unknown as Record<
+      string,
+      { deleteMany: (a: unknown) => Promise<unknown>; updateMany: (a: unknown) => Promise<unknown>; delete: (a: unknown) => Promise<unknown> }
+    >;
+
+    // Règlements du client + leurs allocations.
     if (paymentIds.length > 0) {
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .paymentAllocation.deleteMany({ where: { paymentId: { in: paymentIds } } });
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .payment.deleteMany({ where: { id: { in: paymentIds } } });
+      await raw.paymentAllocation.deleteMany({ where: { paymentId: { in: paymentIds } } });
+      await raw.payment.deleteMany({ where: { id: { in: paymentIds } } });
     }
 
     if (docIds.length > 0) {
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .paymentAllocation.deleteMany({ where: { invoiceId: { in: docIds } } });
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .documentRelation.deleteMany({
-          where: { companyId, OR: [{ sourceDocId: { in: docIds } }, { targetDocId: { in: docIds } }] },
-        });
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .documentApproval.deleteMany({ where: { companyId, docId: { in: docIds } } });
+      // Relâcher les références entrantes entre pièces du client (conversions).
+      await raw.salesOrder.updateMany({ where: { quotationId: { in: docIds } }, data: { quotationId: null } });
+      await raw.deliveryNote.updateMany({ where: { salesOrderId: { in: docIds } }, data: { salesOrderId: null } });
+      await raw.creditNote.updateMany({ where: { invoiceId: { in: docIds } }, data: { invoiceId: null } });
+      await raw.proforma.updateMany({ where: { customerOrderId: { in: docIds } }, data: { customerOrderId: null } });
+
+      // Allocations, écritures comptables et mouvements de stock liés.
+      await raw.paymentAllocation.deleteMany({ where: { invoiceId: { in: docIds } } });
+      await raw.journalLine.deleteMany({ where: { sourceDocId: { in: docIds } } });
+      await raw.journalEntry.deleteMany({ where: { sourceDocId: { in: docIds } } });
+      await raw.inventoryMovement.deleteMany({ where: { referenceDocId: { in: docIds } } });
+
+      // Relations, approbations.
+      await raw.documentRelation.deleteMany({
+        where: { companyId, OR: [{ sourceDocId: { in: docIds } }, { targetDocId: { in: docIds } }] },
+      });
+      await raw.documentApproval.deleteMany({ where: { companyId, docId: { in: docIds } } });
 
       // Lignes puis en-têtes (les lignes référencent leurs en-têtes en RESTRICT).
       for (const spec of CUSTOMER_DOC_SPECS) {
         const ids = allDocs.filter((d) => d.type === spec.type).map((d) => d.id);
         if (ids.length === 0) continue;
-        await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-          [spec.lineModel].deleteMany({ where: { [`${spec.model}Id`]: { in: ids } } });
-        await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-          [spec.model].deleteMany({ where: { id: { in: ids } } });
+        await raw[spec.lineModel].deleteMany({ where: { [`${spec.model}Id`]: { in: ids } } });
+        await raw[spec.model].deleteMany({ where: { id: { in: ids } } });
       }
     }
 
     if (fileKeys.length > 0) {
-      await (tx as unknown as Record<string, { deleteMany: (a: unknown) => Promise<unknown> }>)
-        .fileAsset.deleteMany({ where: { id: { in: fileKeys.map((f) => f.id) } } });
+      await raw.fileAsset.deleteMany({ where: { id: { in: fileKeys.map((f) => f.id) } } });
     }
 
-    await (tx as unknown as Record<string, { delete: (a: unknown) => Promise<unknown> }>)
-      .customer.delete({ where: { id } });
+    await raw.customer.delete({ where: { id } });
   });
 
   // 7. Nettoyage du stockage physique (best-effort, clés assainies).

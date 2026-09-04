@@ -443,7 +443,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
       {menuOpen ? (
         <>
           <div className="fixed inset-0 z-40" onClick={closeAll} aria-hidden="true" />
-          <div className="absolute end-0 top-11 z-50 w-64 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
+          <div className="absolute end-0 top-11 z-50 w-64 max-w-[calc(100vw-2rem)] rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
             <div className="border-b px-3 py-2">
               <p className="truncate text-sm font-medium">
                 {user.fullName ?? user.username}

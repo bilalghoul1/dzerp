@@ -93,7 +93,7 @@ export function PaymentForm({
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
           onClick={() => {

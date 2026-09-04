@@ -186,7 +186,7 @@ export function WarehousesManager({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader className="flex flex-col items-start justify-between gap-2 space-y-0 sm:flex-row sm:items-start">
         <div>
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>

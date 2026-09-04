@@ -640,7 +640,7 @@ export function CompanyEditForm({
           </div>
         </Field>
         <Field label={t("admin.printMargins")} className="sm:col-span-2">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(["top", "right", "bottom", "left"] as const).map((edge) => (
               <div key={edge} className="flex flex-col gap-1.5">
                 <Label className="text-xs capitalize text-muted-foreground">

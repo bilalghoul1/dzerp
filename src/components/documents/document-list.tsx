@@ -413,7 +413,7 @@ export function DocumentList({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex flex-1 items-center gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-1 sm:flex-row sm:items-center">
           <div className="relative flex-1 sm:max-w-xs">
             <span
               aria-hidden="true"
@@ -431,7 +431,7 @@ export function DocumentList({
             />
           </div>
           <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-            <SelectTrigger className="w-48" aria-label={t("documentsUI.statusFilter")}>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("documentsUI.statusFilter")}>
               <SelectValue placeholder={t("documentsUI.allStatuses")} />
             </SelectTrigger>
             <SelectContent>
@@ -447,7 +447,7 @@ export function DocumentList({
             value={sortKey}
             onValueChange={(v) => setSortKey(v as SortKey)}
           >
-            <SelectTrigger className="w-40" aria-label={t("documentsUI.sortBy")}>
+            <SelectTrigger className="w-full sm:w-40" aria-label={t("documentsUI.sortBy")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -471,7 +471,7 @@ export function DocumentList({
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate ? (
             <Button
               onClick={() => {
