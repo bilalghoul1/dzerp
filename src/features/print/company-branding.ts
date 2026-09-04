@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prismaBase } from "@/lib/prisma";
 import { readUploadFile } from "@/features/upload/storage";
 import type {
   PrintBranding,
@@ -10,6 +10,10 @@ import type {
  * Company Branding Service — source unique des données d'identité et du
  * branding d'impression. Lit exclusivement le modèle `Company` (per-company),
  * jamais la table globale des settings (qui n'est pas isolée par société).
+ *
+ * SECURITY: `readBrandingImage` takes an explicit `companyId` parameter and
+ * verifies FileAsset ownership against that company. It never relies on
+ * session-scoped company resolution.
  */
 
 function toStr(value: unknown): string | null {
@@ -37,15 +41,26 @@ function parseMargins(raw: unknown): PrintMargins | null {
   return null;
 }
 
-async function readBrandingImage(storageKey: string | null): Promise<{
+/**
+ * Read a branding image (logo, stamp, or signature) for a specific company.
+ *
+ * SECURITY INVARIANT: Takes an explicit `companyId` and verifies FileAsset
+ * ownership. Never relies on session-scoped company resolution. This prevents
+ * cross-company asset leakage if getCompanyPrintData is ever called with a
+ * companyId different from the active session context.
+ */
+async function readBrandingImage(
+  companyId: string,
+  storageKey: string | null,
+): Promise<{
   buffer: Buffer | null;
   mimeType: string | null;
 } | null> {
   if (!storageKey) return null;
-  // FileAsset est scopé par société (middleware) : on ne peut lire que les
-  // actifs de la société active.
-  const asset = await prisma.fileAsset.findFirst({
-    where: { storageKey },
+  // SECURITY: Use prismaBase (unscoped) with explicit companyId filter.
+  // Never rely on session-scoped extension for asset ownership verification.
+  const asset = await prismaBase.fileAsset.findFirst({
+    where: { storageKey, companyId },
     select: { storageKey: true, mimeType: true },
   });
   if (!asset) return null;
@@ -58,15 +73,15 @@ export async function getCompanyPrintData(companyId: string): Promise<{
   company: PrintCompany;
   branding: PrintBranding;
 }> {
-  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const company = await prismaBase.company.findUnique({ where: { id: companyId } });
   if (!company) {
     throw new Error(`Société introuvable pour l'impression (${companyId}).`);
   }
 
   const [logo, stamp, signature] = await Promise.all([
-    readBrandingImage(company.logoKey),
-    readBrandingImage(company.stampKey),
-    readBrandingImage(company.signatureKey),
+    readBrandingImage(companyId, company.logoKey),
+    readBrandingImage(companyId, company.stampKey),
+    readBrandingImage(companyId, company.signatureKey),
   ]);
 
   return {

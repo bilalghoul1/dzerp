@@ -41,7 +41,20 @@ export function PreferencesForm({
   const save = async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/settings", {
+      // Company-owned fields: write to Company model via dedicated endpoint
+      const companyRes = await fetch("/api/company/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            printFormat: values.printFormat,
+            qrEnabled: values.qrEnabled,
+          },
+        }),
+      });
+
+      // App-wide preferences: write to global Setting via legacy endpoint
+      const prefRes = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,15 +67,19 @@ export function PreferencesForm({
               value: values.notificationsEmail,
               type: "BOOLEAN",
             },
-            { key: "print.defaultFormat", value: values.printFormat, type: "STRING" },
-            { key: "documents.qr.enabled", value: values.qrEnabled, type: "BOOLEAN" },
           ],
         }),
       });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(json?.error?.message ?? "Error");
+
+      if (!companyRes.ok) {
+        const json = await companyRes.json().catch(() => null);
+        throw new Error(json?.error?.message ?? "Company save failed");
       }
+      if (!prefRes.ok) {
+        const json = await prefRes.json().catch(() => null);
+        throw new Error(json?.error?.message ?? "Preferences save failed");
+      }
+
       const nextLocale = locales.find((l) => l === values.locale);
       if (nextLocale && nextLocale !== locale) {
         setLocale(nextLocale);

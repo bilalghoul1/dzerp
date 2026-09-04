@@ -3,50 +3,19 @@
  * Toute autre clé est refusée (le système de paramètres est global : un
  * administrateur de société ne doit pas pouvoir créer des clés arbitraires
  * affectant toutes les sociétés).
+ *
+ * NOTE: Les clés company.* ont été supprimées — l'identité, la configuration
+ * et l'image de marque de la société sont désormais gérées exclusivement par
+ * le modèle Company via `PUT /api/company/profile`.
+ *
+ * `print.defaultFormat` et `documents.qr.enabled` ont été supprimés —
+ * ils appartiennent désormais à Company.printFormat et Company.qrEnabled.
  */
 export const ALLOWED_SETTING_KEYS: ReadonlySet<string> = new Set([
-  "company.name",
-  "company.nameAr",
-  "company.legalName",
-  "company.legalForm",
-  "company.capital",
-  "company.activity",
-  "company.secondaryActivity",
-  "company.establishedAt",
-  "company.taxId",
-  "company.rc",
-  "company.nis",
-  "company.ai",
-  "company.vatNumber",
-  "company.country",
-  "company.wilaya",
-  "company.commune",
-  "company.postalCode",
-  "company.address",
-  "company.phone",
-  "company.mobile",
-  "company.email",
-  "company.website",
-  "company.bank",
-  "company.bankAgency",
-  "company.bankAccount",
-  "company.rib",
-  "company.iban",
-  "company.swift",
-  "company.logoKey",
-  "company.stampKey",
-  "company.signatureKey",
-  "company.primaryColor",
-  "company.printHeader",
-  "company.invoiceFooter",
-  "company.printFormat",
-  "company.currency",
   "fiscal.year",
   "locale.default",
   "theme.default",
   "notifications.email",
-  "print.defaultFormat",
-  "documents.qr.enabled",
   "onboarding.dismissed",
   "tax.rates",
   "currency.list",

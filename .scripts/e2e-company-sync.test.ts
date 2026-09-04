@@ -1,18 +1,14 @@
 /**
- * E2E test: verify that the settings -> Company sync logic actually persists
- * and that the print pipeline reads the NEW company data (not manager/user).
+ * E2E test: verify that company settings flow through the canonical Company
+ * model (via `updateCompanySettings`) and that the print pipeline reads the
+ * correct per-company data. No global Setting table involved.
+ *
  * Runs against the real database using the real modules.
  */
 import "dotenv/config";
-import { prisma, prismaBase } from "../src/lib/prisma";
+import { prismaBase } from "../src/lib/prisma";
 import { getCompanyPrintData } from "../src/features/print/company-branding";
-import { COMPANY_KEY_MAP } from "../src/app/api/settings/keys-shared";
-
-function stringifyValue(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "boolean" || typeof value === "number") return String(value);
-  return JSON.stringify(value);
-}
+import { updateCompanySettings, getCompanySettings } from "../src/features/company/settings";
 
 async function pickCompany() {
   const c = await prismaBase.company.findFirst({
@@ -29,7 +25,7 @@ async function pickUserId() {
 }
 
 async function main() {
-  console.log("=== E2E: Company settings sync -> print pipeline ===\n");
+  console.log("=== E2E: Company settings -> print pipeline (canonical flow) ===\n");
   const company = await pickCompany();
   console.log(`Target company: ${company.name} (${company.id})`);
 
@@ -40,43 +36,27 @@ async function main() {
   const TEST_NIF = `0000999${String(Date.now()).slice(-4)}`;
   const TEST_EMAIL = `test-${Date.now()}@example.com`;
 
-  const settingsPayload: { key: string; value: string; type: string }[] = [
-    { key: "company.name", value: TEST_NAME, type: "STRING" },
-    { key: "company.address", value: TEST_ADDRESS, type: "STRING" },
-    { key: "company.phone", value: TEST_PHONE, type: "STRING" },
-    { key: "company.rc", value: TEST_RC, type: "STRING" },
-    { key: "company.taxId", value: TEST_NIF, type: "STRING" },
-    { key: "company.email", value: TEST_EMAIL, type: "STRING" },
-  ];
-
-  // Build companyData via the SAME mapping the route uses (single source).
-  const companyData: Record<string, unknown> = {};
-  for (const item of settingsPayload) {
-    const field = COMPANY_KEY_MAP[item.key];
-    if (field) {
-      companyData[field] = item.value === "" ? null : item.value;
-    }
-  }
-
-  console.log("\n[1] Applying settings + company update inside ONE transaction...");
   const actorId = await pickUserId();
-  await prismaBase.$transaction(async (tx) => {
-    for (const item of settingsPayload) {
-      await tx.setting.upsert({
-        where: { key: item.key },
-        update: { value: stringifyValue(item.value), updatedById: actorId ?? null },
-        create: { key: item.key, value: stringifyValue(item.value), type: "STRING", updatedById: actorId ?? null },
-      });
-    }
-    await tx.company.update({
-      where: { id: company.id },
-      data: { ...companyData, updatedById: actorId ?? null },
-    });
-  });
-  console.log("[1] Transaction committed.");
 
+  // [1] Write via the canonical service layer (single source: Company model only)
+  console.log("\n[1] Writing via updateCompanySettings (Company model only)...");
+  await updateCompanySettings(
+    company.id,
+    {
+      name: TEST_NAME,
+      address: TEST_ADDRESS,
+      phone: TEST_PHONE,
+      rc: TEST_RC,
+      taxId: TEST_NIF,
+      email: TEST_EMAIL,
+    },
+    actorId ?? "system",
+  );
+  console.log("[1] Done.");
+
+  // [2] Verify Company model
   const fresh = await prismaBase.company.findUnique({ where: { id: company.id } });
-  console.log("\n[2] Company model after sync:");
+  console.log("\n[2] Company model after update:");
   console.log("  name  =", fresh?.name, "| ok:", fresh?.name === TEST_NAME);
   console.log("  addr  =", fresh?.address, "| ok:", fresh?.address === TEST_ADDRESS);
   console.log("  phone =", fresh?.phone, "| ok:", fresh?.phone === TEST_PHONE);
@@ -84,12 +64,20 @@ async function main() {
   console.log("  nif   =", fresh?.taxId, "| ok:", fresh?.taxId === TEST_NIF);
   console.log("  email =", fresh?.email, "| ok:", fresh?.email === TEST_EMAIL);
 
+  // [3] Verify Setting table is NOT used for company identity
   const settingRow = await prismaBase.setting.findUnique({ where: { key: "company.name" } });
-  console.log("\n[3] Setting table row for company.name:", settingRow?.value);
-  const settingOk = settingRow?.value === TEST_NAME;
+  console.log("\n[3] Setting table row for 'company.name':", settingRow?.value ?? "(dormant/absent)");
+  const settingDormant = !settingRow || settingRow.value !== TEST_NAME;
+  console.log("  Setting is dormant (not authoritative):", settingDormant ? "OK" : "FAIL");
 
-  // Print pipeline
-  console.log("\n[4] Print pipeline (getCompanyPrintData) reads NEW data:");
+  // [4] Verify getCompanySettings reads from Company
+  console.log("\n[4] getCompanySettings (canonical read):");
+  const cs = await getCompanySettings(company.id);
+  console.log("  name    =", cs.name, "| ok:", cs.name === TEST_NAME);
+  console.log("  address =", cs.address, "| ok:", cs.address === TEST_ADDRESS);
+
+  // [5] Print pipeline reads correct per-company data
+  console.log("\n[5] Print pipeline (getCompanyPrintData) reads Company data:");
   const pc = (await getCompanyPrintData(company.id)).company;
   console.log("  print.name  =", pc.name);
   console.log("  print.addr  =", pc.address);
@@ -101,32 +89,28 @@ async function main() {
   const printNameOk = pc.name === TEST_NAME;
   const printAddrOk = pc.address === TEST_ADDRESS;
   const printPhoneOk = pc.phone === TEST_PHONE;
-  const noUserLeak = pc.name === TEST_NAME; // not manager/user/default
 
-  // Multi-company safety
+  // [6] Multi-company isolation
   const all = await prismaBase.company.findMany({
     where: { deletedAt: null },
     select: { id: true, name: true },
   });
   const mutatedOthers = all.filter((c) => c.id !== company.id && c.name === TEST_NAME);
   const multiOk = mutatedOthers.length === 0;
+  console.log("\n[6] Multi-company isolation:", multiOk ? "OK" : "FAIL",
+    `(${mutatedOthers.length} other companies mutated)`);
 
-  const pass = settingOk && printNameOk && printAddrOk && printPhoneOk && noUserLeak && multiOk;
+  const pass = settingDormant && printNameOk && printAddrOk && printPhoneOk && multiOk;
   console.log("\n=========================================");
   console.log("E2E RESULT:", pass ? "PASS" : "FAIL");
-  console.log("  Setting table  :", settingOk ? "OK" : "FAIL");
-  console.log("  Print name     :", printNameOk ? "OK" : "FAIL");
-  console.log("  Print address  :", printAddrOk ? "OK" : "FAIL");
-  console.log("  Print phone    :", printPhoneOk ? "OK" : "FAIL");
-  console.log("  No user leak   :", noUserLeak ? "OK" : "FAIL");
-  console.log("  Multi-tenant   :", multiOk ? "OK" : "FAIL");
+  console.log("  Setting dormant :", settingDormant ? "OK" : "FAIL");
+  console.log("  Print name      :", printNameOk ? "OK" : "FAIL");
+  console.log("  Print address   :", printAddrOk ? "OK" : "FAIL");
+  console.log("  Print phone     :", printPhoneOk ? "OK" : "FAIL");
+  console.log("  Multi-tenant    :", multiOk ? "OK" : "FAIL");
   console.log("=========================================");
   if (!pass) process.exitCode = 1;
 }
 
 main()
-  .catch((e) => { console.error("E2E error:", e); process.exitCode = 1; })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await prismaBase.$disconnect();
-  });
+  .catch((e) => { console.error("E2E error:", e); process.exitCode = 1; });

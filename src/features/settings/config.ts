@@ -3,6 +3,13 @@ import {
   setSetting,
   type SettingValue,
 } from "@/features/settings/server";
+import { getCurrentUser } from "@/features/auth/rbac";
+import { resolveCompanyContext } from "@/features/company/resolver";
+import {
+  getCompanySettings,
+  updateCompanySettings,
+  type CompanyField,
+} from "@/features/company/settings";
 
 export type TaxRate = {
   key: string;
@@ -159,159 +166,163 @@ function asArray<T>(value: SettingValue | undefined, fallback: T[]): T[] {
   return Array.isArray(value) ? (value as T[]) : fallback;
 }
 
+/**
+ * @deprecated Compatibility wrapper — reads from the canonical Company model
+ * (via `getCompanySettings`) and global Setting for app-wide preferences only.
+ * Company identity, legal, contact, branding, print, and QR data are read
+ * exclusively from the `Company` model, never from the global `Setting` table.
+ *
+ * Prefer using `getCompanySettings(companyId)` + `getSetting()` directly.
+ * Phase 4 has rebuilt the settings UI. This function is no longer used by any
+ * active component. Scheduled for removal in a future cleanup.
+ */
 export async function getCompanyProfile(): Promise<CompanyProfile> {
-  const keys = [
-    "company.name",
-    "company.nameAr",
-    "company.legalName",
-    "company.legalForm",
-    "company.capital",
-    "company.activity",
-    "company.secondaryActivity",
-    "company.establishedAt",
-    "company.taxId",
-    "company.rc",
-    "company.nis",
-    "company.ai",
-    "company.vatNumber",
-    "company.country",
-    "company.wilaya",
-    "company.commune",
-    "company.postalCode",
-    "company.address",
-    "company.phone",
-    "company.mobile",
-    "company.email",
-    "company.website",
-    "company.bank",
-    "company.bankAgency",
-    "company.bankAccount",
-    "company.rib",
-    "company.iban",
-    "company.swift",
-    "company.logoKey",
-    "company.stampKey",
-    "company.signatureKey",
-    "company.primaryColor",
-    "company.printHeader",
-    "company.invoiceFooter",
-    "company.printFormat",
-    "company.currency",
-    "fiscal.year",
-    "locale.default",
-    "theme.default",
-    "notifications.email",
-    "print.defaultFormat",
-    "documents.qr.enabled",
-  ] as const;
+  const session = await getCurrentUser();
+  if (!session) return DEFAULT_COMPANY_PROFILE;
 
-  const values = await Promise.all(
-    keys.map((key) => getSetting(key)),
-  );
+  try {
+    const context = await resolveCompanyContext(session);
+    const cs = await getCompanySettings(context.company.id);
 
-  const pick = (index: number, fallback: string) =>
-    asString(values[index], fallback);
+    // Read app-wide preferences from global Setting (the ONLY legitimate Setting reads).
+    const [localeVal, themeVal, notifVal, fiscalVal] = await Promise.all([
+      getSetting("locale.default"),
+      getSetting("theme.default"),
+      getSetting("notifications.email"),
+      getSetting("fiscal.year"),
+    ]);
 
-  return {
-    name: pick(0, DEFAULT_COMPANY_PROFILE.name),
-    nameAr: pick(1, DEFAULT_COMPANY_PROFILE.nameAr),
-    legalName: pick(2, DEFAULT_COMPANY_PROFILE.legalName),
-    legalForm: pick(3, DEFAULT_COMPANY_PROFILE.legalForm),
-    capital: pick(4, DEFAULT_COMPANY_PROFILE.capital),
-    activity: pick(5, DEFAULT_COMPANY_PROFILE.activity),
-    secondaryActivity: pick(6, DEFAULT_COMPANY_PROFILE.secondaryActivity),
-    establishedAt: pick(7, DEFAULT_COMPANY_PROFILE.establishedAt),
-    taxId: pick(8, DEFAULT_COMPANY_PROFILE.taxId),
-    rc: pick(9, DEFAULT_COMPANY_PROFILE.rc),
-    nis: pick(10, DEFAULT_COMPANY_PROFILE.nis),
-    ai: pick(11, DEFAULT_COMPANY_PROFILE.ai),
-    vatNumber: pick(12, DEFAULT_COMPANY_PROFILE.vatNumber),
-    country: pick(13, DEFAULT_COMPANY_PROFILE.country),
-    wilaya: pick(14, DEFAULT_COMPANY_PROFILE.wilaya),
-    commune: pick(15, DEFAULT_COMPANY_PROFILE.commune),
-    postalCode: pick(16, DEFAULT_COMPANY_PROFILE.postalCode),
-    address: pick(17, DEFAULT_COMPANY_PROFILE.address),
-    phone: pick(18, DEFAULT_COMPANY_PROFILE.phone),
-    mobile: pick(19, DEFAULT_COMPANY_PROFILE.mobile),
-    email: pick(20, DEFAULT_COMPANY_PROFILE.email),
-    website: pick(21, DEFAULT_COMPANY_PROFILE.website),
-    bank: pick(22, DEFAULT_COMPANY_PROFILE.bank),
-    bankAgency: pick(23, DEFAULT_COMPANY_PROFILE.bankAgency),
-    bankAccount: pick(24, DEFAULT_COMPANY_PROFILE.bankAccount),
-    rib: pick(25, DEFAULT_COMPANY_PROFILE.rib),
-    iban: pick(26, DEFAULT_COMPANY_PROFILE.iban),
-    swift: pick(27, DEFAULT_COMPANY_PROFILE.swift),
-    logoKey: pick(28, DEFAULT_COMPANY_PROFILE.logoKey),
-    stampKey: pick(29, DEFAULT_COMPANY_PROFILE.stampKey),
-    signatureKey: pick(30, DEFAULT_COMPANY_PROFILE.signatureKey),
-    primaryColor: pick(31, DEFAULT_COMPANY_PROFILE.primaryColor),
-    printHeader: pick(32, DEFAULT_COMPANY_PROFILE.printHeader),
-    invoiceFooter: pick(33, DEFAULT_COMPANY_PROFILE.invoiceFooter),
-    printFormat: pick(34, DEFAULT_COMPANY_PROFILE.printFormat),
-    currency: pick(35, DEFAULT_COMPANY_PROFILE.currency),
-    fiscalYear: asNumber(values[36], DEFAULT_COMPANY_PROFILE.fiscalYear),
-    locale: pick(37, DEFAULT_COMPANY_PROFILE.locale),
-    theme: pick(38, DEFAULT_COMPANY_PROFILE.theme),
-    notificationsEmail: asBoolean(
-      values[39],
-      DEFAULT_COMPANY_PROFILE.notificationsEmail,
-    ),
-    qrEnabled: asBoolean(values[41], DEFAULT_COMPANY_PROFILE.qrEnabled),
-  };
+    const s = (key: CompanyField) => (cs[key] as string) ?? "";
+
+    return {
+      name: s("name") || DEFAULT_COMPANY_PROFILE.name,
+      nameAr: s("nameAr"),
+      legalName: s("legalName"),
+      legalForm: s("legalForm"),
+      capital: s("capital"),
+      activity: s("activity"),
+      secondaryActivity: s("secondaryActivity"),
+      establishedAt: s("establishedAt"),
+      taxId: s("taxId"),
+      rc: s("rc"),
+      nis: s("nis"),
+      ai: s("ai"),
+      vatNumber: s("vatNumber"),
+      country: s("country") || "DZ",
+      wilaya: s("wilaya"),
+      commune: s("commune"),
+      postalCode: s("postalCode"),
+      address: s("address"),
+      phone: s("phone"),
+      mobile: s("mobile"),
+      email: s("email"),
+      website: s("website"),
+      bank: s("bank"),
+      bankAgency: s("bankAgency"),
+      bankAccount: s("bankAccount"),
+      rib: s("rib"),
+      iban: s("iban"),
+      swift: s("swift"),
+      logoKey: s("logoKey"),
+      stampKey: s("stampKey"),
+      signatureKey: s("signatureKey"),
+      primaryColor: s("primaryColor"),
+      printHeader: s("printHeader"),
+      invoiceFooter: s("invoiceFooter"),
+      printFormat: s("printFormat") || "A4",
+      currency: s("currency") || "DZD",
+      qrEnabled: Boolean(cs.qrEnabled),
+      fiscalYear: asNumber(fiscalVal, DEFAULT_COMPANY_PROFILE.fiscalYear),
+      locale: asString(localeVal, DEFAULT_COMPANY_PROFILE.locale),
+      theme: asString(themeVal, DEFAULT_COMPANY_PROFILE.theme),
+      notificationsEmail: asBoolean(notifVal, DEFAULT_COMPANY_PROFILE.notificationsEmail),
+    };
+  } catch {
+    // Fallback: company resolution failed (no access), return defaults.
+    return DEFAULT_COMPANY_PROFILE;
+  }
 }
 
+/**
+ * @deprecated Compatibility wrapper — delegates to `updateCompanySettings()`
+ * for company-owned fields and `setSetting()` for app-wide preferences.
+ * Never writes company identity to the global Setting table.
+ * Scheduled for removal in Phase 4.
+ */
 export async function updateCompanyProfile(
   input: Partial<CompanyProfile>,
   updatedById?: string | null,
 ): Promise<void> {
-  const updates: { key: string; value: SettingValue; type?: "STRING" | "NUMBER" | "BOOLEAN" }[] = [
-    { key: "company.name", value: input.name ?? "", type: "STRING" },
-    { key: "company.nameAr", value: input.nameAr ?? "", type: "STRING" },
-    { key: "company.legalName", value: input.legalName ?? "", type: "STRING" },
-    { key: "company.legalForm", value: input.legalForm ?? "", type: "STRING" },
-    { key: "company.capital", value: input.capital ?? "", type: "STRING" },
-    { key: "company.activity", value: input.activity ?? "", type: "STRING" },
-    { key: "company.secondaryActivity", value: input.secondaryActivity ?? "", type: "STRING" },
-    { key: "company.establishedAt", value: input.establishedAt ?? "", type: "STRING" },
-    { key: "company.taxId", value: input.taxId ?? "", type: "STRING" },
-    { key: "company.rc", value: input.rc ?? "", type: "STRING" },
-    { key: "company.nis", value: input.nis ?? "", type: "STRING" },
-    { key: "company.ai", value: input.ai ?? "", type: "STRING" },
-    { key: "company.vatNumber", value: input.vatNumber ?? "", type: "STRING" },
-    { key: "company.country", value: input.country ?? "DZ", type: "STRING" },
-    { key: "company.wilaya", value: input.wilaya ?? "", type: "STRING" },
-    { key: "company.commune", value: input.commune ?? "", type: "STRING" },
-    { key: "company.postalCode", value: input.postalCode ?? "", type: "STRING" },
-    { key: "company.address", value: input.address ?? "", type: "STRING" },
-    { key: "company.phone", value: input.phone ?? "", type: "STRING" },
-    { key: "company.mobile", value: input.mobile ?? "", type: "STRING" },
-    { key: "company.email", value: input.email ?? "", type: "STRING" },
-    { key: "company.website", value: input.website ?? "", type: "STRING" },
-    { key: "company.bank", value: input.bank ?? "", type: "STRING" },
-    { key: "company.bankAgency", value: input.bankAgency ?? "", type: "STRING" },
-    { key: "company.bankAccount", value: input.bankAccount ?? "", type: "STRING" },
-    { key: "company.rib", value: input.rib ?? "", type: "STRING" },
-    { key: "company.iban", value: input.iban ?? "", type: "STRING" },
-    { key: "company.swift", value: input.swift ?? "", type: "STRING" },
-    { key: "company.logoKey", value: input.logoKey ?? "", type: "STRING" },
-    { key: "company.stampKey", value: input.stampKey ?? "", type: "STRING" },
-    { key: "company.signatureKey", value: input.signatureKey ?? "", type: "STRING" },
-    { key: "company.primaryColor", value: input.primaryColor ?? "", type: "STRING" },
-    { key: "company.printHeader", value: input.printHeader ?? "", type: "STRING" },
-    { key: "company.invoiceFooter", value: input.invoiceFooter ?? "", type: "STRING" },
-    { key: "company.printFormat", value: input.printFormat ?? "A4", type: "STRING" },
-    { key: "company.currency", value: input.currency ?? "DZD", type: "STRING" },
-    { key: "fiscal.year", value: input.fiscalYear ?? new Date().getFullYear(), type: "NUMBER" },
-    { key: "locale.default", value: input.locale ?? "fr", type: "STRING" },
-    { key: "theme.default", value: input.theme ?? "light", type: "STRING" },
-    { key: "notifications.email", value: input.notificationsEmail ?? true, type: "BOOLEAN" },
-    { key: "print.defaultFormat", value: input.printFormat ?? "A4", type: "STRING" },
-    { key: "documents.qr.enabled", value: input.qrEnabled ?? false, type: "BOOLEAN" },
-  ];
+  const session = await getCurrentUser();
+  if (!session) return;
 
-  await Promise.all(
-    updates.map((u) => setSetting({ ...u, updatedById })),
-  );
+  const context = await resolveCompanyContext(session);
+  const companyId = context.company.id;
+
+  // Company-owned fields → Company model exclusively
+  const companyFields: Record<string, unknown> = {};
+  if (input.name !== undefined) companyFields.name = input.name;
+  if (input.nameAr !== undefined) companyFields.nameAr = input.nameAr;
+  if (input.legalName !== undefined) companyFields.legalName = input.legalName;
+  if (input.legalForm !== undefined) companyFields.legalForm = input.legalForm;
+  if (input.capital !== undefined) companyFields.capital = input.capital;
+  if (input.activity !== undefined) companyFields.activity = input.activity;
+  if (input.secondaryActivity !== undefined) companyFields.secondaryActivity = input.secondaryActivity;
+  if (input.establishedAt !== undefined) companyFields.establishedAt = input.establishedAt;
+  if (input.taxId !== undefined) companyFields.taxId = input.taxId;
+  if (input.rc !== undefined) companyFields.rc = input.rc;
+  if (input.nis !== undefined) companyFields.nis = input.nis;
+  if (input.ai !== undefined) companyFields.ai = input.ai;
+  if (input.vatNumber !== undefined) companyFields.vatNumber = input.vatNumber;
+  if (input.country !== undefined) companyFields.country = input.country;
+  if (input.wilaya !== undefined) companyFields.wilaya = input.wilaya;
+  if (input.commune !== undefined) companyFields.commune = input.commune;
+  if (input.postalCode !== undefined) companyFields.postalCode = input.postalCode;
+  if (input.address !== undefined) companyFields.address = input.address;
+  if (input.phone !== undefined) companyFields.phone = input.phone;
+  if (input.mobile !== undefined) companyFields.mobile = input.mobile;
+  if (input.email !== undefined) companyFields.email = input.email;
+  if (input.website !== undefined) companyFields.website = input.website;
+  if (input.bank !== undefined) companyFields.bank = input.bank;
+  if (input.bankAgency !== undefined) companyFields.bankAgency = input.bankAgency;
+  if (input.bankAccount !== undefined) companyFields.bankAccount = input.bankAccount;
+  if (input.rib !== undefined) companyFields.rib = input.rib;
+  if (input.iban !== undefined) companyFields.iban = input.iban;
+  if (input.swift !== undefined) companyFields.swift = input.swift;
+  if (input.logoKey !== undefined) companyFields.logoKey = input.logoKey;
+  if (input.stampKey !== undefined) companyFields.stampKey = input.stampKey;
+  if (input.signatureKey !== undefined) companyFields.signatureKey = input.signatureKey;
+  if (input.primaryColor !== undefined) companyFields.primaryColor = input.primaryColor;
+  if (input.printHeader !== undefined) companyFields.printHeader = input.printHeader;
+  if (input.invoiceFooter !== undefined) companyFields.invoiceFooter = input.invoiceFooter;
+  if (input.printFormat !== undefined) companyFields.printFormat = input.printFormat;
+  if (input.currency !== undefined) companyFields.currency = input.currency;
+  if (input.qrEnabled !== undefined) companyFields.qrEnabled = input.qrEnabled;
+
+  if (Object.keys(companyFields).length > 0) {
+    await updateCompanySettings(companyId, companyFields, updatedById ?? session.user.id);
+  }
+
+  // App-wide preferences → global Setting (the ONLY legitimate Setting writes)
+  const prefUpdates: { key: string; value: SettingValue; type?: "STRING" | "NUMBER" | "BOOLEAN" }[] = [];
+  if (input.fiscalYear !== undefined) {
+    prefUpdates.push({ key: "fiscal.year", value: input.fiscalYear, type: "NUMBER" });
+  }
+  if (input.locale !== undefined) {
+    prefUpdates.push({ key: "locale.default", value: input.locale, type: "STRING" });
+  }
+  if (input.theme !== undefined) {
+    prefUpdates.push({ key: "theme.default", value: input.theme, type: "STRING" });
+  }
+  if (input.notificationsEmail !== undefined) {
+    prefUpdates.push({ key: "notifications.email", value: input.notificationsEmail, type: "BOOLEAN" });
+  }
+
+  if (prefUpdates.length > 0) {
+    await Promise.all(
+      prefUpdates.map((u) => setSetting({ ...u, updatedById })),
+    );
+  }
 }
 
 export async function getTaxRates(): Promise<TaxRate[]> {

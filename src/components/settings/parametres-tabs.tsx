@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 type ParametresTab = {
   href: string;
-  labelKey: "parametres.company" | "parametres.branches" | "parametres.taxes" | "parametres.currencies" | "parametres.units" | "parametres.numbering" | "parametres.preferences" | "parametres.referentiels";
+  labelKey: string;
   match: string[];
 };
 
