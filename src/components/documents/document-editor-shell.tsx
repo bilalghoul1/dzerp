@@ -4,6 +4,7 @@ import { DocumentEditorProvider } from "@/components/documents/document-editor-c
 import type { EditorLookups } from "@/components/documents/document-editor-context";
 import type { CommercialDocType } from "@/features/documents/engine/types";
 import type { DocumentDetailModel } from "@/features/documents/framework/ui-types";
+import type { PrintFormat } from "@/features/print/types";
 import { DocumentWorkflowBar } from "@/components/documents/document-workflow-bar";
 import { DocumentHeader } from "@/components/documents/document-header";
 import { DocumentTabs } from "@/components/documents/document-tabs";
@@ -15,6 +16,8 @@ export function DocumentEditorShell({
   initialDetail,
   lookups,
   initialCustomerId,
+  nextNumber,
+  defaultPrintFormat,
 }: {
   type: CommercialDocType;
   docId?: string | null;
@@ -22,6 +25,10 @@ export function DocumentEditorShell({
   lookups: EditorLookups;
   /** Client pré-sélectionné (`?customerId=`) — ignoré en mode édition. */
   initialCustomerId?: string | null;
+  /** Prochain numéro indicatif (création) — jamais réservé. */
+  nextNumber?: string | null;
+  /** Format d'impression par défaut de la société (réglage utilisateur local possible). */
+  defaultPrintFormat?: PrintFormat;
 }) {
   return (
     <DocumentEditorProvider
@@ -32,9 +39,9 @@ export function DocumentEditorShell({
       initialCustomerId={initialCustomerId}
     >
       <div className="space-y-4 print:hidden">
-        <DocumentWorkflowBar />
+        <DocumentWorkflowBar defaultPrintFormat={defaultPrintFormat} />
         <DocumentWorkspace>
-          <DocumentHeader />
+          <DocumentHeader nextNumber={nextNumber} />
           <DocumentTabs />
         </DocumentWorkspace>
       </div>

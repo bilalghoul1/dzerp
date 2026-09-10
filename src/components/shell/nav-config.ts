@@ -17,9 +17,7 @@ export const mainNav: NavItem[] = [
   { labelKey: "nav.dashboard", href: "/", icon: "dashboard", permission: "dashboard.view" },
   { labelKey: "nav.customers", href: "/crm/customers", icon: "group", permission: "crm.customer.view" },
   { labelKey: "nav.suppliers", href: "/crm/suppliers", icon: "handshake", permission: "crm.supplier.view" },
-  { labelKey: "nav.ventes", href: "/ventes", icon: "payments", permission: "ventes.devis.view" },
   { labelKey: "nav.documents", href: "/documents", icon: "description", permission: "documents.read" },
-  { labelKey: "nav.achats", href: "/achats", icon: "shopping_cart", permission: "achats.bon.view" },
   { labelKey: "nav.stock", href: "/stock", icon: "inventory_2", permission: "product.view" },
   { labelKey: "nav.production", href: "/production", icon: "factory", permission: "production.view" },
   { labelKey: "nav.comptabilite", href: "/comptabilite", icon: "account_balance", permission: "compta.view" },
@@ -37,13 +35,16 @@ export const footerNav: NavItem[] = [
 /**
  * Navigation d'entreprise (COMPANY_ADMIN et profils société), regroupée par
  * objectif métier — et NON par modèle de base de données. Remplace la liste
- * plate de `mainNav` dans la sidebar : 13 entrées plates → 6 groupes clairs.
+ * plate de `mainNav` dans la sidebar : 11 entrées plates → 6 groupes clairs.
  *
- * Aucune route n'est supprimée : `Ventes`/`Achats` (redirigent déjà vers
- * `/documents`) et `Employés`/`Contrats` (enfants de `/rh`) ne sont plus des
- * entrées de premier niveau redondantes, mais restent accessibles via le hub
- * Documents (onglets achat/vente) et le hub RH. `mainNav` est conservé pour la
- * Command Palette (Ctrl+K) qui affiche un résultat plat et filtré.
+ * Aucune route n'est supprimée : `/ventes` et `/achats` (simples redirections
+ * vers `/documents` et `/documents/purchase_request`) sont retirées de
+ * `mainNav` et de la sidebar — le hub Documents (onglets achat/vente) est
+ * l'entrée unique — et restent filtrées explicitement dans la Command Palette.
+ * `Employés`/`Contrats` (enfants de `/rh`) ne sont plus des entrées de premier
+ * niveau redondantes, mais restent accessibles via le hub RH. `mainNav` est
+ * conservé pour la Command Palette (Ctrl+K) qui affiche un résultat plat et
+ * filtré.
  */
 export const companyNavGroups: NavGroup[] = [
   {

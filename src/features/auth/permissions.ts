@@ -638,3 +638,47 @@ export const ALL_PERMISSION_KEYS = Object.keys(PERMISSIONS) as PermissionKey[];
 export const PERMISSION_MODULES = Array.from(
   new Set(Object.values(PERMISSIONS).map((p) => p.module)),
 );
+
+/**
+ * Canonical RBAC classification (PD-3) — two planes.
+ *
+ * PLATFORM-ONLY : réservées au rôle GLOBAL SUPER_ADMIN (UserRole). JAMAIS
+ * accordées à un rôle de société (COMPANY_ADMIN / OWNER). Elles contrôlent
+ * l'administration globale de la plateforme (utilisateurs, rôles, audit,
+ * création/archivage/suppression de sociétés).
+ *
+ * COMPANY-SCOPED : toutes les autres permissions (administratives limitées à la
+ * société active — `admin.company.view/update/membership.manage` — ainsi que les
+ * modules métier `crm.*`, `ventes.*`, `achats.*`, `documents.*`, `stock`,
+ * `production`, `comptabilite`, `rh.*`, `parametres.*`, `finance.*`, `rapports`,
+ * `search.global`, `files.*`, `dashboard.view`).
+ */
+export const PLATFORM_ONLY_PERMISSIONS: readonly PermissionKey[] = [
+  "admin.users.manage",
+  "admin.roles.manage",
+  "admin.audit.view",
+  "admin.company.create",
+  "admin.company.archive",
+  "admin.company.delete",
+  "admin.company.restore",
+];
+
+const PLATFORM_ONLY_SET = new Set<PermissionKey>(PLATFORM_ONLY_PERMISSIONS);
+
+/**
+ * Source de vérité UNIQUE (PD-3 / R01) des permissions par défaut de
+ * l'administrateur de société (COMPANY_ADMIN) et du rôle de société hérité
+ * (OWNER). Tous les scripts de provisionnement (seed, restore-super-admin,
+ * bootstrap-rh) consomment cette constante afin d'éliminer les dérives
+ * entre sources et de garantir : COMPANY_ADMIN ≠ SUPER_ADMIN. Les permissions
+ * de plateforme n'y figurent JAMAS.
+ */
+export const COMPANY_ADMIN_DEFAULT_PERMS: readonly PermissionKey[] =
+  ALL_PERMISSION_KEYS.filter((key) => !PLATFORM_ONLY_SET.has(key));
+
+/**
+ * Permissions GLOBALES de plateforme accordées au rôle SUPER_ADMIN
+ * (toutes les clés `admin.*` du catalogue).
+ */
+export const SUPER_ADMIN_DEFAULT_PERMS: readonly PermissionKey[] =
+  ALL_PERMISSION_KEYS.filter((key) => key.startsWith("admin."));

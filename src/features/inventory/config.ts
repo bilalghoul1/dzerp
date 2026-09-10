@@ -135,8 +135,11 @@ export type StockSummaryRow = {
   onHand: number;
 };
 
-export async function listInventoryMovements(): Promise<InventoryMovementRow[]> {
+export async function listInventoryMovements(
+  productId?: string,
+): Promise<InventoryMovementRow[]> {
   const rows = await prisma.inventoryMovement.findMany({
+    where: productId ? { productId } : undefined,
     include: MOVEMENT_INCLUDE,
     orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
     take: 500,
@@ -145,9 +148,12 @@ export async function listInventoryMovements(): Promise<InventoryMovementRow[]> 
 }
 
 /** Stock dérivé du journal des mouvements (aucune quantité n'est stockée). */
-export async function getStockOnHand(): Promise<StockOnHandRow[]> {
+export async function getStockOnHand(
+  productId?: string,
+): Promise<StockOnHandRow[]> {
   const groups = await prisma.inventoryMovement.groupBy({
     by: ["productId", "warehouseId"],
+    ...(productId ? { where: { productId } } : {}),
     _sum: { quantity: true },
   });
 

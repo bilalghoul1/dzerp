@@ -159,21 +159,32 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   engine.fillRect(engine.contentLeft, pageTop, engine.contentWidth, bannerH, brandColor);
 
   const bannerTextColor = COLORS.white;
-  // En RTL l'identité est ancrée à droite du bandeau (miroir), sinon à gauche.
-  const nameX = rtl ? engine.contentRight - 10 : engine.contentLeft + 12;
-  engine.drawText(companyName(doc, ctx.locale), {
-    x: nameX,
-    y: pageTop + (bannerH - P.nameSize) / 2,
-    size: P.nameSize, style: "bold", color: bannerTextColor,
-    align: rtl ? "right" : "left", maxWidth: engine.contentWidth * 0.5,
-  });
-  const titleX = rtl ? engine.contentLeft : right;
-  const titleAlign: Align = rtl ? "left" : "right";
-  // Cadre du titre du document : discret, en dégradé du CX sur le bandeau.
+  // Le type de document occupe un cadre à l'opposé du nom : on calcule d'abord
+  // sa largeur pour donner au nom TOUT l'espace restant.
   const titleLabel = labels.docType;
   const titleSize = P.titleSize;
   const titleW = engine.measure(titleLabel, "bold", titleSize) + 16;
+  // En RTL l'identité est ancrée à droite du bandeau (miroir), sinon à gauche.
+  const nameX = rtl ? engine.contentRight - 10 : engine.contentLeft + 12;
+  // Le nom tient TOUJOURS sur une ligne : on réduit sa taille si nécessaire
+  // (jamais de seconde ligne chevauchée ni de découpe).
+  const nameMaxW = Math.max(44, engine.contentWidth - titleW - 26);
+  const nameSize = engine.fitSizeToWidth(
+    companyName(doc, ctx.locale),
+    "bold",
+    P.nameSize,
+    nameMaxW,
+    4,
+  );
+  engine.drawText(companyName(doc, ctx.locale), {
+    x: nameX,
+    y: pageTop + (bannerH - nameSize) / 2,
+    size: nameSize, style: "bold", color: bannerTextColor,
+    align: rtl ? "right" : "left", maxWidth: nameMaxW,
+  });
   const titleBoxH = titleSize + 10;
+  const titleX = rtl ? engine.contentLeft : right;
+  const titleAlign: Align = rtl ? "left" : "right";
   const titleBoxX = rtl ? engine.contentLeft + 8 : right - 8 - titleW;
   engine.fillRect(titleBoxX, pageTop + (bannerH - titleBoxH) / 2, titleW, titleBoxH, COLORS.black);
   engine.drawText(titleLabel, {
@@ -248,10 +259,12 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
   ];
   for (const [label, value] of metaRows) {
     if (!value) continue;
-    engine.drawText(`${label} : ${value}`, {
+    const text = `${label} : ${value}`;
+    const lines = Math.max(1, engine.wrap(text, "regular", P.bodySize, metaWidth).length);
+    engine.drawText(text, {
       x: titleX, y: metaY, size: P.bodySize, align: titleAlign, maxWidth: metaWidth,
     });
-    metaY += lineH;
+    metaY += lines * lineH;
   }
 
   // ---- Cartes côte-à-côte : Émetteur (fournisseur) + Client ----
@@ -306,11 +319,18 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     ];
   }
 
-  // Largeur de la colonne "Label" : fixe pour aligner toutes les "Valeur".
-  const labelColW = Math.min(
-    cardW * 0.32,
-    Math.ceil(engine.measure(labels.taxId, "regular", P.bodySize) + 4),
-  );
+  // Largeur de la colonne "Label" : mesurée sur le libellé le PLUS large des
+  // deux cartes (et non plus sur "taxId" seulement), plafonnée pour préserver
+  // l'espace des "Valeur". Aucun label ne peut donc être découpé ("Addre/ss").
+  const cardLabels = [
+    ...emitFields.map((f) => f.label),
+    ...clientFields.map((f) => f.label),
+  ];
+  const widestLabelW =
+    cardLabels.length > 0
+      ? Math.max(...cardLabels.map((l) => engine.measure(`${l}:`, "bold", P.bodySize)))
+      : engine.measure(labels.taxId, "regular", P.bodySize);
+  const labelColW = Math.max(28, Math.min(cardW * 0.48, widestLabelW + 6));
   // Lignes de champ compactes (1.0×) pour laisser de la place au corps.
   const fieldLineH = P.bodySize;
   // Nom / sous-titre slightly larger for readability.
@@ -349,29 +369,36 @@ async function drawHeader(ctx: TemplateCtx): Promise<void> {
     engine.fillRect(x, cardTop, 3.5, cardTitleH, brandColor);
     engine.drawText(title, {
       x: x + (rtl ? cardW - 8 : 8), y: cardTop + (cardTitleH - P.sectionSize) / 2, size: P.sectionSize,
-      style: "bold", color: COLORS.black,
+      style: "bold", color: COLORS.black, align: rtl ? "right" : "left",
       maxWidth: cardW - 14,
     });
 
+    // En RTL le contenu de la carte est MIRRORISÉ : nom/libellés ancrés à
+    // droite, valeurs à gauche de la colonne de libellés.
+    const cardTextAlign: Align = rtl ? "right" : "left";
+    const nameAnchor = rtl ? x + cardW - 12 : x + 8;
     let ly = cardTop + cardTitleH + 4;
     // Nom de la partie (mise en avant, gras).
     for (const w of engine.wrap(name, "bold", P.bodySize + 1.5, cardW - 12)) {
-      engine.drawText(w, { x: x + 8, y: ly, size: P.bodySize + 1.5, style: "bold", color: COLORS.black, maxWidth: cardW - 12 });
+      engine.drawText(w, { x: nameAnchor, y: ly, size: P.bodySize + 1.5, style: "bold", color: COLORS.black, align: cardTextAlign, maxWidth: cardW - 12 });
       ly += nameLineH;
     }
     // Activité / sous-titre (gris, corps standard).
     if (subtitle) {
       for (const w of engine.wrap(subtitle, "regular", P.bodySize, cardW - 12)) {
-        engine.drawText(w, { x: x + 8, y: ly, size: P.bodySize, color: COLORS.gray, maxWidth: cardW - 12 });
+        engine.drawText(w, { x: nameAnchor, y: ly, size: P.bodySize, color: COLORS.gray, align: cardTextAlign, maxWidth: cardW - 12 });
         ly += fieldLineH;
       }
     }
     // Champs "Label : Valeur" — chaque champ sur sa propre ligne.
+    const fieldValueW = cardW - 8 - labelColW - 4;
     for (const f of fields) {
-      engine.drawText(`${f.label}:`, { x: x + 8, y: ly, size: P.bodySize, style: "bold", color: COLORS.gray, maxWidth: labelColW });
-      const valLines = engine.wrap(f.value, "regular", P.bodySize, cardW - 8 - labelColW - 4);
+      const labelX = rtl ? x + cardW - 8 : x + 8;
+      const valueX = rtl ? x + cardW - 8 - labelColW - 4 : x + 8 + labelColW + 4;
+      engine.drawText(`${f.label}:`, { x: labelX, y: ly, size: P.bodySize, style: "bold", color: COLORS.gray, align: cardTextAlign, maxWidth: labelColW });
+      const valLines = engine.wrap(f.value, "regular", P.bodySize, fieldValueW);
       for (const v of valLines) {
-        engine.drawText(v, { x: x + 8 + labelColW + 4, y: ly, size: P.bodySize, color: COLORS.black, maxWidth: cardW - 8 - labelColW - 4 });
+        engine.drawText(v, { x: valueX, y: ly, size: P.bodySize, color: COLORS.black, align: cardTextAlign, maxWidth: fieldValueW });
         ly += fieldLineH;
       }
     }
@@ -438,60 +465,55 @@ function lineColumns(ctx: TemplateCtx): TableColumn[] {
   const P = layout(engine.format);
   const currency = doc.document.currency;
   const w = engine.contentWidth;
-  const amountW = () =>
-    engine.measure(formatAmount(0, locale, currency), "regular", P.tableSize) + 8;
+  const size = P.tableSize;
+  // Largeur minimale d'une colonne de montant : un montant nul minuscule, plus
+  // une marge. Le solveur (table.ts) élargit ensuite via les VRAIES valeurs.
+  const priceMin = Math.max(
+    engine.measure(formatAmount(0, locale, currency), "regular", size) + 10,
+    48,
+  );
 
   if (engine.format === "THERMAL") {
-    const priceW = amountW();
-    const fixed = 14 + 24 + priceW + priceW + 24;
+    const qtyW = Math.max(18, engine.measure(labels.quantity, "regular", size) + 4);
+    const taxW = Math.max(14, engine.measure(labels.tax, "regular", size) + 4);
+    const desc = Math.max(40, w - (13 + qtyW + taxW + priceMin * 2));
     return [
-      { key: "n", label: "#", width: 14, align: "right" },
-      { key: "desc", label: labels.description, width: Math.max(40, w - fixed), align: "start" },
-      { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
-      { key: "qty", label: labels.quantity, width: 24, align: "right" },
-      { key: "tax", label: labels.tax, width: 24, align: "right" },
-      { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
+      { key: "n", label: "#", width: 13, minWidth: 13, align: "right", noWrap: true },
+      { key: "desc", label: labels.description, width: desc, minWidth: 40, flex: 1, truncate: true, align: "start" },
+      { key: "price", label: labels.unitPriceHt, width: priceMin, minWidth: priceMin, align: "right", noWrap: true },
+      { key: "qty", label: labels.quantity, width: qtyW, minWidth: qtyW, align: "right", noWrap: true },
+      { key: "tax", label: labels.tax, width: taxW, minWidth: taxW, align: "right", noWrap: true },
+      { key: "ht", label: labels.lineTotalHt, width: priceMin, minWidth: priceMin, align: "right", noWrap: true, style: "bold" },
     ];
   }
 
   if (engine.format === "A5") {
-    const priceW = amountW();
-    const fixed = 16 + 30 + priceW + priceW + 24 + priceW;
+    const qtyW = Math.max(22, engine.measure(labels.quantity, "regular", size) + 6);
+    const taxW = Math.max(16, engine.measure(labels.tax, "regular", size) + 4);
+    const desc = Math.max(46, w - (16 + qtyW + taxW + priceMin * 2));
     return [
-      { key: "n", label: "#", width: 16, align: "right" },
-      { key: "desc", label: labels.description, width: Math.max(50, w - fixed), align: "start" },
-      { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
-      { key: "qty", label: labels.quantity, width: 30, align: "right" },
-      { key: "tax", label: labels.tax, width: 24, align: "right" },
-      { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right", style: "bold" },
+      { key: "n", label: "#", width: 16, minWidth: 16, align: "right", noWrap: true },
+      { key: "desc", label: labels.description, width: desc, minWidth: 46, flex: 1, truncate: true, align: "start" },
+      { key: "price", label: labels.unitPriceHt, width: priceMin, minWidth: priceMin, align: "right", noWrap: true },
+      { key: "qty", label: labels.quantity, width: qtyW, minWidth: qtyW, align: "right", noWrap: true },
+      { key: "tax", label: labels.tax, width: taxW, minWidth: taxW, align: "right", noWrap: true },
+      { key: "ht", label: labels.lineTotalHt, width: priceMin, minWidth: priceMin, align: "right", noWrap: true, style: "bold" },
     ];
   }
 
-  let priceW = Math.max(
-    amountW(),
-    engine.measure(formatAmount(0, locale, currency), "bold", P.tableSize),
-  ) + 12;
-  const qtyW = Math.max(30, engine.measure(labels.quantity, "regular", P.tableSize) + 6);
-  const taxW = Math.max(24, engine.measure(labels.tax, "regular", P.tableSize) + 4);
-  // A4 : deux colonnes de montants (Total HT + Total TTC) pour un rendu pro.
-  // On garantit une colonne "désignation" lisible : on compresse si besoin.
-  let fixed = 20 + qtyW + priceW * 3 + taxW + priceW;
-  const minDesc = 70;
-  let descW = w - fixed;
-  if (descW < minDesc) {
-    // Repasse la colonne HT à une largeur "compacte" pour libérer de la place.
-    priceW = Math.max(amountW(), 48);
-    fixed = 20 + qtyW + priceW * 3 + taxW + priceW;
-    descW = w - fixed;
-  }
+  // A4 : n + désignation + prix + qty + TVA + Total HT + Total TTC.
+  const qtyW = Math.max(26, engine.measure(labels.quantity, "regular", size) + 8);
+  const taxW = Math.max(18, engine.measure(labels.tax, "regular", size) + 6);
+  const priceW = priceMin;
+  const desc = Math.max(90, w - (18 + qtyW + taxW + priceW * 3));
   return [
-    { key: "n", label: "#", width: 20, align: "right" },
-    { key: "desc", label: labels.description, width: Math.max(minDesc, descW), align: "start" },
-    { key: "price", label: labels.unitPriceHt, width: priceW, align: "right" },
-    { key: "qty", label: labels.quantity, width: qtyW, align: "right" },
-    { key: "tax", label: labels.tax, width: taxW, align: "right" },
-    { key: "ht", label: labels.lineTotalHt, width: priceW, align: "right" },
-    { key: "ttc", label: labels.lineTotalTtc, width: priceW, align: "right", style: "bold" },
+    { key: "n", label: "#", width: 18, minWidth: 18, align: "right", noWrap: true },
+    { key: "desc", label: labels.description, width: desc, minWidth: 90, flex: 1, truncate: true, align: "start" },
+    { key: "price", label: labels.unitPriceHt, width: priceW, minWidth: priceW, align: "right", noWrap: true },
+    { key: "qty", label: labels.quantity, width: qtyW, minWidth: qtyW, align: "right", noWrap: true },
+    { key: "tax", label: labels.tax, width: taxW, minWidth: taxW, align: "right", noWrap: true },
+    { key: "ht", label: labels.lineTotalHt, width: priceW, minWidth: priceW, align: "right", noWrap: true },
+    { key: "ttc", label: labels.lineTotalTtc, width: priceW, minWidth: priceW, align: "right", noWrap: true, style: "bold" },
   ];
 }
 
@@ -530,7 +552,9 @@ function drawLines(ctx: TemplateCtx): void {
     headerColor: brand(ctx),
     headerTextColor: COLORS.white,
     zebraColor: COLORS.lightGray,
-    maxLines: 2,
+    // Les descriptions se déroulent SANS plafond arbitraire : le solveur de
+    // table.ts borne à la hauteur utile de la page en dernier recours.
+    maxLines: 100,
     cellPaddingX: 4,
   });
   engine.y = result.y + P.gap;
@@ -546,15 +570,8 @@ function drawTotals(ctx: TemplateCtx): void {
   const currency = doc.document.currency;
   const rtl = engine.rtl;
   const right = engine.contentRight;
-  const boxW = Math.min(
-    engine.contentWidth * (engine.format === "THERMAL" ? 0.85 : 0.5),
-    220,
-  );
-  const labelX = right - boxW;
   // RTL : libellés à droite, valeurs à gauche (miroir de l'axe de lecture).
-  const labelTextX = rtl ? right : labelX;
   const labelAlign: Align = rtl ? "right" : "left";
-  const valueTextX = rtl ? labelX : right;
   const valueAlign: Align = rtl ? "left" : "right";
 
   const totalRows: Array<{ label: string; value: string; bold?: boolean; color?: Color; band?: boolean }> = [
@@ -586,7 +603,36 @@ function drawTotals(ctx: TemplateCtx): void {
 
   const lineH = P.bodySize * 1.5;
   const titleH = P.sectionSize * 1.15;
-  engine.ensureSpace(titleH + totalRows.length * lineH + 12);
+
+  // Le cadre s'élargit selon les libellés ET les valeurs RÉELLEMENT présentes :
+  // un montant ne sera jamais poussé hors du cadre ni chevauché par le label.
+  const rowFont = (r: { bold?: boolean }): "bold" | "regular" => (r.bold ? "bold" : "regular");
+  const rowValueSize = (r: { bold?: boolean }): number => (r.bold ? P.bodySize + 1 : P.bodySize);
+  let boxLabelW = 0;
+  let boxValueW = 0;
+  for (const row of totalRows) {
+    boxLabelW = Math.max(boxLabelW, engine.measure(row.label, rowFont(row), rowValueSize(row)));
+    boxValueW = Math.max(boxValueW, engine.measure(row.value, rowFont(row), rowValueSize(row)));
+  }
+  const boxW = Math.min(
+    engine.contentWidth,
+    Math.max(
+      Math.min(engine.contentWidth * (engine.format === "THERMAL" ? 0.85 : 0.5), 220),
+      boxLabelW + boxValueW + 26,
+    ),
+  );
+  const labelX = right - boxW;
+  const labelTextX = rtl ? right : labelX;
+  const valueTextX = rtl ? labelX : right;
+
+  // Réserve EXACTE du bloc total : le cadre descend à titleH + 2 + N*lineH + 8
+  // (pied du rectangle) et le curseur avance de titleH + 5 + N*lineH + P.gap.
+  // On couvre le max des deux pour chaque format, sinon sur A4 (gap 8) le
+  // curseur finissait à 1pt sous contentBottom et sur THERMAL le pied du cadre
+  // dépassait de 1pt — la section suivante aurait pu démarrer dans le pied.
+  engine.ensureSpace(
+    titleH + totalRows.length * lineH + Math.max(10, 5 + P.gap),
+  );
 
   // Titre discret du cadre récapitulatif.
   engine.drawText(labels.summaryTitle, {
@@ -613,8 +659,17 @@ function drawTotals(ctx: TemplateCtx): void {
       x: labelTextX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
       style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: labelAlign,
     });
+    // Valeur rendue en un bloc à droite : jamais tronquée, taille ajustée au
+    // besoin pour rester à l'intérieur du cadre mesuré.
+    const vValueSize = engine.fitSizeToWidth(
+      row.value,
+      rowFont(row),
+      rowValueSize(row),
+      Math.max(16, boxW - boxLabelW - 12),
+      6,
+    );
     engine.drawText(row.value, {
-      x: valueTextX, y: engine.y, size: row.bold ? P.bodySize + 1 : P.bodySize,
+      x: valueTextX, y: engine.y, size: vValueSize,
       style: row.bold ? "bold" : "regular", color: row.color ?? COLORS.black, align: valueAlign,
     });
     engine.y += lineH;
@@ -675,10 +730,20 @@ function drawAmountInWords(ctx: TemplateCtx): void {
       : doc.totals.totalTtc;
   if (!amount) return;
   const words = amountToWords(amount, locale, currency);
+  // Bloc "montant en lettres" AVEC son cadre : on vérifie qu'il tient entier sur
+  // la page avant de dessiner (le cadre ne se retrouve jamais séparé en deux).
+  const blockMaxW = engine.contentWidth - 12;
+  const wordLines = engine.wrap(words, "regular", P.bodySize, blockMaxW);
+  const titleBlockH = P.sectionSize * 1.4;
+  const blockH =
+    titleBlockH + 3 + wordLines.length * engine.lineHeight(P.bodySize) + 4 + P.gap;
+  if (engine.y + blockH > engine.contentBottom) {
+    engine.newPage();
+  }
   sectionTitle(ctx, labels.amountInWords);
   const boxTop = engine.y;
   engine.y = engine.drawParagraph(words, {
-    x: rtl ? engine.contentRight - 6 : engine.contentLeft + 6, y: engine.y + 3, size: P.bodySize, maxWidth: engine.contentWidth - 12,
+    x: rtl ? engine.contentRight - 6 : engine.contentLeft + 6, y: engine.y + 3, size: P.bodySize, maxWidth: blockMaxW,
   });
   engine.drawRect(engine.contentLeft, boxTop, engine.contentWidth, engine.y - boxTop + 2, {
     border: COLORS.lineGray,
@@ -708,18 +773,37 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   const bankLines = bankInfo.filter(([, v]) => !!v);
   const hasBank = bankLines.length > 0;
 
-  const sigHeight = 56;
-  engine.ensureSpace(sigHeight + (hasBank ? 46 : 0));
+  // Document de livraison / réception : boîte de signature destinataire plus
+  // grande (le réceptionnaire appose cachet + signature + observation).
+  const isDelivery = doc.document.docType === "DELIVERY_NOTE" || doc.document.docType === "GOODS_RECEIPT";
+  const sigBoxH = isDelivery ? 70 : 50;
 
   const colW = (engine.contentWidth - P.gap) / 2;
 
+  // Mesure réelle du bloc banque (libellés enveloppés) ET du bloc signatures :
+  // on garde l'ensemble sur la même page — aucune signature ne chevauche le bas
+  // de page, aucune ligne n'en recouvre une autre.
+  const bankWrapped = bankLines.map(([label, value]) =>
+    Math.max(1, engine.wrap(`${label} : ${value}`, "regular", P.bodySize, colW).length),
+  );
+  const bankH = hasBank
+    ? P.sectionSize * 1.4 + bankWrapped.reduce((a, b) => a + b, 0) * P.bodySize * 1.4 + P.gap
+    : 0;
+  // Le bloc banque termine déjà par P.gap (ligne 802), qui sépare la banque de
+  // la zone signature : on ne comptabilise donc que bankH + sigBoxH.
+  const keepBlockH = bankH + sigBoxH;
+  if (engine.y + keepBlockH > engine.contentBottom) {
+    engine.newPage();
+  }
+
   if (hasBank) {
     sectionTitle(ctx, labels.bank);
-    for (const [label, value] of bankLines) {
+    for (let b = 0; b < bankLines.length; b++) {
+      const [label, value] = bankLines[b];
       engine.drawText(`${label} : ${value}`, {
         x: rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, maxWidth: colW,
       });
-      engine.y += P.bodySize * 1.4;
+      engine.y += bankWrapped[b] * P.bodySize * 1.4;
     }
     engine.y += P.gap;
   }
@@ -727,10 +811,6 @@ async function drawBankAndSignatures(ctx: TemplateCtx): Promise<void> {
   // Signatures.
   const sigTop = engine.y;
   const sigColW = (engine.contentWidth - P.gap) / 2;
-  // Document de livraison / réception : boîte de signature destinataire plus
-  // grande (le réceptionnaire appose cachet + signature + observation).
-  const isDelivery = doc.document.docType === "DELIVERY_NOTE" || doc.document.docType === "GOODS_RECEIPT";
-  const sigBoxH = isDelivery ? 70 : 50;
 
   // Cadre "L'Émetteur — Cachet" (toujours visible, même sans image).
   // RTL : miroir — cadre émetteur à droite, cadre client à gauche.
@@ -827,9 +907,13 @@ export function createRunningHeader(doc: PrintableDocument, labels: PrintLabels,
       color: brandColor,
     });
     engine.y += 6;
-    engine.drawText(companyName(doc, locale), {
-      x: engine.rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: P.bodySize, style: "bold",
-      maxWidth: engine.contentWidth * 0.6,
+    const rhName = companyName(doc, locale);
+    const rhNameMaxW = Math.max(40, engine.contentWidth * 0.6);
+    const rhNameSize = engine.fitSizeToWidth(rhName, "bold", P.bodySize, rhNameMaxW, 4);
+    const rhFloorHit = rhNameSize <= 4.5;
+    engine.drawText(rhName, {
+      x: engine.rtl ? engine.contentRight : engine.contentLeft, y: engine.y, size: rhNameSize, style: "bold",
+      ...(rhFloorHit ? {} : { maxWidth: rhNameMaxW }),
     });
     engine.drawText(`${labels.ref} ${doc.document.number}`, {
       x: engine.rtl ? engine.contentLeft : engine.contentRight, y: engine.y, size: P.bodySize,

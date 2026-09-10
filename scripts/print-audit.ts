@@ -366,11 +366,14 @@ async function sectionTemplates() {
   record(true, "champs optionnels vides rendus sans erreur");
 
   // Nombre maximal réaliste de lignes.
+  // Seuil recalibré 5 → 4 : l'en-tête en une seule ligne et l'estimation exacte
+  // du bloc banque/signatures (plus de +P.gap fantôme) densifient le rendu ;
+  // le PDF 4 pages est vérifié géométriquement propre (0 chevauchement/bordure).
   const maxLines = mockDoc(120, "A4");
   maxLines.document.docType = "INVOICE";
   const ml = await renderMock(maxLines, "fr");
   await validatePdf(ml.pdf);
-  record(ml.pages >= 5, "120 lignes (maximum réaliste)", `${ml.pages} page(s)`);
+  record(ml.pages >= 4, "120 lignes (maximum réaliste)", `${ml.pages} page(s)`);
 
   record(validated.length > 0, `tous les PDF générés (${validated.length}) validés par pdf.js`);
 }

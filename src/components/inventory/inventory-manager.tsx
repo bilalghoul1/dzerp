@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,7 @@ export function InventoryManager({
   canCreate,
   canAdjust,
   canTransfer,
+  filterProduct,
 }: {
   description: string;
   movements: InventoryMovementRow[];
@@ -94,6 +96,8 @@ export function InventoryManager({
   canCreate: boolean;
   canAdjust: boolean;
   canTransfer: boolean;
+  /** Produit filtré via `?productId=` (lien depuis la liste produits). */
+  filterProduct?: { id: string; name: string } | null;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -176,6 +180,26 @@ export function InventoryManager({
 
   return (
     <div className="space-y-4">
+      {filterProduct ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
+          <p className="text-sm">
+            <span className="material-symbols-outlined me-1 align-middle text-[16px] text-muted-foreground" aria-hidden="true">
+              filter_alt
+            </span>
+            <span className="text-muted-foreground">{t("inventory.filteredBy")} </span>
+            <span className="font-medium">{filterProduct.name}</span>
+          </p>
+          <Link
+            href="/stock/mouvements"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+              close
+            </span>
+            {t("inventory.clearFilter")}
+          </Link>
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-start justify-between space-y-0">

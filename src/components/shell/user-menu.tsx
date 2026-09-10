@@ -110,6 +110,17 @@ function MenuRow({ icon, label, onClick, href, active, children }: MenuItemProps
 
 type DialogState = "profile" | "password" | "sessions" | null;
 
+/** Score 0-5 : longueur ≥ 8, minuscule, majuscule, chiffre, symbole. */
+function computeStrength(value: string): number {
+  let score = 0;
+  if (value.length >= 8) score++;
+  if (/[a-z]/.test(value)) score++;
+  if (/[A-Z]/.test(value)) score++;
+  if (/\d/.test(value)) score++;
+  if (/[^A-Za-z0-9]/.test(value)) score++;
+  return score;
+}
+
 function ProfileDialog({ user, open, onClose }: { user: SessionUser; open: boolean; onClose: () => void }) {
   const { t, locale } = useI18n();
   const roles = user.roles
@@ -177,6 +188,24 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [confirm, setConfirm] = React.useState("");
   const [busy, setBusy] = React.useState(false);
 
+  const strength = computeStrength(next);
+  const strengthLabel =
+    next.length === 0
+      ? null
+      : strength >= 4
+        ? t("changePassword.strengthStrong")
+        : strength >= 3
+          ? t("changePassword.strengthGood")
+          : strength >= 2
+            ? t("changePassword.strengthFair")
+            : t("changePassword.strengthWeak");
+  const strengthColor =
+    strength >= 4
+      ? "bg-emerald-500"
+      : strength >= 3
+        ? "bg-amber-500"
+        : "bg-destructive";
+
   const submit = async () => {
     if (next !== confirm) {
       toast.error(t("changePassword.mismatch"));
@@ -234,6 +263,35 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
               onChange={(e) => setNext(e.target.value)}
               autoComplete="new-password"
             />
+            {strengthLabel ? (
+              <div className="space-y-1.5">
+                <div
+                  className="flex gap-1"
+                  role="meter"
+                  aria-label={t("changePassword.strength")}
+                  aria-valuemin={0}
+                  aria-valuemax={5}
+                  aria-valuenow={strength}
+                >
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <span
+                      key={index}
+                      aria-hidden="true"
+                      className={cn(
+                        "h-1.5 flex-1 rounded-full bg-muted",
+                        index < strength && strengthColor,
+                      )}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("changePassword.strength")} : {strengthLabel}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("changePassword.weak")}
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="pw-confirm">{t("changePassword.confirm")}</Label>

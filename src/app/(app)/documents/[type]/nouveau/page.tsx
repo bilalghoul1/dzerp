@@ -7,6 +7,8 @@ type PageProps = {
   searchParams: Promise<{ customerId?: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function DocumentNewRoute({
   params,
   searchParams,
@@ -16,6 +18,9 @@ export default async function DocumentNewRoute({
   if (!docType) notFound();
   const { customerId } = await searchParams;
   return (
-    <DocumentEditorPage type={docType} initialCustomerId={customerId ?? null} />
+    <DocumentEditorPage
+      type={docType}
+      initialCustomerId={customerId ?? null}
+    />
   );
 }

@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { getOrResolveCompanyContext } from "@/features/company/context";
-import { listDocumentSeries } from "@/features/documents/series";
+import {
+  formatSeriesNumber,
+  listDocumentSeries,
+} from "@/features/documents/series";
 import { SeriesManager } from "@/components/settings/series-manager";
 import { getServerI18n } from "@/features/i18n/server";
 
@@ -19,6 +22,7 @@ export default async function NumberingPage() {
       series={series.map((s) => ({
         ...s,
         nextValue: Number(s.nextValue),
+        next: formatSeriesNumber(s, s.nextValue),
       }))}
       description={t("parametres.numberingDescription")}
     />

@@ -139,6 +139,7 @@ function toInputLines(lines: DocumentLineModel[]) {
 
 function resolvePermissions(
   companyPermissions: readonly string[],
+  partyField: "customerId" | "supplierId",
 ): EditorPermissions {
   return {
     create: companyPermissions.includes("documents.create"),
@@ -147,6 +148,9 @@ function resolvePermissions(
     approve: companyPermissions.includes("documents.approve"),
     convert: companyPermissions.includes("documents.convert"),
     print: companyPermissions.includes("documents.print"),
+    partyCreate: companyPermissions.includes(
+      partyField === "customerId" ? "crm.customer.create" : "crm.supplier.create",
+    ),
   };
 }
 
@@ -174,6 +178,7 @@ interface DocumentEditorContextValue {
   save: () => Promise<DocumentDetailModel | null>;
   refresh: () => Promise<void>;
   applyStatus: (target: DocumentStatus) => Promise<void>;
+  addParty: (party: EditorPartyOption) => void;
 }
 
 const DocumentEditorContext =
@@ -208,6 +213,9 @@ export function DocumentEditorProvider({
   const [detail, setDetail] = React.useState<DocumentDetailModel | null>(
     initialDetail ?? null,
   );
+  const [parties, setParties] = React.useState<EditorPartyOption[]>(
+    lookups.parties ?? [],
+  );
   const [header, setHeader] = React.useState<EditorHeaderState>(() => {
     if (initialDetail) return detailToHeader(initialDetail);
     const blank = blankHeader(defaultBranchId, defaultCurrency);
@@ -228,12 +236,11 @@ export function DocumentEditorProvider({
   const [busy, setBusy] = React.useState(false);
 
   const totals = React.useMemo(() => computeAllLines(toInputLines(lines)), [lines]);
-  const permissions = React.useMemo(
-    () => resolvePermissions(company.permissions),
-    [company.permissions],
-  );
-
   const config = React.useMemo(() => getDocConfig(type), [type]);
+  const permissions = React.useMemo(
+    () => resolvePermissions(company.permissions, config.partyField),
+    [company.permissions, config.partyField],
+  );
 
   const markDirty = React.useCallback(() => setDirty(true), []);
 
@@ -243,6 +250,19 @@ export function DocumentEditorProvider({
       value: EditorHeaderState[K],
     ) => {
       setHeader((prev) => ({ ...prev, [field]: value }));
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const addParty = React.useCallback(
+    (party: EditorPartyOption) => {
+      setParties((prev) =>
+        prev.some((p) => p.id === party.id)
+          ? prev
+          : [...prev, party].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setHeader((prev) => ({ ...prev, partyId: party.id }));
       markDirty();
     },
     [markDirty],
@@ -454,7 +474,7 @@ export function DocumentEditorProvider({
       dirty,
       busy,
       permissions,
-      lookups,
+      lookups: { ...lookups, parties },
       setHeaderField,
       setLines: setLinesAll,
       updateLine,
@@ -465,6 +485,7 @@ export function DocumentEditorProvider({
       save,
       refresh,
       applyStatus,
+      addParty,
     }),
     [
       type,
@@ -477,6 +498,7 @@ export function DocumentEditorProvider({
       busy,
       permissions,
       lookups,
+      parties,
       setHeaderField,
       setLinesAll,
       updateLine,
@@ -487,6 +509,7 @@ export function DocumentEditorProvider({
       save,
       refresh,
       applyStatus,
+      addParty,
     ],
   );
 

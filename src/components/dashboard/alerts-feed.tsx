@@ -16,23 +16,38 @@ interface AlertsFeedProps {
   labels: {
     title: string;
     empty: string;
+    critical: string;
+    warning: string;
+    info: string;
   };
 }
 
 const SEVERITY_STYLE: Record<
   AlertSeverity,
-  { dot: string; badge: string; icon: string }
+  { dot: string; badge: string; icon: string; text: string }
 > = {
-  critical: { dot: "bg-destructive", badge: "bg-destructive/10 text-destructive", icon: "error" },
-  warning: { dot: "bg-amber-500", badge: "bg-amber-500/10 text-amber-700", icon: "warning" },
-  info: { dot: "bg-sky-500", badge: "bg-sky-500/10 text-sky-600", icon: "info" },
+  critical: { dot: "bg-destructive", badge: "bg-destructive/10 text-destructive", icon: "error", text: "text-destructive" },
+  warning: { dot: "bg-amber-500", badge: "bg-amber-500/10 text-amber-700", icon: "warning", text: "text-amber-700" },
+  info: { dot: "bg-sky-500", badge: "bg-sky-500/10 text-sky-600", icon: "info", text: "text-sky-600" },
 };
 
 /**
  * Zone B (droite) — Flux vertical des alertes critiques, codées par couleur
- * (rouge = critique, ambre = avertissement, bleu = info).
+ * (rouge = critique, ambre = avertissement, bleu = info). Chaque alerte porte
+ * aussi un libellé de sévérité TEXTUEL (pas de code couleur seul).
  */
 export function AlertsFeed({ items, labels }: AlertsFeedProps) {
+  const severityLabel = (severity: AlertSeverity): string => {
+    switch (severity) {
+      case "critical":
+        return labels.critical;
+      case "warning":
+        return labels.warning;
+      case "info":
+        return labels.info;
+    }
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
       <div className="border-b px-4 py-3">
@@ -66,6 +81,9 @@ export function AlertsFeed({ items, labels }: AlertsFeedProps) {
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium">{alert.title}</p>
                     <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", style.dot)} aria-hidden="true" />
+                    <span className={cn("shrink-0 text-[11px] font-semibold uppercase tracking-wide", style.text)}>
+                      {severityLabel(alert.severity)}
+                    </span>
                   </div>
                   {alert.detail ? (
                     <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{alert.detail}</p>

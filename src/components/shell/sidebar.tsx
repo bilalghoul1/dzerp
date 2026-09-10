@@ -6,10 +6,16 @@ import type { PermissionKey } from "@/features/auth/permissions";
 import { useI18n } from "@/features/i18n/i18n-provider";
 import { adminNavGroups, companyNavGroups, filterNav } from "@/components/shell/nav-config";
 import { QuickCreate } from "@/components/shell/quick-create";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const itemBase =
-  "flex items-center gap-3 px-4 py-2.5 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors";
+  "flex items-center gap-3 px-4 py-2.5 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors min-w-0";
 
 export function SidebarNav({
   permissions,
@@ -30,8 +36,15 @@ export function SidebarNav({
   const { t } = useI18n();
 
   const groups = companyNavGroups
-    .map((g) => ({ ...g, items: filterNav(g.items, permissions) }))
-    .filter((g) => g.items.length > 0);
+    .map((g) => ({
+      ...g,
+      items: filterNav(g.items, permissions),
+      hiddenItems: g.items.filter(
+        (item) =>
+          item.permission && !permissions.includes(item.permission),
+      ),
+    }))
+    .filter((g) => g.items.length > 0 || g.hiddenItems.length > 0);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -43,7 +56,7 @@ export function SidebarNav({
   const homeHref = isPlatform ? "/admin" : "/dashboard";
 
   return (
-    <>
+    <TooltipProvider delayDuration={200}>
       <Link
         href={homeHref}
         onClick={onNavigate}
@@ -99,11 +112,41 @@ export function SidebarNav({
                       >
                         {item.icon}
                       </span>
-                      {t(item.labelKey)}
+                      <span className="min-w-0 flex-1 truncate">{t(item.labelKey)}</span>
                     </Link>
                   </li>
                 );
               })}
+              {group.hiddenItems.map((item) => (
+                <li key={item.href}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          itemBase,
+                          "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground",
+                        )}
+                        aria-disabled="true"
+                      >
+                        <span
+                          className="material-symbols-outlined text-[20px]"
+                          aria-hidden="true"
+                        >
+                          {item.icon}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{t(item.labelKey)}</span>
+                        <span
+                          className="material-symbols-outlined text-[16px]"
+                          aria-hidden="true"
+                        >
+                          lock
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("nav.maskedByPermission")}</TooltipContent>
+                  </Tooltip>
+                </li>
+              ))}
             </ul>
           </div>
         ))}
@@ -139,7 +182,7 @@ export function SidebarNav({
                           >
                             {item.icon}
                           </span>
-                          {t(item.labelKey)}
+                          <span className="min-w-0 flex-1 truncate">{t(item.labelKey)}</span>
                         </Link>
                       </li>
                     );
@@ -150,6 +193,6 @@ export function SidebarNav({
           </div>
         ) : null}
       </nav>
-    </>
+    </TooltipProvider>
   );
 }

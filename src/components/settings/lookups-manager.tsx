@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -108,6 +109,7 @@ export function LookupsManager({
   const [editingRow, setEditingRow] = React.useState<LookupRow | null>(null);
   const [form, setForm] = React.useState<LookupForm>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
+  const readOnly = useSettingsReadOnly();
   const [wilayaFilter, setWilayaFilter] = React.useState("");
 
   const isLookupTab =
@@ -249,7 +251,7 @@ export function LookupsManager({
           {KIND_TABS.map((tab) => (
             <TabsContent key={tab.value} value={tab.value}>
               <div className="flex justify-end">
-                <Button onClick={openCreate} disabled={busy}>
+                <Button onClick={openCreate} disabled={busy || readOnly}>
                   <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                     add
                   </span>
@@ -323,7 +325,7 @@ export function LookupsManager({
                               variant="ghost"
                               size="sm"
                               onClick={() => openEdit(row)}
-                              disabled={busy}
+                              disabled={busy || readOnly}
                             >
                               {t("common.edit")}
                             </Button>
@@ -331,7 +333,7 @@ export function LookupsManager({
                               variant="ghost"
                               size="sm"
                               onClick={() => toggleActive(row)}
-                              disabled={busy}
+                              disabled={busy || readOnly}
                             >
                               {row.isActive
                                 ? t("lookups.deactivate")
@@ -530,7 +532,7 @@ export function LookupsManager({
             >
               {t("common.cancel")}
             </Button>
-            <Button onClick={save} disabled={busy}>
+            <Button onClick={save} disabled={busy || readOnly}>
               {busy ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>

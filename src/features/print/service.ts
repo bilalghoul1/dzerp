@@ -7,6 +7,7 @@ import { assertFontsAvailable } from "./fonts";
 import { mapToPrintableDocument } from "./map-document";
 import { PdfEngine } from "./renderer";
 import { getPrintConfig } from "./registry";
+import type { PrintFormat } from "./types";
 import {
   createFooter,
   createRunningHeader,
@@ -26,13 +27,19 @@ export interface PrintResult {
   filename: string;
   docType: CommercialDocType;
   number: string;
-  format: "A4" | "A5" | "THERMAL";
+  format: PrintFormat;
 }
 
 export interface PrintDocumentParams {
   docId: string;
   companyId: string;
   locale?: Locale;
+  /**
+   * Format de sortie demandé (A4 | A5 | THERMAL). Absent → format par défaut
+   * de la société (`Company.printFormat`). Permet d'anticiper la décision
+   * d'impression (choix par document) sans changer le réglage global.
+   */
+  format?: PrintFormat;
 }
 
 async function resolveLocale(hint: Locale | undefined): Promise<Locale> {
@@ -46,7 +53,7 @@ async function resolveLocale(hint: Locale | undefined): Promise<Locale> {
 }
 
 export async function printDocument(params: PrintDocumentParams): Promise<PrintResult> {
-  const { docId, companyId, locale: localeHint } = params;
+  const { docId, companyId, locale: localeHint, format: formatHint } = params;
 
   const docType = await resolveDocType(docId, companyId);
   if (!docType) {
@@ -59,8 +66,10 @@ export async function printDocument(params: PrintDocumentParams): Promise<PrintR
   const doc = await mapToPrintableDocument(docType, docId, companyId);
   const labels = buildLabels(locale, docType, doc);
 
+  const format = formatHint ?? doc.company.printFormat;
+
   const engine = await PdfEngine.create({
-    format: doc.company.printFormat,
+    format,
     margins: doc.company.printMargins ?? undefined,
     // Le sens d'écriture suit la locale demandée : une demande `ar` bascule
     // tout le rendu en RTL (le moteur, le tableau et les templates sont
@@ -81,7 +90,7 @@ export async function printDocument(params: PrintDocumentParams): Promise<PrintR
     filename: `${config.numberPrefix}-${safeNumber}.pdf`,
     docType,
     number: doc.document.number,
-    format: doc.company.printFormat,
+    format,
   };
 }
 

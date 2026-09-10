@@ -13,10 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/feedback/spinner";
 import type { CommercialDocType } from "@/features/documents/engine/types";
+import type { PrintFormat } from "@/features/print/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 
 type FitMode = "fit-page" | "fit-width" | "custom";
+
+const PRINT_FORMATS: PrintFormat[] = ["A4", "A5", "THERMAL"];
 
 interface PdfPreviewDialogProps {
   open: boolean;
@@ -24,6 +27,8 @@ interface PdfPreviewDialogProps {
   docId: string;
   docType: CommercialDocType;
   title?: string;
+  /** Format par défaut (réglage société). Modifié localement pour ce document. */
+  defaultFormat?: PrintFormat;
 }
 
 interface ToolButtonProps {
@@ -66,6 +71,7 @@ export function DocumentPreviewDialog({
   docId,
   docType,
   title,
+  defaultFormat = "A4",
 }: PdfPreviewDialogProps) {
   const { t, locale } = useI18n();
 
@@ -74,6 +80,7 @@ export function DocumentPreviewDialog({
     width: number;
     height: number;
   } | null>(null);
+  const [format, setFormat] = React.useState<PrintFormat>(defaultFormat);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -92,12 +99,14 @@ export function DocumentPreviewDialog({
   const prevOpenRef = React.useRef(open);
 
   const previewUrl = React.useMemo(
-    () => `/api/documents/${docId}/preview?type=${docType}&locale=${locale}`,
-    [docId, docType, locale],
+    () =>
+      `/api/documents/${docId}/preview?type=${docType}&locale=${locale}&format=${format}`,
+    [docId, docType, locale, format],
   );
   const downloadUrl = React.useMemo(
-    () => `/api/documents/${docId}/pdf?type=${docType}&locale=${locale}`,
-    [docId, docType, locale],
+    () =>
+      `/api/documents/${docId}/pdf?type=${docType}&locale=${locale}&format=${format}`,
+    [docId, docType, locale, format],
   );
 
   // Libère le document à la fermeture et au démontage (sans setState synchrone).
@@ -340,6 +349,31 @@ export function DocumentPreviewDialog({
             onClick={() => goToPage(currentPage + 1)}
             disabled={!pdf || currentPage >= pageCount}
           />
+
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+          <div
+            className="flex items-center rounded-md border bg-background p-0.5"
+            role="group"
+            aria-label={t("documentsUI.printFormat")}
+          >
+            {PRINT_FORMATS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={format === item}
+                aria-label={t(`documentsUI.format${item}`)}
+                title={t(`documentsUI.format${item}`)}
+                onClick={() => setFormat(item)}
+                className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                  format === item
+                    ? "bg-muted font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t(`documentsUI.format${item}`)}
+              </button>
+            ))}
+          </div>
 
           <div className="flex-1" />
 

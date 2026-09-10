@@ -168,6 +168,7 @@ export function ProductsManager({
   const [form, setForm] = React.useState<FormState>(emptyForm);
   const [busy, setBusy] = React.useState(false);
   const [showDetails, setShowDetails] = React.useState(false);
+  const [nameError, setNameError] = React.useState<string | null>(null);
 
   const showArabic = locale === "ar";
   const topCategories = options.categories.filter((c) => !c.parentId);
@@ -240,7 +241,7 @@ export function ProductsManager({
 
   const save = async () => {
     if (!form.name.trim()) {
-      toast.error(t("errors.INVALID_BODY"));
+      setNameError(t("common.required"));
       return;
     }
     setBusy(true);
@@ -421,6 +422,15 @@ export function ProductsManager({
                       <Button
                         variant="ghost"
                         size="sm"
+                        asChild
+                      >
+                        <a href={`/stock/mouvements?productId=${row.id}`}>
+                          {t("inventory.viewMovements")}
+                        </a>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => openEdit(row)}
                         disabled={busy}
                       >
@@ -461,9 +471,16 @@ export function ProductsManager({
                   <Input
                     id="product-name"
                     value={form.name}
-                    onChange={(e) => setField("name", e.target.value)}
+                    onChange={(e) => {
+                      setField("name", e.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    aria-invalid={nameError ? true : undefined}
                     required
                   />
+                  {nameError ? (
+                    <p className="text-xs text-destructive">{nameError}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="product-name-ar">{t("products.nameAr")}</Label>

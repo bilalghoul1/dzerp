@@ -153,7 +153,7 @@ const DOCUMENT_CONFIGS: Record<CommercialDocType, DocumentTypeConfig> = {
     label: "Demande d'achat",
     labelAr: "طلب شراء",
     numberPrefix: "DA",
-    permissionPrefix: "achats.demande",
+    permissionPrefix: "achats.besoin",
     allowedStatuses: ALL_STATUSES,
     transitions: PURCHASING_TRANSITIONS,
     partyField: "supplierId",

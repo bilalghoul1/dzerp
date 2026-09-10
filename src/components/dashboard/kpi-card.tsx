@@ -13,6 +13,7 @@ export interface KpiCardProps {
   label: string;
   value: string;
   sublabel?: string;
+  hint?: string;
   icon: string;
   tone?: KpiTone;
   delta?: { value: string; positive: boolean } | null;
@@ -23,12 +24,14 @@ export interface KpiCardProps {
 /**
  * Carte KPI réutilisable : libellé + valeur importante + indicateur de
  * variation (delta) + icône, avec un code couleur métier (croissance,
- * alerte, info).
+ * alerte, info). `hint` affiche une icône d'aide accessible (title +
+ * aria-label) pour préciser la signification de la valeur, sans `role="img"`.
  */
 export function KpiCard({
   label,
   value,
   sublabel,
+  hint,
   icon,
   tone = "primary",
   delta,
@@ -48,8 +51,17 @@ export function KpiCard({
       ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="truncate">{label}</span>
+            {hint ? (
+              <span
+                className="material-symbols-outlined shrink-0 cursor-help text-[14px]"
+                title={hint}
+                aria-label={hint}
+              >
+                info
+              </span>
+            ) : null}
           </p>
           {loading ? (
             <div className="mt-2 h-8 w-24 animate-pulse rounded bg-muted" />

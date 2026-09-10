@@ -1,10 +1,13 @@
 import { requirePermission } from "@/features/auth/rbac";
 import { getServerI18n } from "@/features/i18n/server";
 import { getOrResolveCompanyContext } from "@/features/company/context";
+import { getCompanySettings } from "@/features/company/settings";
+import type { PrintFormat } from "@/features/print/types";
 import { getDocConfig } from "@/features/documents/engine/config";
 import { getDocument } from "@/features/documents/engine/service";
 import { normalizeDocumentDetail } from "@/features/documents/framework/normalize";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
+import { previewNextDocumentNumber } from "@/features/documents/series";
 import { getTaxRates, getCurrencies, getUnits } from "@/features/settings/config";
 import { listCustomers } from "@/features/customers/config";
 import { listSuppliers } from "@/features/suppliers/config";
@@ -65,6 +68,22 @@ export async function DocumentEditorPage({
     ? normalizeDocumentDetail(detail, type)
     : null;
 
+  // Prochain numéro INDICATIF (jamais réservé — l'allocation reste au CAS
+  // `nextDocumentNumber` lors de l'enregistrement).
+  const nextNumber = docId ? null : await previewNextDocumentNumber(type);
+
+  // Format d'impression par défaut de la société (réglage global `parametres`).
+  const defaultPrintFormat = companyId
+    ? await getCompanySettings(companyId)
+        .then((settings) => {
+          const value = settings.printFormat;
+          return value === "A5" || value === "THERMAL" || value === "A4"
+            ? (value as PrintFormat)
+            : "A4";
+        })
+        .catch(() => "A4" as PrintFormat)
+    : ("A4" as PrintFormat);
+
   const lookups: EditorLookups = {
     parties: parties.map((party) => ({ id: party.id, name: party.name })),
     currencies: currencies.map((currency) => ({
@@ -117,6 +136,8 @@ export async function DocumentEditorPage({
         initialDetail={normalizedDetail}
         lookups={lookups}
         initialCustomerId={customerId}
+        nextNumber={nextNumber}
+        defaultPrintFormat={defaultPrintFormat}
       />
     </div>
   );

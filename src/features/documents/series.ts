@@ -53,6 +53,29 @@ export function previewNextNumber(
 }
 
 /**
+ * Prochain numéro indicatif pour un type de document (lecture seule, aucune
+ * réservation : l'allocateur CAS `nextDocumentNumber` reste le seul à
+ * incrémenter). Renvoie `null` si aucune série active n'est configurée.
+ */
+export async function previewNextDocumentNumber(
+  docType: DocType,
+): Promise<string | null> {
+  const series = await prisma.documentSeries.findFirst({
+    where: { docType, isActive: true },
+    select: {
+      prefix: true,
+      separator: true,
+      suffix: true,
+      withYear: true,
+      year: true,
+      nextValue: true,
+      padLength: true,
+    },
+  });
+  return series ? previewNextNumber(series) : null;
+}
+
+/**
  * Alloue le prochain numéro d'une série documentaire de façon atomique
  * (compare-and-swap) : deux appels concurrents ne peuvent pas obtenir le même
  * numéro. Throws si aucune série active n'est configurée pour le type.

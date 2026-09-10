@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import type { CompanyProfile } from "@/features/settings/config";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +33,7 @@ export function PreferencesForm({
   description: string;
 }) {
   const { t, locale, setLocale, locales } = useI18n();
+  const readOnly = useSettingsReadOnly();
   const [values, setValues] = React.useState(profile);
   const [busy, setBusy] = React.useState(false);
 
@@ -197,7 +199,7 @@ export function PreferencesForm({
         </div>
       </CardContent>
       <CardFooter>
-        <Button onClick={save} disabled={busy}>
+        <Button onClick={save} disabled={busy || readOnly}>
           {busy ? t("common.saving") : t("common.save")}
         </Button>
       </CardFooter>

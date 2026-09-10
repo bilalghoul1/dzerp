@@ -19,13 +19,15 @@ const PALETTE = [
 interface TopProductsChartProps {
   data: ProductSlice[];
   emptyLabel: string;
+  /** Résumé textuel accessible (lecture d'écran), ex. volume total. */
+  summary?: string;
 }
 
 /**
  * Zone C — Graphique en secteurs (donut) du Top 5 produits les plus vendus
  * par volume.
  */
-export function TopProductsChart({ data, emptyLabel }: TopProductsChartProps) {
+export function TopProductsChart({ data, emptyLabel, summary }: TopProductsChartProps) {
   if (data.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
@@ -38,7 +40,8 @@ export function TopProductsChart({ data, emptyLabel }: TopProductsChartProps) {
   }
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-64 w-full" role="img" aria-label={summary ?? (data[0] ? data[0].name : "Top produits")}>
+      {summary ? <p className="sr-only">{summary}</p> : null}
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

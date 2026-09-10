@@ -7,12 +7,14 @@ import {
 } from "@/features/documents/engine";
 import type { CommercialDocType } from "@/features/documents/engine";
 import { printDocument } from "@/features/print/service";
+import type { PrintFormat } from "@/features/print/types";
 import { LOCALES, type Locale } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const VALID_TYPES = new Set(getAllDocTypes());
 const VALID_LOCALES = new Set(LOCALES);
+const VALID_FORMATS = new Set<PrintFormat>(["A4", "A5", "THERMAL"]);
 
 /**
  * Génère le PDF d'un document via le pipeline d'impression unique
@@ -33,6 +35,7 @@ export async function handlePdfRequest(
       const { searchParams } = new URL(request.url);
       const typeParam = searchParams.get("type") as CommercialDocType | null;
       const localeParam = searchParams.get("locale");
+      const formatParam = searchParams.get("format") as PrintFormat | null;
 
       let docType = typeParam;
       if (!docType || !VALID_TYPES.has(docType)) {
@@ -46,10 +49,20 @@ export async function handlePdfRequest(
         ? (localeParam as Locale)
         : undefined;
 
+      // Format optionnel : A4 | A5 | THERMAL. Invalide → ignoré (format par
+      // défaut de la société). Via le pipeline unique printDocument, Preview,
+      // Download et Print honorent exactement le format demandé.
+      const format: PrintFormat | undefined = VALID_FORMATS.has(
+        formatParam as PrintFormat,
+      )
+        ? (formatParam as PrintFormat)
+        : undefined;
+
       const result = await printDocument({
         docId: id,
         companyId: guard.context.company.id,
         locale,
+        format,
       });
 
       return new NextResponse(new Uint8Array(result.pdf), {

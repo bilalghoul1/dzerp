@@ -15,6 +15,8 @@ interface FinancialPulseProps {
     expenses: string;
     receivables: string;
     cashFlow: string;
+    cashFlowHint: string;
+    thisMonth: string;
     vsLastMonth: string;
     empty: string;
   };
@@ -25,7 +27,8 @@ interface FinancialPulseProps {
 /**
  * Zone A — Bande « Pouls financier » : 4 KPIs financiers à fort impact.
  * Revenu mensuel (+ évolution vs mois précédent), créances impayées
- * (urgentes, en rouge), dépenses mensuelles et trésorerie nette.
+ * (urgentes, en rouge), dépenses mensuelles et résultat du mois
+ * (ventes − achats facturés, base d'engagement, extrait d'un mois donné).
  */
 export function FinancialPulse({ data, labels, formatAmount, formatPct }: FinancialPulseProps) {
   const hasData =
@@ -65,6 +68,8 @@ export function FinancialPulse({ data, labels, formatAmount, formatPct }: Financ
         <KpiCard
           label={labels.cashFlow}
           value={formatAmount(data.cashFlow)}
+          hint={labels.cashFlowHint}
+          sublabel={labels.thisMonth}
           icon="account_balance"
           tone={data.cashFlow < 0 ? "crimson" : "info"}
           accent={data.cashFlow < 0}

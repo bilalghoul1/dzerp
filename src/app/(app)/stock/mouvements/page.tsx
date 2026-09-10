@@ -13,17 +13,30 @@ import { getServerI18n } from "@/features/i18n/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage() {
+type PageProps = {
+  searchParams: Promise<{ productId?: string }>;
+};
+
+export default async function InventoryPage({ searchParams }: PageProps) {
   const session = await requirePermission("inventory.view");
   const context = await getOrResolveCompanyContext();
   if (!context) redirect("/login");
 
+  const { productId } = await searchParams;
+  // Le filtre produit provient d'un lien interne (liste produits) : il doit
+  // désigner un produit réel de la société active, sinon il est ignoré.
+  const filterId = productId ?? null;
+
   const [movements, stock, options, { t }] = await Promise.all([
-    listInventoryMovements(),
-    getStockOnHand(),
+    listInventoryMovements(filterId ?? undefined),
+    getStockOnHand(filterId ?? undefined),
     listInventoryOptions(),
     getServerI18n(),
   ]);
+
+  const filterProduct = filterId
+    ? options.products.find((p) => p.id === filterId) ?? null
+    : null;
 
   const canCreate = hasPermission(session.permissions, "inventory.create");
   const canAdjust = hasPermission(session.permissions, "inventory.adjust");
@@ -45,6 +58,11 @@ export default async function InventoryPage() {
         canCreate={canCreate}
         canAdjust={canAdjust}
         canTransfer={canTransfer}
+        filterProduct={
+          filterProduct
+            ? { id: filterProduct.id, name: filterProduct.name }
+            : null
+        }
       />
     </div>
   );

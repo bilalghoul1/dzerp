@@ -31,6 +31,7 @@ export async function GET(): Promise<NextResponse> {
       const series = await listDocumentSeries();
       const withPreview = series.map((s) => ({
         ...s,
+        nextValue: Number(s.nextValue),
         next: formatSeriesNumber(s, s.nextValue),
       }));
       return okResponse(withPreview);

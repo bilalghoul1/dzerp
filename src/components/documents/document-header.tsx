@@ -21,10 +21,11 @@ import {
 import { DocumentStatusBadge } from "@/components/documents/document-status-badge";
 import { WorkflowSteps } from "@/components/documents/workflow-steps";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
+import { QuickCreatePartyDialog } from "@/components/documents/quick-create-party-dialog";
 import { getDocConfig } from "@/features/documents/engine/config";
 import { formatDate } from "@/lib/utils";
 
-export function DocumentHeader() {
+export function DocumentHeader({ nextNumber }: { nextNumber?: string | null }) {
   const { t, locale } = useI18n();
   const company = useCompany();
   const editor = useDocumentEditor();
@@ -52,6 +53,14 @@ export function DocumentHeader() {
               readOnly
               aria-readonly="true"
             />
+            {nextNumber ? (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold">
+                  {t("documentsUI.nextNumberIndicative")}
+                </span>{" "}
+                <span className="font-mono">{nextNumber}</span>
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -93,24 +102,32 @@ export function DocumentHeader() {
 
           <div className="space-y-2">
             <Label htmlFor="doc-party">{t(`documentsUI.${config.partyField === "customerId" ? "fieldCustomer" : "fieldSupplier"}`)} *</Label>
-            <Select
-              value={editor.header.partyId}
-              onValueChange={(value) =>
-                editor.setHeaderField("partyId", value)
-              }
-              disabled={!isEditable || editor.busy}
-            >
-              <SelectTrigger id="doc-party">
-                <SelectValue placeholder={t("common.selectPlaceholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {editor.lookups.parties.map((party) => (
-                  <SelectItem key={party.id} value={party.id}>
-                    {party.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={editor.header.partyId}
+                onValueChange={(value) =>
+                  editor.setHeaderField("partyId", value)
+                }
+                disabled={!isEditable || editor.busy}
+              >
+                <SelectTrigger id="doc-party">
+                  <SelectValue placeholder={t("common.selectPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {editor.lookups.parties.map((party) => (
+                    <SelectItem key={party.id} value={party.id}>
+                      {party.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isEditable && editor.permissions.partyCreate && (
+                <QuickCreatePartyDialog
+                  nature={config.partyField === "customerId" ? "customer" : "supplier"}
+                  onCreated={editor.addParty}
+                />
+              )}
+            </div>
             {config.partyField === "customerId" && editor.detail?.partyId ? (
               <a
                 href={`/crm/customers/${editor.detail.partyId}`}

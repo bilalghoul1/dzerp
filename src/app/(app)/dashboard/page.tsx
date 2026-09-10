@@ -449,6 +449,8 @@ export default async function DashboardPage() {
     expenses: t("dashboard.monthlyExpenses"),
     receivables: t("dashboard.receivables"),
     cashFlow: t("dashboard.netCashFlow"),
+    cashFlowHint: t("dashboard.netCashFlowHint"),
+    thisMonth: t("dashboard.thisMonth"),
     vsLastMonth: t("dashboard.vsLastMonth"),
     empty: t("dashboard.emptyFinancialData"),
   };
@@ -467,6 +469,9 @@ export default async function DashboardPage() {
   const alertLabels = {
     title: t("dashboard.criticalAlerts"),
     empty: t("dashboard.noCriticalAlerts"),
+    critical: t("dashboard.alertCritical"),
+    warning: t("dashboard.alertWarning"),
+    info: t("dashboard.alertInfo"),
   };
 
   return (
@@ -552,6 +557,7 @@ export default async function DashboardPage() {
                 expensesName={t("dashboard.monthlyExpenses")}
                 formatLocale={deliveryLocale}
                 currency={currency}
+                summary={t("dashboard.chartRevenueSummary")}
               />
             </CardContent>
           </Card>
@@ -560,7 +566,11 @@ export default async function DashboardPage() {
               <CardTitle className="text-base">{t("dashboard.topSelling")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <TopProductsChart data={productSlices} emptyLabel={t("dashboard.noProductData")} />
+              <TopProductsChart
+                data={productSlices}
+                emptyLabel={t("dashboard.noProductData")}
+                summary={t("dashboard.chartTopProductsSummary")}
+              />
             </CardContent>
           </Card>
         </div>

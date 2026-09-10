@@ -9,6 +9,7 @@ import { Spinner } from "@/components/feedback/spinner";
 import { useDocumentEditor } from "@/components/documents/document-editor-context";
 import { DocumentConvertDialog } from "@/components/documents/document-convert-dialog";
 import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
+import type { PrintFormat } from "@/features/print/types";
 import { deleteDocument, getTransitions } from "@/features/documents/framework/api";
 import { getUiConfig } from "@/features/documents/framework/ui-config";
 import type { CommercialDocType } from "@/features/documents/engine/types";
@@ -30,7 +31,12 @@ function transitionButtonClass(to: DocumentStatus): string {
   }
 }
 
-export function DocumentWorkflowBar() {
+export function DocumentWorkflowBar({
+  defaultPrintFormat,
+}: {
+  /** Format d'impression par défaut de la société (réglage par document possible). */
+  defaultPrintFormat?: PrintFormat;
+}) {
   const { t } = useI18n();
   const editor = useDocumentEditor();
   const router = useRouter();
@@ -306,6 +312,7 @@ export function DocumentWorkflowBar() {
           onOpenChange={setPreviewOpen}
           docId={editor.docId}
           docType={editor.type}
+          defaultFormat={defaultPrintFormat}
           title={
             editor.detail?.number
               ? t("documentsUI.preview")

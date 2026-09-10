@@ -132,6 +132,8 @@ export function BusinessPartnersManager({
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = React.useState(false);
   const [showDetails, setShowDetails] = React.useState(false);
+  const [nameError, setNameError] = React.useState<string | null>(null);
+  const [emailError, setEmailError] = React.useState<string | null>(null);
 
   const apiBase = API_BY_KIND[kind];
 
@@ -186,7 +188,11 @@ export function BusinessPartnersManager({
 
   const save = async () => {
     if (!form.name.trim()) {
-      toast.error(t("parties.name") + " " + t("common.required"));
+      setNameError(t("common.required"));
+      return;
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setEmailError(t("parametres.invalidEmail"));
       return;
     }
     setBusy(true);
@@ -397,9 +403,16 @@ export function BusinessPartnersManager({
                   <Input
                     id="party-name"
                     value={form.name}
-                    onChange={(e) => setField("name", e.target.value)}
+                    onChange={(e) => {
+                      setField("name", e.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    aria-invalid={nameError ? true : undefined}
                     required
                   />
+                  {nameError ? (
+                    <p className="text-xs text-destructive">{nameError}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="party-name-ar">{t("parties.nameAr")}</Label>
@@ -610,8 +623,15 @@ export function BusinessPartnersManager({
                           id="party-email"
                           type="email"
                           value={form.email}
-                          onChange={(e) => setField("email", e.target.value)}
+                          onChange={(e) => {
+                            setField("email", e.target.value);
+                            if (emailError) setEmailError(null);
+                          }}
+                          aria-invalid={emailError ? true : undefined}
                         />
+                        {emailError ? (
+                          <p className="text-xs text-destructive">{emailError}</p>
+                        ) : null}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="party-phone">{t("parties.phone")}</Label>

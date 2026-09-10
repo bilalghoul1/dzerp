@@ -2,6 +2,10 @@ import "dotenv/config";
 import { prisma, prismaBase } from "../src/lib/prisma";
 import { hashPassword } from "../src/features/auth/password";
 import { runUnscoped } from "../src/features/company/context";
+import {
+  COMPANY_ADMIN_DEFAULT_PERMS,
+  SUPER_ADMIN_DEFAULT_PERMS,
+} from "../src/features/auth/permissions";
 
 /**
  * Réconciliation IDEMPOTENTE et SANS DESTRUCTION de la plateforme.
@@ -35,14 +39,18 @@ async function main() {
     },
   });
   const adminPerms = await prisma.permission.findMany({
-    where: { key: { startsWith: "admin." } },
-    select: { id: true },
+    where: { key: { contains: "admin." } },
+    select: { id: true, key: true },
   });
   await prisma.rolePermission.createMany({
-    data: adminPerms.map((p) => ({ roleId: saRole.id, permissionId: p.id })),
+    data: adminPerms
+      .filter((p) => (SUPER_ADMIN_DEFAULT_PERMS as readonly string[]).includes(p.key))
+      .map((p) => ({ roleId: saRole.id, permissionId: p.id })),
     skipDuplicates: true,
   });
-  console.log(`  ✓ SUPER_ADMIN présent (${adminPerms.length} permissions admin.*)`);
+  console.log(
+    `  ✓ SUPER_ADMIN présent (${adminPerms.length} permissions admin.*, jeu canonique global)`,
+  );
 
   console.log("→ 2. Rôle OWNER (propriétaire de société)…");
   const ownerRole = await prisma.role.upsert({
@@ -59,24 +67,11 @@ async function main() {
   });
   const permissionKeys = await prisma.permission.findMany({ select: { key: true, id: true } });
   const permissionIds = Object.fromEntries(permissionKeys.map((p) => [p.key, p.id]));
-  const companyAdminPerms = [
-    "dashboard.view",
-    "crm.customer.view", "crm.customer.create", "crm.customer.update",
-    "crm.supplier.view", "crm.supplier.create", "crm.supplier.update",
-    "product.view", "product.create", "product.update",
-    "warehouse.view", "warehouse.create", "warehouse.update",
-    "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
-    "parametres.view", "parametres.manage",
-    "admin.company.view", "admin.company.update",
-    "admin.company.membership.manage",
-    "admin.audit.view",
-    "search.global", "files.upload", "files.download",
-  ];
-  const ownerGrants = [...new Set([...companyAdminPerms, "admin.company.membership.manage"])]
-    .filter((key) => permissionIds[key])
-    .map((key) => ({ roleId: ownerRole.id, permissionId: permissionIds[key] }));
+  const ownerGrants = [...COMPANY_ADMIN_DEFAULT_PERMS]
+    .filter((key) => permissionIds[key as string])
+    .map((key) => ({ roleId: ownerRole.id, permissionId: permissionIds[key as string] }));
   await prisma.rolePermission.createMany({ data: ownerGrants, skipDuplicates: true });
-  console.log(`  ✓ OWNER présent (${ownerGrants.length} permissions)`);
+  console.log(`  ✓ OWNER présent (${ownerGrants.length} permissions, jeu canonique société)`);
 
   console.log("→ 3. Attache `superadmin` au rôle SUPER_ADMIN…");
   const superAdmin = await prisma.user.findUnique({ where: { username: "superadmin" } });

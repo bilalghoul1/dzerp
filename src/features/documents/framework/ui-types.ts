@@ -200,4 +200,5 @@ export interface EditorPermissions {
   approve: boolean;
   convert: boolean;
   print: boolean;
+  partyCreate: boolean;
 }

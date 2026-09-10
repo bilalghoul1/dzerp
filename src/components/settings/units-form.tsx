@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import type { UnitItem } from "@/features/settings/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export function UnitsForm({
   description: string;
 }) {
   const { t } = useI18n();
+  const readOnly = useSettingsReadOnly();
   const [items, setItems] = React.useState<UnitItem[]>(rows);
   const [busy, setBusy] = React.useState(false);
 
@@ -129,7 +131,7 @@ export function UnitsForm({
             ))}
           </TableBody>
         </Table>
-        <Button variant="outline" size="sm" onClick={addRow} disabled={busy} className="mt-3">
+        <Button variant="outline" size="sm" onClick={addRow} disabled={busy || readOnly} className="mt-3">
           <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
             add
           </span>
@@ -137,7 +139,7 @@ export function UnitsForm({
         </Button>
       </CardContent>
       <CardFooter>
-        <Button onClick={save} disabled={busy}>
+        <Button onClick={save} disabled={busy || readOnly}>
           {busy ? t("common.saving") : t("common.save")}
         </Button>
       </CardFooter>

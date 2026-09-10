@@ -27,6 +27,8 @@ interface RevenueChartProps {
   formatLocale: string;
   /** Devise affichée dans les infobulles ("DZD", ...). */
   currency: string;
+  /** Résumé textuel accessible (lecture d'écran), ex. période couverte. */
+  summary?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function RevenueChart({
   expensesName,
   formatLocale,
   currency,
+  summary,
 }: RevenueChartProps) {
   if (data.length === 0) {
     return (
@@ -53,7 +56,8 @@ export function RevenueChart({
   }
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-64 w-full" role="img" aria-label={summary ?? `${revenueName} / ${expensesName}`}>
+      {summary ? <p className="sr-only">{summary}</p> : null}
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />

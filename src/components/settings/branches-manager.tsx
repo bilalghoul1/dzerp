@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -141,6 +142,7 @@ export function BranchesManager({
   const [form, setForm] = React.useState<BranchInput>(EMPTY_FORM);
   const [errors, setErrors] = React.useState<FormErrors>({});
   const [busy, setBusy] = React.useState(false);
+  const readOnly = useSettingsReadOnly();
   const [search, setSearch] = React.useState("");
   const [filterType, setFilterType] = React.useState<string>("all");
   const [filterStatus, setFilterStatus] = React.useState<string>("all");
@@ -332,7 +334,7 @@ export function BranchesManager({
             <CardTitle>{t("parametres.branches")}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <Button onClick={openCreate} disabled={busy}>
+          <Button onClick={openCreate} disabled={busy || readOnly}>
             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
               add
             </span>
@@ -421,7 +423,7 @@ export function BranchesManager({
                             variant="ghost"
                             size="sm"
                             onClick={() => openEdit(branch)}
-                            disabled={busy}
+                            disabled={busy || readOnly}
                           >
                             {t("common.edit")}
                           </Button>
@@ -448,7 +450,7 @@ export function BranchesManager({
                               variant="ghost"
                               size="sm"
                               onClick={() => toggleActive(branch)}
-                              disabled={busy}
+                              disabled={busy || readOnly}
                             >
                               {branch.isActive
                                 ? t("parametres.deactivateBranch")
@@ -496,7 +498,7 @@ export function BranchesManager({
                       variant="ghost"
                       size="sm"
                       onClick={() => openEdit(branch)}
-                      disabled={busy}
+                      disabled={busy || readOnly}
                     >
                       {t("common.edit")}
                     </Button>
@@ -505,7 +507,7 @@ export function BranchesManager({
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleActive(branch)}
-                        disabled={busy}
+                        disabled={busy || readOnly}
                       >
                         {branch.isActive
                           ? t("parametres.deactivateBranch")
@@ -764,7 +766,7 @@ export function BranchesManager({
               >
                 {t("common.cancel")}
               </Button>
-              <Button onClick={save} disabled={busy}>
+              <Button onClick={save} disabled={busy || readOnly}>
                 {busy ? t("common.saving") : t("common.save")}
               </Button>
             </DialogFooter>
@@ -790,7 +792,7 @@ export function BranchesManager({
               <Button
                 variant="destructive"
                 onClick={() => confirmTarget && doToggleActive(confirmTarget)}
-                disabled={busy}
+                disabled={busy || readOnly}
               >
                 {t("parametres.deactivateBranch")}
               </Button>

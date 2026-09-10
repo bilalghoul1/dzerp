@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -38,13 +39,9 @@ type SeriesRow = {
   padLength: number;
   step: number;
   isActive: boolean;
+  /** Numéro suivant calculé côté serveur (indicatif, jamais réservé). */
+  next: string;
 };
-
-function preview(row: SeriesRow): string {
-  const year = row.withYear ? String(row.year ?? new Date().getFullYear()) : "";
-  const seq = String(row.nextValue).padStart(Math.max(row.padLength, 1), "0");
-  return `${row.prefix}${year}${row.separator}${seq}${row.suffix}`;
-}
 
 export function SeriesManager({
   series,
@@ -54,8 +51,19 @@ export function SeriesManager({
   description: string;
 }) {
   const { t } = useI18n();
+  const readOnly = useSettingsReadOnly();
   const [rows, setRows] = React.useState<SeriesRow[]>(series);
   const [busy, setBusy] = React.useState<Record<string, boolean>>({});
+
+  const refresh = async () => {
+    const res = await fetch("/api/series");
+    const json = (await res.json().catch(() => null)) as
+      | { data?: SeriesRow[] }
+      | null;
+    if (res.ok && json?.data) {
+      setRows(json.data);
+    }
+  };
 
   const update = (id: string, patch: Partial<SeriesRow>) =>
     setRows((prev) =>
@@ -84,6 +92,7 @@ export function SeriesManager({
       if (!res.ok) {
         throw new Error(json?.error?.message ?? "Error");
       }
+      await refresh();
       toast.success(t("parametres.saveSuccess"));
     } catch (error) {
       toast.error(
@@ -127,24 +136,28 @@ export function SeriesManager({
                   <TableCell>
                     <Input
                       value={row.prefix}
+                      disabled={readOnly}
                       onChange={(e) => update(row.id, { prefix: e.target.value })}
                     />
                   </TableCell>
                   <TableCell>
                     <Input
                       value={row.separator}
+                      disabled={readOnly}
                       onChange={(e) => update(row.id, { separator: e.target.value })}
                     />
                   </TableCell>
                   <TableCell>
                     <Input
                       value={row.suffix}
+                      disabled={readOnly}
                       onChange={(e) => update(row.id, { suffix: e.target.value })}
                     />
                   </TableCell>
                   <TableCell>
                     <Switch
                       checked={row.withYear}
+                      disabled={readOnly}
                       onCheckedChange={(v) => update(row.id, { withYear: v })}
                       aria-label={t("parametres.seriesYear")}
                     />
@@ -154,6 +167,7 @@ export function SeriesManager({
                       type="number"
                       min={1}
                       max={12}
+                      disabled={readOnly}
                       value={row.padLength}
                       onChange={(e) =>
                         update(row.id, {
@@ -169,6 +183,7 @@ export function SeriesManager({
                     <Input
                       type="number"
                       min={1}
+                      disabled={readOnly}
                       value={row.nextValue}
                       onChange={(e) =>
                         update(row.id, {
@@ -180,20 +195,24 @@ export function SeriesManager({
                   <TableCell>
                     <Switch
                       checked={row.isActive}
+                      disabled={readOnly}
                       onCheckedChange={(v) => update(row.id, { isActive: v })}
                       aria-label={t("parametres.seriesActive")}
                     />
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="font-mono">
-                      {preview(row)}
+                      {row.next}
                     </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {t("parametres.seriesIndicative")}
+                    </p>
                   </TableCell>
                   <TableCell className="text-end">
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={busy[row.id]}
+                      disabled={busy[row.id] || readOnly}
                       onClick={() => save(row)}
                     >
                       {busy[row.id] ? t("common.saving") : t("common.save")}

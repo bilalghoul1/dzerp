@@ -6,13 +6,16 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { hashPassword } from "@/features/auth/password";
+import { COMPANY_ADMIN_DEFAULT_PERMS } from "@/features/auth/permissions";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({ adapter });
 
-const ALL_KEYS = [
-  "accounting.journal.create","accounting.view","achats.besoin.create","achats.besoin.view","achats.bon.create","achats.bon.manage","achats.bon.view","achats.facture.create","achats.facture.view","achats.reception.create","achats.reception.view","admin.audit.view","admin.company.archive","admin.company.create","admin.company.delete","admin.company.membership.manage","admin.company.restore","admin.company.update","admin.company.view","admin.roles.manage","admin.users.manage","compta.manage","compta.view","crm.customer.create","crm.customer.delete","crm.customer.export","crm.customer.import","crm.customer.restore","crm.customer.update","crm.customer.view","crm.supplier.create","crm.supplier.delete","crm.supplier.export","crm.supplier.import","crm.supplier.restore","crm.supplier.update","crm.supplier.view","dashboard.view","documents.approve","documents.convert","documents.create","documents.delete","documents.print","documents.read","documents.update","files.download","files.upload","finance.payment.create","finance.payment.view","inventory.adjust","inventory.create","inventory.export","inventory.transfer","inventory.view","parametres.manage","parametres.view","product.create","product.delete","product.export","product.import","product.restore","product.update","product.view","production.bom.create","production.bom.update","production.bom.view","production.cancel","production.complete","production.create","production.machine.create","production.machine.view","production.manage","production.plan","production.start","production.update","production.view","production.workcenter.create","production.workcenter.view","rapports.view","rh.department.archive","rh.department.create","rh.department.update","rh.department.view","rh.jobtitle.archive","rh.jobtitle.create","rh.jobtitle.update","rh.jobtitle.view","rh.manage","rh.position.archive","rh.position.create","rh.position.update","rh.position.view","rh.view","search.global","rh.employee.view","rh.employee.create","rh.employee.update","rh.employee.archive","rh.employee.delete","rh.employee.restore","rh.employee.import","rh.employee.export","rh.contract.view","rh.contract.create","rh.contract.update","rh.contract.archive","rh.contract.delete","rh.contract.restore","rh.contract.import","rh.contract.export","rh.employee.document.view","rh.employee.document.create","rh.employee.document.delete"
-];
+// PD-3 / R01 : source de vérité UNIQUE = COMPANY_ADMIN_DEFAULT_PERMS
+// (catalogue src/features/auth/permissions.ts). Exclut automatiquement toutes
+// les permissions de plateforme (admin.users.manage, admin.roles.manage,
+// admin.audit.view, admin.company.create/archive/delete/restore).
+const ALL_KEYS = [...COMPANY_ADMIN_DEFAULT_PERMS] as string[];
 
 const VIEW_KEYS = ALL_KEYS.filter((k) => k.endsWith(".view"));
 const COMPANY_ADMIN_KEYS = ALL_KEYS; // COMPANY_ADMIN = contrôle complet de sa société

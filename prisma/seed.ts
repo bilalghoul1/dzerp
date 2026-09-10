@@ -2,7 +2,11 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/features/auth/password";
-import { PERMISSIONS } from "../src/features/auth/permissions";
+import {
+  COMPANY_ADMIN_DEFAULT_PERMS,
+  SUPER_ADMIN_DEFAULT_PERMS,
+  PERMISSIONS,
+} from "../src/features/auth/permissions";
 
 const connectionString =
   process.env.DATABASE_URL ??
@@ -237,8 +241,8 @@ async function main() {
   });
   if (!superAdminGranted) {
     await prisma.rolePermission.createMany({
-      data: Object.keys(permissionIds)
-        .filter((key) => key.startsWith("admin."))
+      data: (SUPER_ADMIN_DEFAULT_PERMS as readonly string[])
+        .filter((key) => permissionIds[key])
         .map((key) => ({
           roleId: superAdminRole.id,
           permissionId: permissionIds[key],
@@ -246,39 +250,15 @@ async function main() {
     });
   }
 
-  const companyAdminPerms = [
-    "dashboard.view",
-    "crm.customer.view", "crm.customer.create", "crm.customer.update",
-    "crm.supplier.view", "crm.supplier.create", "crm.supplier.update",
-    "product.view", "product.create", "product.update",
-    "warehouse.view", "warehouse.create", "warehouse.update",
-    "inventory.view", "inventory.create", "inventory.adjust", "inventory.transfer",
-    "finance.payment.view", "finance.payment.create",
-    "accounting.view", "accounting.journal.create",
-    "parametres.view", "parametres.manage",
-    "admin.company.view", "admin.company.update",
-    "admin.company.membership.manage",
-    "admin.audit.view",
-    "search.global", "files.upload", "files.download",
-    // Production (MRP)
-    "production.view", "production.create", "production.update", "production.plan",
-    "production.start", "production.complete", "production.cancel",
-    "production.bom.view", "production.bom.create", "production.bom.update",
-    "production.machine.view", "production.machine.create",
-    "production.workcenter.view", "production.workcenter.create",
-    // RH — Organisation (Phase 10.1)
-    "rh.view",
-    "rh.department.view", "rh.department.create", "rh.department.update", "rh.department.archive",
-    "rh.jobtitle.view", "rh.jobtitle.create", "rh.jobtitle.update", "rh.jobtitle.archive",
-    "rh.position.view", "rh.position.create", "rh.position.update", "rh.position.archive",
-  ];
+  // COMPANY_ADMIN : jeu de permissions CANONIQUE unique (PD-3 / R01),
+  // défini dans src/features/auth/permissions.ts (COMPANY_ADMIN_DEFAULT_PERMS).
+  // Couvre tous les modules métier (documents, ventes, achats, comptabilité,
+  // rapports, RH employés/contrats) SANS aucune permission de plateforme.
   await prisma.rolePermission.createMany({
-    data: companyAdminPerms
+    data: COMPANY_ADMIN_DEFAULT_PERMS
       .filter((key) => permissionIds[key])
       .map((key) => ({ roleId: companyAdminRole.id, permissionId: permissionIds[key] })),
   });
-
-  // COMPANY_ADMIN reçoit sa permission set dédié ci-dessus (companyAdminPerms).
 
   console.log("→ Utilisateurs…");
   // Plus AUCUN compte « admin » : l'administrateur de plateforme est

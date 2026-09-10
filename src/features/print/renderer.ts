@@ -225,7 +225,18 @@ export class PdfEngine {
   ): string[] {
     const clean = sanitizeText(text).trim();
     if (!clean) return [""];
-    const words = clean.split(/\s+/);
+    const rawWords = clean.split(/\s+/);
+    // Les unités monétaires (code devise, %…) suivent TOUJOURS leur nombre :
+    // "1 000 000 DA" ne peut pas être coupé entre un chiffre et sa devise.
+    const UNIT = /^(DA|DZD|DJF|TND|MAD|EGP|%|[$€£¥])$/;
+    const words: string[] = [];
+    for (const word of rawWords) {
+      if (UNIT.test(word) && words.length > 0) {
+        words[words.length - 1] = `${words[words.length - 1]} ${word}`;
+      } else {
+        words.push(word);
+      }
+    }
     const lines: string[] = [];
     let current = "";
     for (const word of words) {
@@ -263,6 +274,29 @@ export class PdfEngine {
   /** Largeur d'un texte une fois composé. */
   measure(text: string, style: FontStyle, size: number): number {
     return this.fonts.measureText(text, style, size).width;
+  }
+
+  /**
+   * Trouve la plus grande taille (≥ minSize) telle que le texte tienne dans
+   * maxWidth. Utilisé pour préserver l'intégrité des valeurs financières et des
+   * titres : on ne tronque jamais — on réduit la typographie dans les limites
+   * sûres de la ligne.
+   */
+  fitSizeToWidth(
+    text: string,
+    style: FontStyle,
+    startSize: number,
+    maxWidth: number,
+    minSize = 5.5,
+  ): number {
+    if (maxWidth <= 0 || startSize <= minSize) return Math.max(startSize, minSize);
+    const clean = sanitizeText(text);
+    if (!clean) return startSize;
+    let size = startSize;
+    while (size > minSize && this.measure(clean, style, size) > maxWidth) {
+      size = Math.max(minSize, size - 0.5);
+    }
+    return size;
   }
 
   /**

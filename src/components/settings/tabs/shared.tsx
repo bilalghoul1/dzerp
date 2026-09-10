@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useI18n } from "@/features/i18n/i18n-provider";
+import { useSettingsReadOnly } from "@/components/settings/settings-readonly-provider";
 import type { CompanyProfile } from "@/features/settings/config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,9 +143,14 @@ export function SaveBar({
   label?: string;
 }) {
   const { t } = useI18n();
+  const readOnly = useSettingsReadOnly();
+  const disabled = busy || readOnly;
   return (
-    <div className="flex justify-end pt-2">
-      <Button onClick={onSave} disabled={busy} size="sm">
+    <div
+      className="flex justify-end pt-2"
+      title={disabled ? t("parametres.readOnlyTitle") : undefined}
+    >
+      <Button onClick={onSave} disabled={disabled} size="sm">
         {busy ? t("common.saving") : (label ?? t("common.save"))}
       </Button>
     </div>
