@@ -358,10 +358,17 @@
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-6px); }
   }
+  @keyframes dz-flow-dot {
+    0% { transform: translateX(4px); opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateX(34px); opacity: 0; }
+  }
 
   .dz-float { animation: dz-float 6s ease-in-out infinite; }
   .dz-float-slow { animation: dz-float-slow 9s ease-in-out infinite; }
   .dz-screen { animation: dz-screen 7s ease-in-out infinite; }
+  .dz-flow-dot { animation: dz-flow-dot 3s ease-in-out infinite; }
 
   .dz-reveal {
     opacity: 0;
@@ -372,7 +379,8 @@
     .dz-float,
     .dz-float-slow,
     .dz-screen,
-    .dz-reveal {
+    .dz-reveal,
+    .dz-flow-dot {
       animation: none !important;
       opacity: 1 !important;
       transform: none !important;
